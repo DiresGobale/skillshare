@@ -516,51 +516,95 @@ export function Login() {
   const [show2FA, setShow2FA] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [status, setStatus] = useState<string | null>(null);
 
-  const submit = async (e: React.FormEvent) => {
+  // Core sign-in logic: pre-check credentials, then call NextAuth
+  const doLogin = async (emailVal: string, passwordVal: string, totpVal?: string) => {
+    setError(null);
+    setLoading(true);
+    try {
+      // Step 1: Pre-check credentials via our API (returns clear error messages)
+      const checkRes = await fetch("/api/auth/check", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: emailVal, password: passwordVal }),
+      });
+      const checkData = await checkRes.json();
+
+      if (!checkData.ok) {
+        setError(checkData.error ?? "Invalid email or password.");
+        setLoading(false);
+        return;
+      }
+
+      // Step 2: If 2FA is needed and no TOTP provided, show the 2FA field
+      if (checkData.needs2FA && !totpVal) {
+        setShow2FA(true);
+        setStatus("Enter your 6-digit authenticator code to continue.");
+        setLoading(false);
+        return;
+      }
+
+      // Step 3: Call NextAuth signIn with email + password + (optional) TOTP
+      const res = await nextAuthSignIn("credentials", {
+        email: emailVal,
+        password: passwordVal,
+        totp: totpVal || undefined,
+        redirect: false,
+      });
+
+      if (!res || res.error) {
+        // NextAuth returns "CredentialsSignin" for any authorize failure.
+        // The specific error (wrong TOTP, etc.) was already caught by our
+        // pre-check, so if we get here with an error it's likely a bad TOTP.
+        if (checkData.needs2FA) {
+          setError("Invalid 2FA code. Please try again.");
+          setShow2FA(true);
+        } else {
+          setError("Login failed. Please try again.");
+        }
+        setLoading(false);
+        return;
+      }
+
+      // Success — reload so the server-rendered session hydrates.
+      // The page.tsx router will redirect to the correct dashboard based on role.
+      setStatus("Success! Redirecting to your dashboard…");
+      window.location.assign("/");
+    } catch {
+      setError("Network error. Please try again.");
+      setLoading(false);
+    }
+  };
+
+  const submit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!email || !password) {
       setError("Please enter both email and password.");
       return;
     }
-    setError(null);
-    setLoading(true);
-    try {
-      const res = await nextAuthSignIn("credentials", {
-        email,
-        password,
-        totp: totp || undefined,
-        redirect: false,
-      });
-      if (!res || res.error) {
-        const msg = res?.error ?? "Login failed.";
-        if (msg === "2FA_REQUIRED") {
-          setShow2FA(true);
-          setError("This account requires 2FA. Enter your 6-digit authenticator code below.");
-        } else if (msg.includes("2FA") || msg.includes("Invalid 2FA")) {
-          setError(msg);
-          setShow2FA(true);
-        } else {
-          setError(msg);
-        }
-        return;
-      }
-      // Successful login — NextAuth session is now in httpOnly cookie.
-      // Reload the page so the server-rendered session hydrates.
-      window.location.href = "/";
-    } catch {
-      setError("Network error. Please try again.");
-    } finally {
-      setLoading(false);
-    }
+    doLogin(email, password, totp || undefined);
   };
 
+  // One-click demo login: fills the form AND submits immediately
+  const quickLogin = (acc: typeof demoAccounts[number]) => {
+    setEmail(acc.email);
+    setPassword(acc.password);
+    setTotp("");
+    setShow2FA(false);
+    setError(null);
+    setStatus(null);
+    doLogin(acc.email, acc.password);
+  };
+
+  // Just autofill (for manual review)
   const fillDemo = (acc: typeof demoAccounts[number]) => {
     setEmail(acc.email);
     setPassword(acc.password);
     setTotp("");
     setShow2FA(false);
     setError(null);
+    setStatus(null);
   };
 
   return (
@@ -613,7 +657,7 @@ export function Login() {
                   autoComplete="one-time-code"
                 />
                 <p className="text-[11px] text-amber-700">
-                  Admin demo: ask the administrator for the current TOTP code, or check the server logs from <code className="rounded bg-amber-100 px-1">bun run scripts/seed.ts</code>.
+                  The live TOTP code is shown on the next screen after you verify. For the demo admin, the code updates every 30 seconds.
                 </p>
               </div>
             )}
@@ -623,12 +667,20 @@ export function Login() {
                 {error}
               </div>
             )}
+            {status && !error && (
+              <div className="flex items-center gap-2 rounded-md border border-blue-200 bg-blue-50 px-3 py-2 text-xs text-blue-700">
+                <span className="h-3 w-3 animate-spin rounded-full border-2 border-blue-600 border-t-transparent" />
+                {status}
+              </div>
+            )}
             <Button type="submit" className="w-full h-10" disabled={loading}>
               {loading ? (
                 <>
                   <span className="h-4 w-4 animate-spin rounded-full border-2 border-primary-foreground border-t-transparent" />
                   Signing in…
                 </>
+              ) : show2FA ? (
+                "Verify & sign in"
               ) : (
                 "Sign in"
               )}
@@ -656,20 +708,22 @@ export function Login() {
         </CardContent>
       </Card>
 
-      {/* Demo credentials picker */}
+      {/* Demo credentials picker — one-click login */}
       <Card className="mt-4 border-primary/20">
         <CardHeader className="pb-3">
           <CardTitle className="text-sm flex items-center gap-2">
-            <Sparkles className="h-4 w-4 text-primary" /> Try a demo account
+            <Sparkles className="h-4 w-4 text-primary" /> One-click demo login
           </CardTitle>
-          <CardDescription>Click any card to autofill — password is <code className="rounded bg-muted px-1 py-0.5 text-[10px]">demo1234</code> for all roles.</CardDescription>
+          <CardDescription>
+            Click any card to instantly sign in as that role. Password is{" "}
+            <code className="rounded bg-muted px-1 py-0.5 text-[10px]">demo1234</code> for all accounts.
+          </CardDescription>
         </CardHeader>
         <CardContent className="space-y-2">
           {demoAccounts.map((acc) => (
-            <button
+            <div
               key={acc.id}
-              onClick={() => fillDemo(acc)}
-              className="group flex w-full items-center gap-3 rounded-lg border border-border bg-card p-3 text-left transition-all hover:border-primary/40 hover:bg-accent"
+              className="group flex items-center gap-3 rounded-lg border border-border bg-card p-3 transition-all hover:border-primary/40 hover:bg-accent"
             >
               <span
                 className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-xs font-semibold text-white"
@@ -700,8 +754,25 @@ export function Login() {
                 <p className="truncate text-xs text-muted-foreground">{acc.blurb}</p>
                 <p className="truncate text-[10px] text-muted-foreground font-mono mt-0.5">{acc.email}</p>
               </div>
-              <ArrowRight className="h-3.5 w-3.5 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100" />
-            </button>
+              <div className="flex flex-col gap-1">
+                <Button
+                  size="sm"
+                  className="h-7 text-xs"
+                  onClick={() => quickLogin(acc)}
+                  disabled={loading}
+                >
+                  {loading ? "…" : "Sign in"}
+                </Button>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="h-6 text-[10px]"
+                  onClick={() => fillDemo(acc)}
+                >
+                  Autofill
+                </Button>
+              </div>
+            </div>
           ))}
         </CardContent>
       </Card>
@@ -754,7 +825,7 @@ export function Register() {
         go("login");
         return;
       }
-      window.location.href = "/";
+      window.location.assign("/");
     } catch {
       setServerError("Network error. Please try again.");
     } finally {

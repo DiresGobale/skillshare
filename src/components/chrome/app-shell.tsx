@@ -407,7 +407,7 @@ function Topbar({ onToggleMobile, mobileOpen }: { onToggleMobile: () => void; mo
                         password: acc.password,
                         redirect: false,
                       });
-                      window.location.href = "/";
+                      window.location.assign("/");
                     }}
                     className={cn(
                       "flex w-full items-center gap-2 px-3 py-2 text-sm hover:bg-accent",
