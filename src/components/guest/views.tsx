@@ -36,6 +36,7 @@ import {
   Briefcase,
   ArrowRight,
   Check,
+  CheckCircle2,
   Sparkles,
   Target,
   ShieldCheck,
@@ -53,6 +54,7 @@ import {
   Filter,
   AlertCircle,
 } from "lucide-react";
+import { Textarea } from "@/components/ui/textarea";
 
 // ============================================================
 // Public top nav (guest header)
@@ -81,7 +83,8 @@ function PublicHeader({ onAuth }: { onAuth: (r: "login" | "register") => void })
   const navLinks = [
     { label: "Browse jobs", view: "public-jobs" as const },
     { label: "How it works", view: "landing" as const },
-    { label: "For employers", view: "landing" as const },
+    { label: "About", view: "about" as const },
+    { label: "Contact", view: "contact" as const },
   ];
 
   return (
@@ -195,9 +198,9 @@ function PublicFooter() {
           <div>
             <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Company</p>
             <ul className="mt-3 space-y-2 text-sm">
-              <li><button className="text-muted-foreground hover:text-foreground">About</button></li>
-              <li><button className="text-muted-foreground hover:text-foreground">Privacy</button></li>
-              <li><button className="text-muted-foreground hover:text-foreground">Contact</button></li>
+              <li><button className="text-muted-foreground hover:text-foreground" onClick={() => go("about")}>About</button></li>
+              <li><button className="text-muted-foreground hover:text-foreground" onClick={() => go("contact")}>Contact</button></li>
+              <li><button className="text-muted-foreground hover:text-foreground" onClick={() => go("landing")}>Privacy</button></li>
             </ul>
           </div>
         </div>
@@ -790,6 +793,7 @@ export function Register() {
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [submitting, setSubmitting] = useState(false);
   const [serverError, setServerError] = useState<string | null>(null);
+  const [successMsg, setSuccessMsg] = useState<string | null>(null);
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -814,18 +818,10 @@ export function Register() {
         setServerError(data.error ?? "Registration failed.");
         return;
       }
-      // Auto sign-in via NextAuth
-      const signInRes = await nextAuthSignIn("credentials", {
-        email: email.trim(),
-        password,
-        redirect: false,
-      });
-      if (!signInRes || signInRes.error) {
-        // Account created but sign-in failed — go to login
-        go("login");
-        return;
-      }
-      window.location.assign("/");
+      // Account created successfully — redirect to login so the user
+      // signs in with their new credentials (per requirement #2).
+      setSuccessMsg("Account created! Redirecting to login…");
+      setTimeout(() => go("login"), 1500);
     } catch {
       setServerError("Network error. Please try again.");
     } finally {
@@ -913,6 +909,12 @@ export function Register() {
               <div className="flex items-center gap-2 rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-700">
                 <AlertCircle className="h-3.5 w-3.5 shrink-0" />
                 {serverError}
+              </div>
+            )}
+            {successMsg && (
+              <div className="flex items-center gap-2 rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-700">
+                <CheckCircle2 className="h-3.5 w-3.5 shrink-0" />
+                {successMsg}
               </div>
             )}
             <Button type="submit" className="w-full h-10" disabled={submitting}>
@@ -1205,6 +1207,262 @@ export function PublicJobDetail() {
               </div>
             </CardContent>
           </Card>
+        </div>
+      </main>
+      <PublicFooter />
+    </div>
+  );
+}
+
+// ============================================================
+// ABOUT PAGE
+// ============================================================
+export function AboutPage() {
+  const { go } = useApp();
+  return (
+    <div className="flex min-h-screen flex-col">
+      <PublicHeader onAuth={(r) => go(r)} />
+      <main className="flex-1">
+        {/* Hero */}
+        <section className="bg-hero-glow border-b border-border">
+          <div className="mx-auto max-w-4xl px-4 py-16 sm:px-6 sm:py-20 lg:px-8 text-center">
+            <Badge variant="outline" className="bg-primary/5 text-primary border-primary/20 mb-4">
+              About SkillMatch AI
+            </Badge>
+            <h1 className="text-4xl font-extrabold tracking-tight sm:text-5xl">
+              <span className="text-gradient-primary">Skill-based hiring</span> for the African talent market.
+            </h1>
+            <p className="mx-auto mt-5 max-w-2xl text-base text-muted-foreground sm:text-lg">
+              We're building the most transparent, skill-first employment platform on the continent.
+              No keyword spam. No résumé black holes. Just verifiable skills matched to real opportunities.
+            </p>
+          </div>
+        </section>
+
+        {/* Mission */}
+        <section className="border-b border-border py-16">
+          <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+            <div className="grid gap-10 lg:grid-cols-2">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-wider text-primary">Our mission</p>
+                <h2 className="mt-2 text-3xl font-bold tracking-tight">Make hiring about evidence, not keywords.</h2>
+                <p className="mt-4 text-muted-foreground">
+                  Traditional job boards treat candidates as a list of keywords and employers as a filter funnel.
+                  That's broken. It wastes everyone's time and locks talented people out of roles they'd thrive in.
+                </p>
+                <p className="mt-3 text-muted-foreground">
+                  SkillMatch AI flips the model. We build a structured skill graph for every candidate,
+                  verify it through assessments and prior employer attestation, then use an explainable
+                  AI to match candidates to jobs based on what they can actually do — not who they know
+                  or how well they game applicant tracking systems.
+                </p>
+              </div>
+              <div className="grid gap-4 sm:grid-cols-2">
+                {[
+                  { stat: "4,872", label: "Active job seekers" },
+                  { stat: "958", label: "Hiring employers" },
+                  { stat: "1,247", label: "Open roles" },
+                  { stat: "6,124", label: "Verified skills" },
+                ].map((s) => (
+                  <div key={s.label} className="rounded-xl border border-border bg-card p-5 text-center">
+                    <p className="text-3xl font-bold tracking-tight text-primary">{s.stat}</p>
+                    <p className="mt-1 text-xs text-muted-foreground">{s.label}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </section>
+
+        {/* Values */}
+        <section className="border-b border-border bg-muted/30 py-16">
+          <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+            <h2 className="text-center text-3xl font-bold tracking-tight">What we stand for</h2>
+            <div className="mt-10 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+              {[
+                { icon: <ShieldCheck className="h-5 w-5" />, title: "Verified skills", desc: "Every skill is backed by an assessment, certificate, or employer attestation — never self-reported alone." },
+                { icon: <Sparkles className="h-5 w-5" />, title: "Explainable AI", desc: "Every match score is broken into understandable factors. No black boxes, no opaque rejections." },
+                { icon: <Lock className="h-5 w-5" />, title: "Privacy by default", desc: "Employers can't see your contact info until you apply or accept an interview. You're always in control." },
+                { icon: <TrendingUp className="h-5 w-5" />, title: "Skill growth", desc: "We show you exactly which skills separate you from your target roles — and where to learn them." },
+              ].map((v) => (
+                <div key={v.title} className="rounded-xl border border-border bg-card p-5">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10 text-primary">
+                    {v.icon}
+                  </div>
+                  <h3 className="mt-4 text-base font-semibold">{v.title}</h3>
+                  <p className="mt-1.5 text-sm text-muted-foreground">{v.desc}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+        </section>
+
+        {/* How it works */}
+        <section className="border-b border-border py-16">
+          <div className="mx-auto max-w-4xl px-4 sm:px-6 lg:px-8">
+            <h2 className="text-center text-3xl font-bold tracking-tight">How the matching works</h2>
+            <p className="mx-auto mt-3 max-w-2xl text-center text-muted-foreground">
+              Our AI computes a 0–100% match score for every job application, broken down into six weighted factors.
+            </p>
+            <div className="mt-10 space-y-4">
+              {[
+                { label: "Skill match", weight: "25%", desc: "Overall overlap between your skills and the job's required + preferred skill set." },
+                { label: "Required skill match", weight: "30%", desc: "Coverage of mandatory skills the employer explicitly requires." },
+                { label: "Proficiency match", weight: "15%", desc: "How closely your proficiency level meets the requested level on each matched skill." },
+                { label: "Experience match", weight: "15%", desc: "Years and seniority of relevant experience against the role's expectations." },
+                { label: "Education match", weight: "10%", desc: "Whether your highest verified education meets the role's stated threshold." },
+                { label: "Verified skills", weight: "5%", desc: "Share of matched skills that have been independently verified." },
+              ].map((f) => (
+                <div key={f.label} className="flex items-center gap-4 rounded-lg border border-border bg-card p-4">
+                  <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary font-bold">
+                    {f.weight}
+                  </div>
+                  <div>
+                    <p className="text-sm font-semibold">{f.label}</p>
+                    <p className="text-xs text-muted-foreground">{f.desc}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </section>
+
+        {/* CTA */}
+        <section className="py-16">
+          <div className="mx-auto max-w-4xl px-4 sm:px-6 lg:px-8 text-center">
+            <h2 className="text-3xl font-bold tracking-tight">Ready to be matched?</h2>
+            <p className="mx-auto mt-3 max-w-xl text-muted-foreground">
+              Join thousands of job seekers and employers using SkillMatch AI across Africa.
+            </p>
+            <div className="mt-7 flex flex-col items-center justify-center gap-3 sm:flex-row">
+              <Button size="lg" onClick={() => go("register")}>Sign up as job seeker</Button>
+              <Button size="lg" variant="outline" onClick={() => go("register")}>Sign up as employer</Button>
+            </div>
+          </div>
+        </section>
+      </main>
+      <PublicFooter />
+    </div>
+  );
+}
+
+// ============================================================
+// CONTACT PAGE
+// ============================================================
+export function ContactPage() {
+  const { go } = useApp();
+  const [form, setForm] = useState({ name: "", email: "", subject: "", message: "" });
+  const [errors, setErrors] = useState<Record<string, string>>({});
+  const [submitted, setSubmitted] = useState(false);
+
+  const submit = (e: React.FormEvent) => {
+    e.preventDefault();
+    const next: Record<string, string> = {};
+    if (!form.name.trim()) next.name = "Please enter your name.";
+    if (!form.email.trim()) next.email = "Please enter your email.";
+    else if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(form.email)) next.email = "Please enter a valid email.";
+    if (!form.subject.trim()) next.subject = "Please enter a subject.";
+    if (!form.message.trim()) next.message = "Please enter a message.";
+    else if (form.message.trim().length < 10) next.message = "Message must be at least 10 characters.";
+    setErrors(next);
+    if (Object.keys(next).length === 0) {
+      setSubmitted(true);
+      setForm({ name: "", email: "", subject: "", message: "" });
+    }
+  };
+
+  return (
+    <div className="flex min-h-screen flex-col">
+      <PublicHeader onAuth={(r) => go(r)} />
+      <main className="flex-1 bg-muted/20">
+        <div className="mx-auto max-w-5xl px-4 py-12 sm:px-6 lg:px-8">
+          <div className="text-center">
+            <Badge variant="outline" className="bg-primary/5 text-primary border-primary/20 mb-4">
+              Contact us
+            </Badge>
+            <h1 className="text-3xl font-bold tracking-tight sm:text-4xl">Get in touch</h1>
+            <p className="mx-auto mt-3 max-w-xl text-muted-foreground">
+              Questions, feedback, or partnership ideas? We'd love to hear from you.
+            </p>
+          </div>
+
+          <div className="mt-10 grid gap-6 lg:grid-cols-3">
+            {/* Contact info */}
+            <div className="space-y-4">
+              <div className="rounded-xl border border-border bg-card p-5">
+                <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10 text-primary">
+                  <Mail className="h-5 w-5" />
+                </div>
+                <h3 className="mt-3 text-sm font-semibold">Email</h3>
+                <p className="mt-1 text-xs text-muted-foreground">For general inquiries</p>
+                <a href="mailto:hello@skillmatch.ai" className="mt-2 block text-sm font-medium text-primary hover:underline">
+                  hello@skillmatch.ai
+                </a>
+              </div>
+              <div className="rounded-xl border border-border bg-card p-5">
+                <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10 text-primary">
+                  <Briefcase className="h-5 w-5" />
+                </div>
+                <h3 className="mt-3 text-sm font-semibold">Employers</h3>
+                <p className="mt-1 text-xs text-muted-foreground">For hiring & partnerships</p>
+                <a href="mailto:employers@skillmatch.ai" className="mt-2 block text-sm font-medium text-primary hover:underline">
+                  employers@skillmatch.ai
+                </a>
+              </div>
+              <div className="rounded-xl border border-border bg-card p-5">
+                <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10 text-primary">
+                  <Building2 className="h-5 w-5" />
+                </div>
+                <h3 className="mt-3 text-sm font-semibold">Office</h3>
+                <p className="mt-1 text-xs text-muted-foreground">Nairobi, Kenya</p>
+                <p className="mt-2 text-sm text-muted-foreground">Remote-first, operating across 14 African markets</p>
+              </div>
+            </div>
+
+            {/* Form */}
+            <div className="lg:col-span-2">
+              <Card>
+                <CardContent className="p-6">
+                  {submitted ? (
+                    <div className="flex flex-col items-center py-10 text-center">
+                      <div className="flex h-12 w-12 items-center justify-center rounded-full bg-emerald-100 text-emerald-600">
+                        <CheckCircle2 className="h-6 w-6" />
+                      </div>
+                      <h3 className="mt-3 text-lg font-semibold">Message sent!</h3>
+                      <p className="mt-1 text-sm text-muted-foreground">We'll get back to you within 1–2 business days.</p>
+                      <Button className="mt-5" size="sm" onClick={() => setSubmitted(false)}>Send another message</Button>
+                    </div>
+                  ) : (
+                    <form onSubmit={submit} className="space-y-4">
+                      <div className="grid gap-4 sm:grid-cols-2">
+                        <div className="space-y-1.5">
+                          <Label htmlFor="c-name">Name *</Label>
+                          <Input id="c-name" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="Your name" />
+                          {errors.name && <p className="text-xs text-rose-600">{errors.name}</p>}
+                        </div>
+                        <div className="space-y-1.5">
+                          <Label htmlFor="c-email">Email *</Label>
+                          <Input id="c-email" type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} placeholder="you@example.com" />
+                          {errors.email && <p className="text-xs text-rose-600">{errors.email}</p>}
+                        </div>
+                      </div>
+                      <div className="space-y-1.5">
+                        <Label htmlFor="c-subject">Subject *</Label>
+                        <Input id="c-subject" value={form.subject} onChange={(e) => setForm({ ...form, subject: e.target.value })} placeholder="How can we help?" />
+                        {errors.subject && <p className="text-xs text-rose-600">{errors.subject}</p>}
+                      </div>
+                      <div className="space-y-1.5">
+                        <Label htmlFor="c-message">Message *</Label>
+                        <Textarea id="c-message" rows={5} value={form.message} onChange={(e) => setForm({ ...form, message: e.target.value })} placeholder="Tell us more…" className="resize-none" />
+                        {errors.message && <p className="text-xs text-rose-600">{errors.message}</p>}
+                      </div>
+                      <Button type="submit" className="w-full h-10">Send message</Button>
+                    </form>
+                  )}
+                </CardContent>
+              </Card>
+            </div>
+          </div>
         </div>
       </main>
       <PublicFooter />

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { cn } from "@/lib/utils";
 import { useApp } from "@/lib/app-context";
 import { Button } from "@/components/ui/button";
@@ -31,6 +31,7 @@ import {
   SectionHeader,
   StatCard,
   EmptyState,
+  LoadingState,
   SuccessBanner,
   InfoCallout,
   PrivacyLock,
@@ -44,6 +45,7 @@ import {
   employerDashboardStats,
   currentUser,
 } from "@/lib/mock-data";
+import { useFetch } from "@/lib/use-fetch";
 import type { Job, Candidate, ApplicationStatus, Conversation, ProficiencyLevel } from "@/lib/types";
 import {
   Building2,
@@ -75,6 +77,7 @@ import {
   ChevronRight,
   UserCheck,
   X,
+  Trash2,
   Save,
   Send as SendIcon,
   CalendarClock,
@@ -103,6 +106,20 @@ function timeAgo(date: string) {
 // ============================================================
 export function EmployerDashboard() {
   const { go } = useApp();
+  const { data: jobsData, loading: jobsLoading } = useFetch<any>("/api/jobs");
+  const { data: candidatesData } = useFetch<any>("/api/candidates");
+  const { data: notifData } = useFetch<any>("/api/notifications");
+
+  const jobs: any[] = jobsData?.jobs ?? [];
+  const candidates: any[] = candidatesData?.candidates ?? [];
+  const notifications: any[] = notifData?.notifications ?? [];
+
+  const publishedJobs = jobs.filter((j) => j.status === "published");
+  const draftJobs = jobs.filter((j) => j.status === "draft");
+  const totalApplicants = candidates.length;
+  const shortlisted = candidates.filter((c) => c.applicationStatus === "shortlisted").length;
+  const interviews = candidates.filter((c) => c.applicationStatus === "interview").length;
+
   return (
     <PageContainer>
       <SectionHeader
@@ -116,56 +133,47 @@ export function EmployerDashboard() {
       />
 
       <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <StatCard label="Active jobs" value={employerDashboardStats.activeJobs} icon={<Briefcase className="h-4 w-4" />} hint="2 published, 1 draft" />
-        <StatCard label="Total applicants" value={employerDashboardStats.totalApplicants} icon={<Users className="h-4 w-4" />} hint="+12 this week" delta="+15%" deltaTone="up" />
-        <StatCard label="Shortlisted" value={employerDashboardStats.shortlisted} icon={<Star className="h-4 w-4" />} hint="Awaiting next step" />
-        <StatCard label="Interviews this week" value={employerDashboardStats.interviewsThisWeek} icon={<CalendarClock className="h-4 w-4" />} hint="Thursday, Oct 9" />
+        <StatCard label="Active jobs" value={publishedJobs.length} icon={<Briefcase className="h-4 w-4" />} hint={`${draftJobs.length} draft${draftJobs.length === 1 ? "" : "s"}`} />
+        <StatCard label="Total applicants" value={totalApplicants} icon={<Users className="h-4 w-4" />} hint="Across all jobs" />
+        <StatCard label="Shortlisted" value={shortlisted} icon={<Star className="h-4 w-4" />} hint="Awaiting next step" />
+        <StatCard label="In interview" value={interviews} icon={<CalendarClock className="h-4 w-4" />} hint="Active interview stage" />
       </div>
 
       <div className="mt-6 grid gap-4 lg:grid-cols-3">
         {/* Active jobs */}
         <Card className="lg:col-span-2">
           <CardHeader className="pb-3 flex flex-row items-center justify-between space-y-0">
-            <CardTitle className="text-sm">Active jobs</CardTitle>
+            <CardTitle className="text-sm">Your jobs</CardTitle>
             <Button variant="ghost" size="sm" onClick={() => go("jobs")}>
               View all <ArrowRight className="h-3.5 w-3.5" />
             </Button>
           </CardHeader>
           <CardContent className="space-y-2.5">
-            {employerJobs.filter(j => j.status === "published").map((j) => (
-              <button
-                key={j.id}
-                onClick={() => go("candidates", { jobId: j.id })}
-                className="group flex w-full items-center gap-3 rounded-lg border border-border bg-card p-3 text-left transition-colors hover:bg-accent"
-              >
-                <CompanyLogo initials={j.companyLogo || "CO"} size="md" />
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-semibold group-hover:text-primary">{j.title}</p>
-                  <p className="text-xs text-muted-foreground">{j.location} · posted {timeAgo(j.postedAt)}</p>
-                  <div className="mt-1 flex items-center gap-3 text-[11px] text-muted-foreground">
-                    <span>{j.applicants} applicants</span>
-                    <span>{j.views} views</span>
+            {jobsLoading ? (
+              <LoadingState label="Loading jobs…" rows={2} />
+            ) : jobs.length === 0 ? (
+              <EmptyState
+                icon={<Briefcase className="h-5 w-5" />}
+                title="No jobs yet"
+                description="Post your first job to start receiving applicants."
+                action={<Button size="sm" onClick={() => go("job-edit", { jobId: "new" })}><Plus className="h-3.5 w-3.5" /> Post a job</Button>}
+              />
+            ) : (
+              jobs.map((j) => (
+                <button
+                  key={j.id}
+                  onClick={() => go("candidates", { jobId: j.id })}
+                  className="group flex w-full items-center gap-3 rounded-lg border border-border bg-card p-3 text-left transition-colors hover:bg-accent"
+                >
+                  <CompanyLogo initials={j.companyLogo || "CO"} size="md" />
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-semibold group-hover:text-primary">{j.title}</p>
+                    <p className="text-xs text-muted-foreground">{j.location} · posted {timeAgo(j.postedAt)}</p>
                   </div>
-                </div>
-                <JobStatusBadge status={j.status} />
-                <ChevronRight className="h-4 w-4 text-muted-foreground" />
-              </button>
-            ))}
-            {employerJobs.find(j => j.status === "draft") && (
-              <div className="rounded-lg border border-dashed border-border bg-muted/30 p-3">
-                <div className="flex items-center gap-3">
-                  <div className="flex h-10 w-10 items-center justify-center rounded-md bg-muted text-muted-foreground">
-                    <Briefcase className="h-5 w-5" />
-                  </div>
-                  <div className="flex-1">
-                    <p className="text-sm font-semibold">{employerJobs.find(j => j.status === "draft")?.title}</p>
-                    <p className="text-xs text-muted-foreground">Draft · last edited 3 days ago</p>
-                  </div>
-                  <Button size="sm" variant="outline" onClick={() => go("job-edit", { jobId: employerJobs.find(j => j.status === "draft")?.id })}>
-                    Continue
-                  </Button>
-                </div>
-              </div>
+                  <JobStatusBadge status={j.status} />
+                  <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                </button>
+              ))
             )}
           </CardContent>
         </Card>
@@ -173,56 +181,65 @@ export function EmployerDashboard() {
         {/* Top candidates */}
         <Card>
           <CardHeader className="pb-3 flex flex-row items-center justify-between space-y-0">
-            <CardTitle className="text-sm">Top candidates</CardTitle>
+            <CardTitle className="text-sm">Recent candidates</CardTitle>
             <Button variant="ghost" size="sm" onClick={() => go("candidates")}>
               All <ArrowRight className="h-3.5 w-3.5" />
             </Button>
           </CardHeader>
           <CardContent className="space-y-2">
-            {candidates.slice(0, 4).map((c) => (
-              <button
-                key={c.id}
-                onClick={() => go("candidate-detail", { candidateId: c.id })}
-                className="group flex w-full items-center gap-2.5 rounded-lg border border-border bg-card p-2.5 text-left transition-colors hover:bg-accent"
-              >
-                <Avatar initials={c.initials} color={c.avatarColor} size="sm" />
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-xs font-semibold group-hover:text-primary">{c.name}</p>
-                  <p className="truncate text-[10px] text-muted-foreground">{c.title}</p>
-                </div>
-                <MatchScore score={c.matchScore} size="sm" showLabel={false} />
-              </button>
-            ))}
+            {candidates.length === 0 ? (
+              <EmptyState icon={<Users className="h-5 w-5" />} title="No candidates yet" description="Applicants will appear here." />
+            ) : (
+              candidates.slice(0, 4).map((c) => (
+                <button
+                  key={c.id}
+                  onClick={() => go("candidate-detail", { candidateId: c.id })}
+                  className="group flex w-full items-center gap-2.5 rounded-lg border border-border bg-card p-2.5 text-left transition-colors hover:bg-accent"
+                >
+                  <Avatar initials={c.initials} color={c.avatarColor} size="sm" />
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-xs font-semibold group-hover:text-primary">{c.name}</p>
+                    <p className="truncate text-[10px] text-muted-foreground">{c.title}</p>
+                  </div>
+                  {c.matchScore > 0 && <MatchScore score={c.matchScore} size="sm" showLabel={false} />}
+                </button>
+              ))
+            )}
           </CardContent>
         </Card>
       </div>
 
-      {/* Pending actions */}
+      {/* Recent notifications */}
       <Card className="mt-4">
-        <CardHeader className="pb-3">
-          <CardTitle className="text-sm">Pending actions</CardTitle>
-          <CardDescription>{employerDashboardStats.pendingActions} items need your attention</CardDescription>
+        <CardHeader className="pb-3 flex flex-row items-center justify-between space-y-0">
+          <CardTitle className="text-sm">Recent notifications</CardTitle>
+          <Button variant="ghost" size="sm" onClick={() => go("notifications")}>
+            View all <ArrowRight className="h-3.5 w-3.5" />
+          </Button>
         </CardHeader>
-        <CardContent>
-          <div className="space-y-2">
-            {[
-              { label: "5 new applicants awaiting review for Senior Frontend Engineer", action: "Review", view: "candidates" as const, urgent: true },
-              { label: "Interview confirmation needed with Amara Okafor", action: "Confirm", view: "interviews" as const, urgent: true },
-              { label: "Draft job \"Product Manager, Growth\" not yet published", action: "Continue", view: "job-edit" as const, urgent: false },
-              { label: "2 unread messages from candidates", action: "Open", view: "messages" as const, urgent: false },
-            ].map((a, i) => (
-              <div key={i} className="flex items-center gap-3 rounded-lg border border-border bg-card p-3">
-                <div className={cn(
-                  "h-2 w-2 shrink-0 rounded-full",
-                  a.urgent ? "bg-rose-500" : "bg-amber-500"
-                )} />
-                <p className="flex-1 text-xs">{a.label}</p>
-                <Button size="sm" variant="outline" onClick={() => go(a.view)}>
-                  {a.action}
-                </Button>
+        <CardContent className="space-y-2">
+          {notifications.length === 0 ? (
+            <EmptyState icon={<Bell className="h-5 w-5" />} title="No notifications" />
+          ) : (
+            notifications.slice(0, 3).map((n) => (
+              <div
+                key={n.id}
+                className={cn(
+                  "rounded-lg border border-border bg-card p-3",
+                  !n.read && "border-primary/30 bg-primary/5"
+                )}
+              >
+                <div className="flex items-start gap-2">
+                  {!n.read && <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-primary" />}
+                  <div className="min-w-0 flex-1">
+                    <p className="text-xs font-semibold">{n.title}</p>
+                    <p className="mt-0.5 line-clamp-2 text-xs text-muted-foreground">{n.message}</p>
+                    <p className="mt-1 text-[10px] text-muted-foreground">{timeAgo(n.createdAt)}</p>
+                  </div>
+                </div>
               </div>
-            ))}
-          </div>
+            ))
+          )}
         </CardContent>
       </Card>
     </PageContainer>
@@ -333,10 +350,32 @@ export function EmployerCompanyProfile() {
 // ============================================================
 export function EmployerJobs() {
   const { go } = useApp();
+  const { data, loading, refetch } = useFetch<any>("/api/jobs");
   const [filter, setFilter] = useState("all");
+  const [deleteId, setDeleteId] = useState<string | null>(null);
 
-  let jobs = [...employerJobs];
+  const allJobs: any[] = data?.jobs ?? [];
+  let jobs = [...allJobs];
   if (filter !== "all") jobs = jobs.filter((j) => j.status === filter);
+
+  const closeJob = async (id: string) => {
+    await fetch(`/api/jobs/${id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ status: "closed" }),
+    });
+    refetch();
+  };
+
+  const deleteJob = async (id: string) => {
+    setDeleteId(id);
+    try {
+      await fetch(`/api/jobs/${id}`, { method: "DELETE" });
+      refetch();
+    } finally {
+      setDeleteId(null);
+    }
+  };
 
   return (
     <PageContainer>
@@ -352,65 +391,16 @@ export function EmployerJobs() {
 
       <Tabs value={filter} onValueChange={setFilter} className="mt-6">
         <TabsList className="overflow-x-auto">
-          <TabsTrigger value="all">All ({employerJobs.length})</TabsTrigger>
-          <TabsTrigger value="published">Published ({employerJobs.filter(j => j.status === "published").length})</TabsTrigger>
-          <TabsTrigger value="draft">Drafts ({employerJobs.filter(j => j.status === "draft").length})</TabsTrigger>
-          <TabsTrigger value="closed">Closed ({employerJobs.filter(j => j.status === "closed").length})</TabsTrigger>
+          <TabsTrigger value="all">All ({allJobs.length})</TabsTrigger>
+          <TabsTrigger value="published">Published ({allJobs.filter(j => j.status === "published").length})</TabsTrigger>
+          <TabsTrigger value="draft">Drafts ({allJobs.filter(j => j.status === "draft").length})</TabsTrigger>
+          <TabsTrigger value="closed">Closed ({allJobs.filter(j => j.status === "closed").length})</TabsTrigger>
         </TabsList>
       </Tabs>
 
-      <div className="mt-4 overflow-hidden rounded-lg border border-border">
-        <table className="w-full text-sm">
-          <thead className="bg-muted/50 text-[11px] uppercase tracking-wide text-muted-foreground">
-            <tr>
-              <th className="px-4 py-2.5 text-left font-medium">Job</th>
-              <th className="hidden px-4 py-2.5 text-left font-medium sm:table-cell">Status</th>
-              <th className="hidden px-4 py-2.5 text-left font-medium md:table-cell">Applicants</th>
-              <th className="hidden px-4 py-2.5 text-left font-medium lg:table-cell">Posted</th>
-              <th className="px-4 py-2.5 text-right font-medium">Actions</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-border bg-card">
-            {jobs.map((j) => (
-              <tr key={j.id} className="hover:bg-accent/30">
-                <td className="px-4 py-3">
-                  <div className="flex items-center gap-2.5">
-                    <CompanyLogo initials={j.companyLogo || "CO"} size="sm" />
-                    <div className="min-w-0">
-                      <button
-                        onClick={() => go("candidates", { jobId: j.id })}
-                        className="block truncate text-sm font-semibold hover:text-primary text-left"
-                      >
-                        {j.title}
-                      </button>
-                      <p className="text-xs text-muted-foreground">{j.location}</p>
-                    </div>
-                  </div>
-                </td>
-                <td className="hidden px-4 py-3 sm:table-cell"><JobStatusBadge status={j.status} /></td>
-                <td className="hidden px-4 py-3 md:table-cell">
-                  <button onClick={() => go("candidates", { jobId: j.id })} className="text-sm font-semibold hover:text-primary">
-                    {j.applicants}
-                  </button>
-                </td>
-                <td className="hidden px-4 py-3 text-xs text-muted-foreground lg:table-cell">{timeAgo(j.postedAt)}</td>
-                <td className="px-4 py-3 text-right">
-                  <div className="flex justify-end gap-1">
-                    <Button size="sm" variant="ghost" onClick={() => go("candidates", { jobId: j.id })}>
-                      <Eye className="h-3.5 w-3.5" />
-                    </Button>
-                    <Button size="sm" variant="ghost" onClick={() => go("job-edit", { jobId: j.id })}>
-                      Edit
-                    </Button>
-                  </div>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-
-      {jobs.length === 0 && (
+      {loading ? (
+        <LoadingState label="Loading jobs…" rows={3} />
+      ) : jobs.length === 0 ? (
         <EmptyState
           className="mt-4"
           icon={<Briefcase className="h-5 w-5" />}
@@ -418,6 +408,69 @@ export function EmployerJobs() {
           description="Create a new job posting to start receiving applicants."
           action={<Button size="sm" onClick={() => go("job-edit", { jobId: "new" })}>Post a job</Button>}
         />
+      ) : (
+        <div className="mt-4 overflow-hidden rounded-lg border border-border">
+          <table className="w-full text-sm">
+            <thead className="bg-muted/50 text-[11px] uppercase tracking-wide text-muted-foreground">
+              <tr>
+                <th className="px-4 py-2.5 text-left font-medium">Job</th>
+                <th className="hidden px-4 py-2.5 text-left font-medium sm:table-cell">Status</th>
+                <th className="hidden px-4 py-2.5 text-left font-medium lg:table-cell">Posted</th>
+                <th className="px-4 py-2.5 text-right font-medium">Actions</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-border bg-card">
+              {jobs.map((j) => (
+                <tr key={j.id} className="hover:bg-accent/30">
+                  <td className="px-4 py-3">
+                    <div className="flex items-center gap-2.5">
+                      <CompanyLogo initials={j.companyLogo || "CO"} size="sm" />
+                      <div className="min-w-0">
+                        <button
+                          onClick={() => go("candidates", { jobId: j.id })}
+                          className="block truncate text-sm font-semibold hover:text-primary text-left"
+                        >
+                          {j.title}
+                        </button>
+                        <p className="text-xs text-muted-foreground">{j.location}</p>
+                      </div>
+                    </div>
+                  </td>
+                  <td className="hidden px-4 py-3 sm:table-cell"><JobStatusBadge status={j.status} /></td>
+                  <td className="hidden px-4 py-3 text-xs text-muted-foreground lg:table-cell">{timeAgo(j.postedAt)}</td>
+                  <td className="px-4 py-3 text-right">
+                    <div className="flex justify-end gap-1">
+                      <Button size="sm" variant="ghost" onClick={() => go("candidates", { jobId: j.id })} title="View candidates">
+                        <Eye className="h-3.5 w-3.5" />
+                      </Button>
+                      <Button size="sm" variant="ghost" onClick={() => go("job-edit", { jobId: j.id })} title="Edit">
+                        Edit
+                      </Button>
+                      {j.status === "published" && (
+                        <Button size="sm" variant="ghost" onClick={() => closeJob(j.id)} title="Close job">
+                          Close
+                        </Button>
+                      )}
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => deleteJob(j.id)}
+                        disabled={deleteId === j.id}
+                        title="Delete job"
+                      >
+                        {deleteId === j.id ? (
+                          <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-rose-500 border-t-transparent" />
+                        ) : (
+                          <Trash2 className="h-3.5 w-3.5 text-rose-600" />
+                        )}
+                      </Button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       )}
     </PageContainer>
   );
@@ -429,20 +482,44 @@ export function EmployerJobs() {
 export function EmployerJobEdit() {
   const { go, selectedJobId } = useApp();
   const isNew = selectedJobId === "new";
-  const existing = employerJobs.find((j) => j.id === selectedJobId);
+  const { data: existingData } = useFetch<any>(selectedJobId && selectedJobId !== "new" ? `/api/jobs/${selectedJobId}` : null);
+  const existing = existingData?.job;
 
   const [step, setStep] = useState(1);
   const [published, setPublished] = useState(false);
   const [savedDraft, setSavedDraft] = useState(false);
-  const [skills, setSkills] = useState(
-    existing?.skills ?? [
-      { id: "n1", name: "React", category: "Frontend", proficiency: "advanced" as ProficiencyLevel, mandatory: true, weight: 0.9 },
-      { id: "n2", name: "TypeScript", category: "Languages", proficiency: "advanced" as ProficiencyLevel, mandatory: true, weight: 0.85 },
-    ]
-  );
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  // Form state
+  const [title, setTitle] = useState("");
+  const [category, setCategory] = useState("Engineering");
+  const [jobType, setJobType] = useState("full-time");
+  const [location, setLocation] = useState("");
+  const [remote, setRemote] = useState("hybrid");
+  const [salaryMin, setSalaryMin] = useState("5000");
+  const [salaryMax, setSalaryMax] = useState("8000");
+  const [description, setDescription] = useState("");
+  const [skills, setSkills] = useState<
+    { id: string; name: string; category: string; proficiency: ProficiencyLevel; mandatory: boolean; weight: number }[]
+  >([]);
   const [newSkill, setNewSkill] = useState("");
   const [newProficiency, setNewProficiency] = useState<ProficiencyLevel>("intermediate");
   const [newMandatory, setNewMandatory] = useState(true);
+
+  // Sync form when existing job loads
+  useEffect(() => {
+    if (existing) {
+      setTitle(existing.title ?? "");
+      setCategory(existing.category ?? "Engineering");
+      setJobType(existing.type ?? "full-time");
+      setLocation(existing.location ?? "");
+      setRemote(existing.remote ?? "hybrid");
+      setSalaryMin(String(existing.salaryMin ?? 5000));
+      setSalaryMax(String(existing.salaryMax ?? 8000));
+      setDescription(existing.description ?? "");
+    }
+  }, [existing]);
 
   const addSkill = () => {
     if (!newSkill.trim()) return;
@@ -454,6 +531,76 @@ export function EmployerJobEdit() {
   };
 
   const removeSkill = (id: string) => setSkills(skills.filter((s) => s.id !== id));
+
+  const saveJob = async (status: "draft" | "published") => {
+    setError(null);
+    // Validation
+    if (!title.trim()) {
+      setError("Job title is required.");
+      setStep(1);
+      return;
+    }
+    if (!description.trim()) {
+      setError("Job description is required.");
+      setStep(1);
+      return;
+    }
+    if (!location.trim()) {
+      setError("Location is required.");
+      setStep(1);
+      return;
+    }
+    if (Number(salaryMin) >= Number(salaryMax)) {
+      setError("Salary maximum must be greater than the minimum.");
+      setStep(1);
+      return;
+    }
+
+    setSaving(true);
+    try {
+      const payload = {
+        title: title.trim(),
+        category,
+        type: jobType,
+        location: location.trim(),
+        remote,
+        salaryMin: Number(salaryMin),
+        salaryMax: Number(salaryMax),
+        description: description.trim(),
+        status,
+        skills: skills.map((s) => ({ name: s.name, proficiency: s.proficiency, mandatory: s.mandatory })),
+      };
+      let res;
+      if (isNew) {
+        res = await fetch("/api/jobs", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+      } else {
+        res = await fetch(`/api/jobs/${selectedJobId}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+      }
+      const json = await res.json();
+      if (!json.ok) {
+        setError(json.error ?? "Failed to save job.");
+        return;
+      }
+      if (status === "draft") {
+        setSavedDraft(true);
+      } else {
+        setPublished(true);
+        setTimeout(() => go("jobs"), 1500);
+      }
+    } catch {
+      setError("Network error. Please try again.");
+    } finally {
+      setSaving(false);
+    }
+  };
 
   return (
     <PageContainer>
@@ -508,13 +655,13 @@ export function EmployerJobEdit() {
           {step === 1 && (
             <div className="space-y-4">
               <div className="space-y-1.5">
-                <Label>Job title</Label>
-                <Input defaultValue={existing?.title ?? ""} placeholder="e.g. Senior Frontend Engineer" />
+                <Label>Job title *</Label>
+                <Input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="e.g. Senior Frontend Engineer" />
               </div>
               <div className="grid gap-4 sm:grid-cols-2">
                 <div className="space-y-1.5">
                   <Label>Category</Label>
-                  <Select defaultValue={existing?.category ?? "Engineering"}>
+                  <Select value={category} onValueChange={setCategory}>
                     <SelectTrigger><SelectValue /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="Engineering">Engineering</SelectItem>
@@ -527,7 +674,7 @@ export function EmployerJobEdit() {
                 </div>
                 <div className="space-y-1.5">
                   <Label>Type</Label>
-                  <Select defaultValue={existing?.type ?? "full-time"}>
+                  <Select value={jobType} onValueChange={setJobType}>
                     <SelectTrigger><SelectValue /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="full-time">Full-time</SelectItem>
@@ -538,12 +685,12 @@ export function EmployerJobEdit() {
                   </Select>
                 </div>
                 <div className="space-y-1.5">
-                  <Label>Location</Label>
-                  <Input defaultValue={existing?.location ?? ""} placeholder="e.g. Lagos, Nigeria" />
+                  <Label>Location *</Label>
+                  <Input value={location} onChange={(e) => setLocation(e.target.value)} placeholder="e.g. Lagos, Nigeria" />
                 </div>
                 <div className="space-y-1.5">
                   <Label>Workplace</Label>
-                  <Select defaultValue={existing?.remote ?? "hybrid"}>
+                  <Select value={remote} onValueChange={setRemote}>
                     <SelectTrigger><SelectValue /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="onsite">On-site</SelectItem>
@@ -553,24 +700,31 @@ export function EmployerJobEdit() {
                   </Select>
                 </div>
                 <div className="space-y-1.5">
-                  <Label>Salary min (USD / month)</Label>
-                  <Input type="number" defaultValue={existing?.salary.min ?? 5000} />
+                  <Label>Salary min (USD / month) *</Label>
+                  <Input type="number" min="0" value={salaryMin} onChange={(e) => setSalaryMin(e.target.value)} />
                 </div>
                 <div className="space-y-1.5">
-                  <Label>Salary max (USD / month)</Label>
-                  <Input type="number" defaultValue={existing?.salary.max ?? 8000} />
+                  <Label>Salary max (USD / month) *</Label>
+                  <Input type="number" min="0" value={salaryMax} onChange={(e) => setSalaryMax(e.target.value)} />
                 </div>
               </div>
               <div className="space-y-1.5">
-                <Label>Job description</Label>
+                <Label>Job description *</Label>
                 <Textarea
                   rows={5}
-                  defaultValue={existing?.description ?? ""}
+                  value={description}
+                  onChange={(e) => setDescription(e.target.value)}
                   placeholder="Describe the role, team, and what success looks like…"
                 />
               </div>
+              {error && (
+                <div className="flex items-center gap-2 rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-700">
+                  <AlertCircle className="h-3.5 w-3.5 shrink-0" />
+                  {error}
+                </div>
+              )}
               <div className="flex justify-end">
-                <Button onClick={() => setStep(2)}>Continue <ArrowRight className="h-3.5 w-3.5" /></Button>
+                <Button onClick={() => { setError(null); setStep(2); }}>Continue <ArrowRight className="h-3.5 w-3.5" /></Button>
               </div>
             </div>
           )}
@@ -681,11 +835,20 @@ export function EmployerJobEdit() {
               <div className="flex justify-between">
                 <Button variant="ghost" onClick={() => setStep(2)}>Back</Button>
                 <div className="flex gap-2">
-                  <Button variant="outline" onClick={() => setSavedDraft(true)}>
+                  <Button variant="outline" onClick={() => saveJob("draft")} disabled={saving}>
                     <Save className="h-3.5 w-3.5" /> Save draft
                   </Button>
-                  <Button onClick={() => { setPublished(true); setTimeout(() => go("jobs"), 1500); }}>
-                    <SendIcon className="h-3.5 w-3.5" /> Publish job
+                  <Button onClick={() => saveJob("published")} disabled={saving}>
+                    {saving ? (
+                      <>
+                        <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-primary-foreground border-t-transparent" />
+                        Publishing…
+                      </>
+                    ) : (
+                      <>
+                        <SendIcon className="h-3.5 w-3.5" /> Publish job
+                      </>
+                    )}
                   </Button>
                 </div>
               </div>
@@ -702,28 +865,41 @@ export function EmployerJobEdit() {
 // ============================================================
 export function EmployerCandidates() {
   const { go, selectedJobId } = useApp();
+  const url = selectedJobId ? `/api/candidates?jobId=${selectedJobId}` : "/api/candidates";
+  const { data, loading } = useFetch<any>(url);
   const [sortBy, setSortBy] = useState("match");
   const [filter, setFilter] = useState("all");
   const [query, setQuery] = useState("");
 
-  let list = [...candidates];
+  const allCandidates: any[] = data?.candidates ?? [];
+  let list = [...allCandidates];
   if (filter !== "all") list = list.filter((c) => c.applicationStatus === filter);
   if (query) {
     const q = query.toLowerCase();
-    list = list.filter((c) => c.name.toLowerCase().includes(q) || c.title.toLowerCase().includes(q));
+    list = list.filter((c) => c.name.toLowerCase().includes(q) || (c.title ?? "").toLowerCase().includes(q));
   }
-  list.sort((a, b) => b.matchScore - a.matchScore);
+  list.sort((a, b) => (b.matchScore || 0) - (a.matchScore || 0));
 
-  const targetJob = employerJobs.find((j) => j.id === selectedJobId) || employerJobs[0];
+  const targetJobTitle = allCandidates[0]?.job?.title ?? "all your jobs";
+
+  const updateStatus = async (applicationId: string, status: string) => {
+    await fetch("/api/applications", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ applicationId, status }),
+    });
+    // Refresh by reloading the page (simple)
+    window.location.reload();
+  };
 
   return (
     <PageContainer>
       <SectionHeader
         title="Candidate Ranking"
-        description={`AI-ranked applicants for ${targetJob?.title}`}
+        description={`Applicants for ${targetJobTitle}`}
         actions={
           <Badge variant="outline" className="bg-primary/5 text-primary border-primary/20">
-            {candidates.length} candidates
+            {allCandidates.length} candidate{allCandidates.length === 1 ? "" : "s"}
           </Badge>
         }
       />
@@ -753,12 +929,13 @@ export function EmployerCandidates() {
           <SelectContent>
             <SelectItem value="match">Sort: Match score</SelectItem>
             <SelectItem value="recent">Sort: Most recent</SelectItem>
-            <SelectItem value="experience">Sort: Experience</SelectItem>
           </SelectContent>
         </Select>
       </div>
 
-      {list.length === 0 ? (
+      {loading ? (
+        <LoadingState label="Loading candidates…" rows={3} />
+      ) : list.length === 0 ? (
         <EmptyState
           className="mt-6"
           icon={<Users className="h-5 w-5" />}
@@ -783,60 +960,42 @@ export function EmployerCandidates() {
                         </button>
                         <p className="text-xs text-muted-foreground">{c.title} · {c.location}</p>
                         <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[11px] text-muted-foreground">
-                          <span>{c.experienceYears}y experience</span>
-                          <span>{c.education}</span>
-                          <span className="flex items-center gap-1">
-                            <ShieldCheck className="h-3 w-3 text-emerald-600" /> {c.verifiedSkills} verified
-                          </span>
                           <span>Applied {timeAgo(c.appliedAt)}</span>
                         </div>
                       </div>
                       <div className="flex items-center gap-2">
                         <ApplicationStatusBadge status={c.applicationStatus} />
-                        <MatchScore score={c.matchScore} size="md" />
+                        {c.matchScore > 0 && <MatchScore score={c.matchScore} size="md" />}
                       </div>
                     </div>
 
-                    <div className="mt-3 grid gap-2 sm:grid-cols-2">
-                      <div>
-                        <p className="text-[10px] font-semibold uppercase text-emerald-700">Matching skills</p>
+                    {c.skills && c.skills.length > 0 && (
+                      <div className="mt-3">
+                        <p className="text-[10px] font-semibold uppercase text-emerald-700">Candidate skills</p>
                         <div className="mt-1 flex flex-wrap gap-1">
-                          {c.matchingSkills.slice(0, 5).map((s) => (
-                            <SkillChip key={s} name={s} size="sm" />
+                          {c.skills.slice(0, 6).map((s: any) => (
+                            <SkillChip key={s.id} name={s.name} proficiency={s.proficiency} verified={s.verified} size="sm" />
                           ))}
                         </div>
                       </div>
-                      {c.missingSkills.length > 0 && (
-                        <div>
-                          <p className="text-[10px] font-semibold uppercase text-rose-700">Missing skills</p>
-                          <div className="mt-1 flex flex-wrap gap-1">
-                            {c.missingSkills.map((s) => (
-                              <span
-                                key={s}
-                                className="inline-flex items-center gap-1 rounded-md border border-rose-200 bg-rose-50 px-2 py-0.5 text-[11px] font-medium text-rose-700"
-                              >
-                                <AlertCircle className="h-3 w-3" /> {s}
-                              </span>
-                            ))}
-                          </div>
-                        </div>
-                      )}
-                    </div>
+                    )}
 
                     <div className="mt-3 flex flex-wrap items-center gap-2">
                       <Button size="sm" onClick={() => go("candidate-detail", { candidateId: c.id })}>
                         <Eye className="h-3.5 w-3.5" /> View profile
                       </Button>
-                      <Button size="sm" variant="outline" onClick={() => go("candidate-detail", { candidateId: c.id })}>
-                        <Star className="h-3.5 w-3.5" /> Shortlist
+                      {c.applicationStatus !== "shortlisted" && c.applicationStatus !== "interview" && (
+                        <Button size="sm" variant="outline" onClick={() => updateStatus(c.applicationId, "shortlisted")}>
+                          <Star className="h-3.5 w-3.5" /> Shortlist
+                        </Button>
+                      )}
+                      <Button size="sm" variant="outline" onClick={() => updateStatus(c.applicationId, "interview")}>
+                        <CalendarClock className="h-3.5 w-3.5" /> Move to interview
                       </Button>
-                      <Button size="sm" variant="outline" onClick={() => go("messages")}>
-                        <MessageSquare className="h-3.5 w-3.5" /> Message
+                      <Button size="sm" variant="ghost" onClick={() => updateStatus(c.applicationId, "rejected")}>
+                        <X className="h-3.5 w-3.5" /> Reject
                       </Button>
-                      <Button size="sm" variant="ghost" onClick={() => go("interviews")}>
-                        <CalendarClock className="h-3.5 w-3.5" /> Interview
-                      </Button>
-                      {!c.contactUnlocked && <PrivacyLock compact />}
+                      <PrivacyLock compact />
                     </div>
                   </div>
                 </div>
@@ -1068,55 +1227,64 @@ export function EmployerCandidateDetail() {
 // ============================================================
 export function EmployerApplications() {
   const { go } = useApp();
+  const { data, loading } = useFetch<any>("/api/applications");
+  const applications: any[] = data?.applications ?? [];
+
   return (
     <PageContainer>
       <SectionHeader
         title="Applications"
         description="All applications across your active jobs."
       />
-      <div className="mt-6 overflow-hidden rounded-lg border border-border">
-        <table className="w-full text-sm">
-          <thead className="bg-muted/50 text-[11px] uppercase tracking-wide text-muted-foreground">
-            <tr>
-              <th className="px-4 py-2.5 text-left font-medium">Candidate</th>
-              <th className="hidden px-4 py-2.5 text-left font-medium sm:table-cell">Job</th>
-              <th className="hidden px-4 py-2.5 text-left font-medium md:table-cell">Match</th>
-              <th className="px-4 py-2.5 text-left font-medium">Status</th>
-              <th className="hidden px-4 py-2.5 text-left font-medium lg:table-cell">Applied</th>
-              <th className="px-4 py-2.5 text-right font-medium">Actions</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-border bg-card">
-            {candidates.map((c) => (
-              <tr key={c.id} className="hover:bg-accent/30">
-                <td className="px-4 py-3">
-                  <div className="flex items-center gap-2.5">
-                    <Avatar initials={c.initials} color={c.avatarColor} size="sm" />
-                    <div className="min-w-0">
-                      <p className="truncate text-sm font-semibold">{c.name}</p>
-                      <p className="truncate text-xs text-muted-foreground">{c.title}</p>
-                    </div>
-                  </div>
-                </td>
-                <td className="hidden px-4 py-3 sm:table-cell">
-                  <p className="text-sm">Senior Frontend Engineer</p>
-                  <p className="text-xs text-muted-foreground">Northwind</p>
-                </td>
-                <td className="hidden px-4 py-3 md:table-cell">
-                  <MatchScore score={c.matchScore} size="sm" showLabel={false} />
-                </td>
-                <td className="px-4 py-3"><ApplicationStatusBadge status={c.applicationStatus} /></td>
-                <td className="hidden px-4 py-3 text-xs text-muted-foreground lg:table-cell">{timeAgo(c.appliedAt)}</td>
-                <td className="px-4 py-3 text-right">
-                  <Button size="sm" variant="outline" onClick={() => go("candidate-detail", { candidateId: c.id })}>
-                    Review
-                  </Button>
-                </td>
+      {loading ? (
+        <LoadingState label="Loading applications…" rows={3} />
+      ) : applications.length === 0 ? (
+        <EmptyState className="mt-6" icon={<Send className="h-5 w-5" />} title="No applications yet" description="Once candidates apply to your jobs, they'll appear here." />
+      ) : (
+        <div className="mt-6 overflow-hidden rounded-lg border border-border">
+          <table className="w-full text-sm">
+            <thead className="bg-muted/50 text-[11px] uppercase tracking-wide text-muted-foreground">
+              <tr>
+                <th className="px-4 py-2.5 text-left font-medium">Candidate</th>
+                <th className="hidden px-4 py-2.5 text-left font-medium sm:table-cell">Job</th>
+                <th className="hidden px-4 py-2.5 text-left font-medium md:table-cell">Match</th>
+                <th className="px-4 py-2.5 text-left font-medium">Status</th>
+                <th className="hidden px-4 py-2.5 text-left font-medium lg:table-cell">Applied</th>
+                <th className="px-4 py-2.5 text-right font-medium">Actions</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+            </thead>
+            <tbody className="divide-y divide-border bg-card">
+              {applications.map((a) => (
+                <tr key={a.id} className="hover:bg-accent/30">
+                  <td className="px-4 py-3">
+                    <div className="flex items-center gap-2.5">
+                      <Avatar initials={a.candidate?.initials ?? a.candidate?.name?.slice(0,2).toUpperCase() ?? "?"} color={a.candidate?.avatarColor ?? "oklch(0.55 0.22 285)"} size="sm" />
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-semibold">{a.candidate?.name ?? "—"}</p>
+                        <p className="truncate text-xs text-muted-foreground">{a.candidate?.title ?? ""}</p>
+                      </div>
+                    </div>
+                  </td>
+                  <td className="hidden px-4 py-3 sm:table-cell">
+                    <p className="text-sm">{a.job?.title ?? "—"}</p>
+                    <p className="text-xs text-muted-foreground">{a.job?.company ?? ""}</p>
+                  </td>
+                  <td className="hidden px-4 py-3 md:table-cell">
+                    {a.matchScore && <MatchScore score={a.matchScore} size="sm" showLabel={false} />}
+                  </td>
+                  <td className="px-4 py-3"><ApplicationStatusBadge status={a.status} /></td>
+                  <td className="hidden px-4 py-3 text-xs text-muted-foreground lg:table-cell">{timeAgo(a.appliedAt)}</td>
+                  <td className="px-4 py-3 text-right">
+                    <Button size="sm" variant="outline" onClick={() => go("candidate-detail", { candidateId: a.candidate?.id })}>
+                      Review
+                    </Button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
     </PageContainer>
   );
 }
@@ -1191,54 +1359,64 @@ export function EmployerInterviews() {
 // EMPLOYER NOTIFICATIONS & MESSAGES (mirror seeker pattern)
 // ============================================================
 export function EmployerNotifications() {
-  const [items, setItems] = useState(employerNotifications);
-  const markAllRead = () => setItems(items.map((n) => ({ ...n, read: true })));
+  const { data, loading, refetch } = useFetch<any>("/api/notifications");
+  const items: any[] = data?.notifications ?? [];
+  const markAllRead = async () => {
+    await fetch("/api/notifications", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ markAllRead: true }),
+    });
+    refetch();
+  };
 
   return (
     <PageContainer>
       <SectionHeader
         title="Notifications"
+        description={`${items.filter((n) => !n.read).length} unread`}
         actions={
-          <Button variant="outline" size="sm" onClick={markAllRead}>
+          <Button variant="outline" size="sm" onClick={markAllRead} disabled={items.filter((n) => !n.read).length === 0}>
             <Check className="h-3.5 w-3.5" /> Mark all read
           </Button>
         }
       />
-      <div className="mt-6 space-y-2">
-        {items.map((n) => (
-          <div
-            key={n.id}
-            className={cn(
-              "flex items-start gap-3 rounded-lg border bg-card p-3",
-              !n.read ? "border-primary/30 bg-primary/5" : "border-border"
-            )}
-          >
-            <div className={cn(
-              "flex h-8 w-8 shrink-0 items-center justify-center rounded-full",
-              n.type === "application" ? "bg-blue-100 text-blue-700" :
-              n.type === "interview" ? "bg-amber-100 text-amber-700" :
-              "bg-slate-100 text-slate-700"
-            )}>
-              {n.type === "application" ? <Send className="h-4 w-4" /> :
-               n.type === "interview" ? <CalendarClock className="h-4 w-4" /> :
-               <Bell className="h-4 w-4" />}
-            </div>
-            <div className="min-w-0 flex-1">
-              <div className="flex items-start justify-between gap-2">
-                <p className="text-sm font-semibold">{n.title}</p>
-                <span className="text-[10px] text-muted-foreground">{n.time}</span>
-              </div>
-              <p className="mt-0.5 text-xs text-muted-foreground">{n.message}</p>
-              {n.actionLabel && (
-                <Button size="sm" variant="link" className="mt-1 h-auto p-0 text-xs">
-                  {n.actionLabel} <ArrowRight className="h-3 w-3" />
-                </Button>
+      {loading ? (
+        <LoadingState label="Loading notifications…" rows={3} />
+      ) : items.length === 0 ? (
+        <EmptyState className="mt-6" icon={<Bell className="h-5 w-5" />} title="No notifications" description="You're all caught up." />
+      ) : (
+        <div className="mt-6 space-y-2">
+          {items.map((n) => (
+            <div
+              key={n.id}
+              className={cn(
+                "flex items-start gap-3 rounded-lg border bg-card p-3",
+                !n.read ? "border-primary/30 bg-primary/5" : "border-border"
               )}
+            >
+              <div className={cn(
+                "flex h-8 w-8 shrink-0 items-center justify-center rounded-full",
+                n.type === "application" ? "bg-blue-100 text-blue-700" :
+                n.type === "interview" ? "bg-amber-100 text-amber-700" :
+                "bg-slate-100 text-slate-700"
+              )}>
+                {n.type === "application" ? <Send className="h-4 w-4" /> :
+                 n.type === "interview" ? <CalendarClock className="h-4 w-4" /> :
+                 <Bell className="h-4 w-4" />}
+              </div>
+              <div className="min-w-0 flex-1">
+                <div className="flex items-start justify-between gap-2">
+                  <p className="text-sm font-semibold">{n.title}</p>
+                  <span className="text-[10px] text-muted-foreground">{timeAgo(n.createdAt)}</span>
+                </div>
+                <p className="mt-0.5 text-xs text-muted-foreground">{n.message}</p>
+              </div>
+              {!n.read && <span className="mt-1 h-2 w-2 shrink-0 rounded-full bg-primary" />}
             </div>
-            {!n.read && <span className="mt-1 h-2 w-2 shrink-0 rounded-full bg-primary" />}
-          </div>
-        ))}
-      </div>
+          ))}
+        </div>
+      )}
     </PageContainer>
   );
 }

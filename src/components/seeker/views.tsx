@@ -53,6 +53,7 @@ import {
   seekerDashboardStats,
   currentUser,
 } from "@/lib/mock-data";
+import { useFetch } from "@/lib/use-fetch";
 import type {
   Job,
   Application,
@@ -98,6 +99,7 @@ import {
   Zap,
   Lightbulb,
   RefreshCw,
+  X,
 } from "lucide-react";
 
 // ============================================================
@@ -129,12 +131,44 @@ function timeAgo(date: string) {
 // ============================================================
 export function SeekerDashboard() {
   const { go } = useApp();
-  const user = currentUser.seeker;
+  const { data: profileData, loading: profileLoading } = useFetch<any>("/api/profile");
+  const { data: appsData, loading: appsLoading } = useFetch<any>("/api/applications");
+  const { data: notifData, loading: notifLoading } = useFetch<any>("/api/notifications");
+  const { data: jobsData } = useFetch<any>("/api/jobs");
+
+  const profile = profileData?.profile;
+  const applications = appsData?.applications ?? [];
+  const notifications = notifData?.notifications ?? [];
+  const publishedJobs = jobsData?.jobs ?? [];
+
+  // Compute profile completion from real data
+  const profileCompletion = profile
+    ? Math.round(
+        (((profile.name ? 1 : 0) +
+          (profile.about ? 1 : 0) +
+          (profile.location ? 1 : 0) +
+          (profile.skills?.length > 0 ? 1 : 0) +
+          (profile.experiences?.length > 0 ? 1 : 0) +
+          (profile.educations?.length > 0 ? 1 : 0)) /
+          6) *
+          100
+      )
+    : 0;
+
+  const firstName = profile?.name?.split(" ")[0] ?? "there";
+  const activeApplications = applications.filter((a: any) =>
+    ["submitted", "screening", "shortlisted", "interview"].includes(a.status)
+  ).length;
+  const interviewsScheduled = applications.filter((a: any) => a.status === "interview").length;
+  const avgMatchScore = applications.length
+    ? Math.round(applications.reduce((sum: number, a: any) => sum + (a.matchScore || 0), 0) / applications.length)
+    : 0;
+  const unreadNotifications = notifications.filter((n: any) => !n.read).length;
 
   return (
     <PageContainer>
       <SectionHeader
-        title={`Welcome back, ${user.name.split(" ")[0]}`}
+        title={`Welcome back, ${firstName}`}
         description="Here's your job-search overview for today."
         actions={
           <Button onClick={() => go("recommended")}>
@@ -144,10 +178,10 @@ export function SeekerDashboard() {
       />
 
       <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <StatCard label="Profile completion" value={`${user.profileCompletion}%`} icon={<User className="h-4 w-4" />} hint="3 steps left" />
-        <StatCard label="Recommended jobs" value={seekerDashboardStats.newRecommendations} icon={<Target className="h-4 w-4" />} hint="Updated 2h ago" />
-        <StatCard label="Active applications" value={seekerDashboardStats.activeApplications} icon={<Send className="h-4 w-4" />} hint={`${seekerDashboardStats.interviewsScheduled} interview scheduled`} />
-        <StatCard label="Avg. match score" value={`${seekerDashboardStats.averageMatchScore}%`} icon={<Sparkles className="h-4 w-4" />} hint="Across active applications" delta="+4% this week" deltaTone="up" />
+        <StatCard label="Profile completion" value={`${profileCompletion}%`} icon={<User className="h-4 w-4" />} hint={profileCompletion < 100 ? "Steps left" : "All done!"} />
+        <StatCard label="Open jobs" value={publishedJobs.length} icon={<Target className="h-4 w-4" />} hint="Live on platform" />
+        <StatCard label="Active applications" value={activeApplications} icon={<Send className="h-4 w-4" />} hint={`${interviewsScheduled} interview scheduled`} />
+        <StatCard label="Avg. match score" value={`${avgMatchScore}%`} icon={<Sparkles className="h-4 w-4" />} hint="Across your applications" />
       </div>
 
       <div className="mt-6 grid gap-4 lg:grid-cols-3">
@@ -159,15 +193,15 @@ export function SeekerDashboard() {
           </CardHeader>
           <CardContent className="space-y-3">
             <div className="flex items-center gap-4">
-              <ProfileCompletionRing value={user.profileCompletion} size={84} />
+              <ProfileCompletionRing value={profileCompletion} size={84} />
               <div className="space-y-1 text-xs">
                 {[
-                  { label: "Basic info", done: true },
-                  { label: "Skills & proficiency", done: true },
-                  { label: "Education", done: true },
-                  { label: "Experience", done: true },
-                  { label: "Resume upload", done: true },
-                  { label: "Skill verification", done: false },
+                  { label: "Basic info", done: !!(profile?.name && profile?.about) },
+                  { label: "Skills & proficiency", done: (profile?.skills?.length ?? 0) > 0 },
+                  { label: "Education", done: (profile?.educations?.length ?? 0) > 0 },
+                  { label: "Experience", done: (profile?.experiences?.length ?? 0) > 0 },
+                  { label: "Location", done: !!profile?.location },
+                  { label: "Skill verification", done: (profile?.skills?.filter((s: any) => s.verified === "verified").length ?? 0) > 0 },
                 ].map((s) => (
                   <div key={s.label} className="flex items-center gap-2">
                     {s.done ? (
@@ -186,40 +220,41 @@ export function SeekerDashboard() {
           </CardContent>
         </Card>
 
-        {/* Recommended jobs */}
+        {/* Recommended jobs (from published jobs in DB) */}
         <Card className="lg:col-span-2">
           <CardHeader className="pb-3 flex flex-row items-center justify-between space-y-0">
             <div>
-              <CardTitle className="text-sm">Top recommended jobs</CardTitle>
-              <CardDescription>Based on your skills & recent activity</CardDescription>
+              <CardTitle className="text-sm">Open jobs on the platform</CardTitle>
+              <CardDescription>Click any job to view details and apply</CardDescription>
             </div>
             <Button variant="ghost" size="sm" onClick={() => go("recommended")}>
               View all <ArrowRight className="h-3.5 w-3.5" />
             </Button>
           </CardHeader>
           <CardContent className="space-y-2.5">
-            {recommendedJobs.slice(0, 3).map((j) => (
-              <button
-                key={j.id}
-                onClick={() => go("job-detail", { jobId: j.id })}
-                className="group flex w-full items-center gap-3 rounded-lg border border-border bg-card p-3 text-left transition-colors hover:bg-accent"
-              >
-                <CompanyLogo initials={j.companyLogo || "CO"} size="md" />
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-semibold group-hover:text-primary">{j.title}</p>
-                  <p className="truncate text-xs text-muted-foreground">{j.company} · {j.location}</p>
-                  <div className="mt-1 flex flex-wrap gap-1">
-                    {j.skills.slice(0, 3).map((s) => (
-                      <SkillChip key={s.id} name={s.name} size="sm" />
-                    ))}
+            {profileLoading || jobsData === null ? (
+              <LoadingState label="Loading jobs…" rows={2} />
+            ) : publishedJobs.length === 0 ? (
+              <EmptyState icon={<Target className="h-5 w-5" />} title="No open jobs yet" description="Check back soon — employers are posting new roles." />
+            ) : (
+              publishedJobs.slice(0, 4).map((j: any) => (
+                <button
+                  key={j.id}
+                  onClick={() => go("job-detail", { jobId: j.id })}
+                  className="group flex w-full items-center gap-3 rounded-lg border border-border bg-card p-3 text-left transition-colors hover:bg-accent"
+                >
+                  <CompanyLogo initials={j.companyLogo || j.company.slice(0, 2).toUpperCase()} size="md" />
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-semibold group-hover:text-primary">{j.title}</p>
+                    <p className="truncate text-xs text-muted-foreground">{j.company} · {j.location}</p>
                   </div>
-                </div>
-                <div className="flex flex-col items-end gap-1">
-                  <MatchScore score={j.matchScore || 0} size="sm" showLabel={false} />
-                  <span className="text-[10px] text-muted-foreground">{formatSalary(j)}</span>
-                </div>
-              </button>
-            ))}
+                  <div className="flex flex-col items-end gap-1">
+                    <span className="text-[10px] text-muted-foreground">${j.salaryMin.toLocaleString()}–${j.salaryMax.toLocaleString()}/{j.salaryPeriod}</span>
+                    <span className="text-[10px] text-muted-foreground">{j.remote}</span>
+                  </div>
+                </button>
+              ))
+            )}
           </CardContent>
         </Card>
       </div>
@@ -237,21 +272,32 @@ export function SeekerDashboard() {
             </Button>
           </CardHeader>
           <CardContent className="space-y-2">
-            {seekerApplications.slice(0, 3).map((a) => (
-              <button
-                key={a.id}
-                onClick={() => go("applications")}
-                className="group flex w-full items-center gap-3 rounded-lg border border-border bg-card p-3 text-left transition-colors hover:bg-accent"
-              >
-                <CompanyLogo initials={a.job.companyLogo || "CO"} size="sm" />
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-semibold group-hover:text-primary">{a.job.title}</p>
-                  <p className="truncate text-xs text-muted-foreground">{a.job.company} · applied {timeAgo(a.appliedAt)}</p>
-                </div>
-                <ApplicationStatusBadge status={a.status} />
-                <MatchScore score={a.matchScore} size="sm" showLabel={false} />
-              </button>
-            ))}
+            {appsLoading ? (
+              <LoadingState label="Loading applications…" rows={2} />
+            ) : applications.length === 0 ? (
+              <EmptyState
+                icon={<Send className="h-5 w-5" />}
+                title="No applications yet"
+                description="Browse open jobs and apply to start tracking them here."
+                action={<Button size="sm" onClick={() => go("recommended")}>Browse jobs</Button>}
+              />
+            ) : (
+              applications.slice(0, 4).map((a: any) => (
+                <button
+                  key={a.id}
+                  onClick={() => go("applications")}
+                  className="group flex w-full items-center gap-3 rounded-lg border border-border bg-card p-3 text-left transition-colors hover:bg-accent"
+                >
+                  <CompanyLogo initials={a.job?.companyLogo || "CO"} size="sm" />
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-semibold group-hover:text-primary">{a.job?.title}</p>
+                    <p className="truncate text-xs text-muted-foreground">{a.job?.company} · applied {timeAgo(a.appliedAt)}</p>
+                  </div>
+                  <ApplicationStatusBadge status={a.status} />
+                  {a.matchScore && <MatchScore score={a.matchScore} size="sm" showLabel={false} />}
+                </button>
+              ))
+            )}
           </CardContent>
         </Card>
 
@@ -260,63 +306,64 @@ export function SeekerDashboard() {
           <CardHeader className="pb-3 flex flex-row items-center justify-between space-y-0">
             <div>
               <CardTitle className="text-sm">Notifications</CardTitle>
-              <CardDescription>{seekerDashboardStats.unreadNotifications} unread</CardDescription>
+              <CardDescription>{unreadNotifications} unread</CardDescription>
             </div>
             <Button variant="ghost" size="sm" onClick={() => go("notifications")}>
               <Bell className="h-3.5 w-3.5" />
             </Button>
           </CardHeader>
           <CardContent className="space-y-2">
-            {seekerNotifications.slice(0, 3).map((n) => (
-              <div
-                key={n.id}
-                className={cn(
-                  "rounded-lg border border-border bg-card p-3",
-                  !n.read && "border-primary/30 bg-primary/5"
-                )}
-              >
-                <div className="flex items-start gap-2">
-                  {!n.read && <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-primary" />}
-                  <div className="min-w-0 flex-1">
-                    <p className="text-xs font-semibold">{n.title}</p>
-                    <p className="mt-0.5 line-clamp-2 text-xs text-muted-foreground">{n.message}</p>
-                    <p className="mt-1 text-[10px] text-muted-foreground">{n.time}</p>
+            {notifLoading ? (
+              <LoadingState label="Loading…" rows={2} />
+            ) : notifications.length === 0 ? (
+              <EmptyState icon={<Bell className="h-5 w-5" />} title="No notifications" />
+            ) : (
+              notifications.slice(0, 3).map((n: any) => (
+                <div
+                  key={n.id}
+                  className={cn(
+                    "rounded-lg border border-border bg-card p-3",
+                    !n.read && "border-primary/30 bg-primary/5"
+                  )}
+                >
+                  <div className="flex items-start gap-2">
+                    {!n.read && <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-primary" />}
+                    <div className="min-w-0 flex-1">
+                      <p className="text-xs font-semibold">{n.title}</p>
+                      <p className="mt-0.5 line-clamp-2 text-xs text-muted-foreground">{n.message}</p>
+                      <p className="mt-1 text-[10px] text-muted-foreground">{timeAgo(n.createdAt)}</p>
+                    </div>
                   </div>
                 </div>
-              </div>
-            ))}
+              ))
+            )}
           </CardContent>
         </Card>
       </div>
 
-      {/* Skill gap teaser */}
+      {/* Skill summary */}
       <Card className="mt-4">
         <CardHeader className="pb-3 flex flex-row items-center justify-between space-y-0">
           <div>
-            <CardTitle className="text-sm">Skill gap focus</CardTitle>
-            <CardDescription>Skills that would unlock more high-match roles</CardDescription>
+            <CardTitle className="text-sm">Your skills</CardTitle>
+            <CardDescription>{profile?.skills?.length ?? 0} skills on your profile</CardDescription>
           </div>
-          <Button variant="ghost" size="sm" onClick={() => go("skill-gap")}>
-            Full analysis <ArrowRight className="h-3.5 w-3.5" />
+          <Button variant="ghost" size="sm" onClick={() => go("skills")}>
+            Manage skills <ArrowRight className="h-3.5 w-3.5" />
           </Button>
         </CardHeader>
         <CardContent>
-          <div className="grid gap-2 sm:grid-cols-3">
-            {skillGapAnalysis.slice(0, 3).map((g) => (
-              <div key={g.skill} className="rounded-lg border border-border bg-card p-3">
-                <div className="flex items-center justify-between">
-                  <p className="text-sm font-semibold">{g.skill}</p>
-                  <Badge variant="outline" className="text-[10px]">{g.jobsAvailable} jobs</Badge>
-                </div>
-                <p className="mt-1 text-xs text-muted-foreground">
-                  Required: <span className="capitalize">{g.requiredProficiency}</span>
-                </p>
-                <p className="text-xs text-muted-foreground">
-                  You: {g.currentProficiency ?? "—"}
-                </p>
-              </div>
-            ))}
-          </div>
+          {profileLoading ? (
+            <LoadingState label="Loading skills…" rows={1} />
+          ) : (profile?.skills?.length ?? 0) === 0 ? (
+            <EmptyState icon={<Sparkles className="h-5 w-5" />} title="No skills yet" description="Add skills to your profile to start matching." action={<Button size="sm" onClick={() => go("skills")}>Add skills</Button>} />
+          ) : (
+            <div className="flex flex-wrap gap-2">
+              {profile.skills.map((s: any) => (
+                <SkillChip key={s.id} name={s.name} proficiency={s.proficiency} verified={s.verified} size="sm" />
+              ))}
+            </div>
+          )}
         </CardContent>
       </Card>
     </PageContainer>
@@ -327,8 +374,65 @@ export function SeekerDashboard() {
 // SEEKER PROFILE
 // ============================================================
 export function SeekerProfile() {
-  const { go } = useApp();
-  const user = currentUser.seeker;
+  const { go, user: sessionUser } = useApp();
+  const { data, loading, refetch } = useFetch<any>("/api/profile");
+  const profile = data?.profile;
+
+  // Editable form state
+  const [name, setName] = useState("");
+  const [title, setTitle] = useState("");
+  const [location, setLocation] = useState("");
+  const [about, setAbout] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [saveMsg, setSaveMsg] = useState<{ ok: boolean; msg: string } | null>(null);
+
+  // Sync form state when profile loads
+  useEffect(() => {
+    if (profile) {
+      setName(profile.name ?? "");
+      setTitle(profile.title ?? "");
+      setLocation(profile.location ?? "");
+      setAbout(profile.about ?? "");
+    }
+  }, [profile]);
+
+  const save = async () => {
+    setSaving(true);
+    setSaveMsg(null);
+    try {
+      const res = await fetch("/api/profile", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name, title, location, about }),
+      });
+      const json = await res.json();
+      if (json.ok) {
+        setSaveMsg({ ok: true, msg: "Profile updated successfully." });
+        refetch();
+      } else {
+        setSaveMsg({ ok: false, msg: json.error ?? "Save failed." });
+      }
+    } catch {
+      setSaveMsg({ ok: false, msg: "Network error." });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const completion = profile
+    ? Math.round(
+        (((profile.name ? 1 : 0) +
+          (profile.about ? 1 : 0) +
+          (profile.location ? 1 : 0) +
+          (profile.skills?.length > 0 ? 1 : 0) +
+          (profile.experiences?.length > 0 ? 1 : 0) +
+          (profile.educations?.length > 0 ? 1 : 0)) /
+          6) *
+          100
+      )
+    : 0;
+
+  const pendingSkills = profile?.skills?.filter((s: any) => s.verified === "pending").length ?? 0;
 
   return (
     <PageContainer>
@@ -336,138 +440,184 @@ export function SeekerProfile() {
         title="My Profile"
         description="Your professional profile is used by the AI matching engine."
         actions={
-          <Button variant="outline">
+          <Button variant="outline" onClick={() => window.print()}>
             <Download className="h-4 w-4" /> Export PDF
           </Button>
         }
       />
 
-      <div className="mt-6 grid gap-4 lg:grid-cols-3">
-        {/* Profile card */}
-        <Card className="lg:col-span-1">
-          <CardContent className="p-6">
-            <div className="flex flex-col items-center text-center">
-              <Avatar initials={user.initials} color={user.avatarColor} size="lg" />
-              <h2 className="mt-3 text-base font-semibold">{user.name}</h2>
-              <p className="text-xs text-muted-foreground">{user.title}</p>
-              <p className="mt-1 text-xs text-muted-foreground">{user.location}</p>
-              <div className="mt-3 flex gap-2">
-                <Button size="sm" variant="outline">
-                  <Mail className="h-3.5 w-3.5" /> Message
-                </Button>
-                <Button size="sm" variant="outline">
-                  <Phone className="h-3.5 w-3.5" /> Contact
-                </Button>
+      {loading ? (
+        <LoadingState label="Loading profile…" rows={3} />
+      ) : (
+        <div className="mt-6 grid gap-4 lg:grid-cols-3">
+          {/* Profile card */}
+          <Card className="lg:col-span-1">
+            <CardContent className="p-6">
+              <div className="flex flex-col items-center text-center">
+                <Avatar
+                  initials={profile?.initials ?? sessionUser?.initials ?? "U"}
+                  color={profile?.avatarColor ?? sessionUser?.avatarColor ?? "oklch(0.55 0.22 285)"}
+                  size="lg"
+                />
+                <h2 className="mt-3 text-base font-semibold">{profile?.name ?? "—"}</h2>
+                <p className="text-xs text-muted-foreground">{profile?.title ?? "—"}</p>
+                <p className="mt-1 text-xs text-muted-foreground">{profile?.location ?? "—"}</p>
               </div>
-            </div>
-            <div className="mt-5 space-y-3 border-t border-border pt-4">
-              <div className="flex items-center gap-2 text-xs">
-                <Mail className="h-3.5 w-3.5 text-muted-foreground" />
-                <span className="text-muted-foreground">{user.email}</span>
-              </div>
-              <div className="flex items-center gap-2 text-xs">
-                <Phone className="h-3.5 w-3.5 text-muted-foreground" />
-                <span className="text-muted-foreground">{user.phone}</span>
-              </div>
-              <div className="flex items-center gap-2 text-xs">
-                <Calendar className="h-3.5 w-3.5 text-muted-foreground" />
-                <span className="text-muted-foreground">Joined {user.joinedAt}</span>
-              </div>
-            </div>
-            <div className="mt-5 border-t border-border pt-4">
-              <div className="flex items-center justify-between">
-                <p className="text-xs font-semibold">Profile completion</p>
-                <span className="text-xs font-semibold text-primary">{user.profileCompletion}%</span>
-              </div>
-              <Progress value={user.profileCompletion} className="mt-1.5 h-1.5" />
-              <Button variant="outline" size="sm" className="mt-3 w-full" onClick={() => go("skills")}>
-                <Sparkles className="h-3.5 w-3.5" /> Verify 4 pending skills
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* About + editable sections */}
-        <div className="lg:col-span-2 space-y-4">
-          <Card>
-            <CardHeader className="pb-3">
-              <CardTitle className="text-sm">About</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <Textarea
-                defaultValue="Senior Frontend Engineer with 6 years building customer-facing products across fintech, agritech, and payments. Led the React/Next.js rewrite at Twiga Foods, lifting Lighthouse scores by 47%. Passionate about accessibility, performance, and mentoring."
-                rows={4}
-                className="resize-none"
-              />
-              <div className="mt-2 flex justify-end gap-2">
-                <Button variant="ghost" size="sm">Cancel</Button>
-                <Button size="sm">Save changes</Button>
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Experience */}
-          <Card>
-            <CardHeader className="pb-3 flex flex-row items-center justify-between space-y-0">
-              <CardTitle className="text-sm flex items-center gap-2">
-                <Briefcase className="h-4 w-4 text-primary" /> Experience
-              </CardTitle>
-              <Button variant="outline" size="sm">
-                <Plus className="h-3.5 w-3.5" /> Add
-              </Button>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              {seekerExperience.map((e) => (
-                <div key={e.id} className="rounded-lg border border-border bg-card p-3">
-                  <div className="flex items-start justify-between gap-2">
-                    <div>
-                      <p className="text-sm font-semibold">{e.title}</p>
-                      <p className="text-xs text-muted-foreground">{e.company}</p>
-                      <p className="text-[11px] text-muted-foreground">{e.startDate} — {e.endDate}</p>
-                    </div>
-                    {e.current && <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-200 text-[10px]">Current</Badge>}
-                  </div>
-                  <p className="mt-2 text-xs text-muted-foreground">{e.description}</p>
+              <div className="mt-5 space-y-3 border-t border-border pt-4">
+                <div className="flex items-center gap-2 text-xs">
+                  <Mail className="h-3.5 w-3.5 text-muted-foreground" />
+                  <span className="text-muted-foreground">{sessionUser?.email}</span>
                 </div>
-              ))}
+                {profile?.location && (
+                  <div className="flex items-center gap-2 text-xs">
+                    <MapPin className="h-3.5 w-3.5 text-muted-foreground" />
+                    <span className="text-muted-foreground">{profile.location}</span>
+                  </div>
+                )}
+              </div>
+              <div className="mt-5 border-t border-border pt-4">
+                <div className="flex items-center justify-between">
+                  <p className="text-xs font-semibold">Profile completion</p>
+                  <span className="text-xs font-semibold text-primary">{completion}%</span>
+                </div>
+                <Progress value={completion} className="mt-1.5 h-1.5" />
+                {pendingSkills > 0 && (
+                  <Button variant="outline" size="sm" className="mt-3 w-full" onClick={() => go("skills")}>
+                    <Sparkles className="h-3.5 w-3.5" /> {pendingSkills} skill{pendingSkills === 1 ? "" : "s"} pending verification
+                  </Button>
+                )}
+              </div>
             </CardContent>
           </Card>
 
-          {/* Education */}
-          <Card>
-            <CardHeader className="pb-3 flex flex-row items-center justify-between space-y-0">
-              <CardTitle className="text-sm flex items-center gap-2">
-                <GraduationCap className="h-4 w-4 text-primary" /> Education
-              </CardTitle>
-              <Button variant="outline" size="sm">
-                <Plus className="h-3.5 w-3.5" /> Add
-              </Button>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              {seekerEducation.map((ed) => (
-                <div key={ed.id} className="rounded-lg border border-border bg-card p-3">
-                  <div className="flex items-start justify-between gap-2">
-                    <div>
-                      <p className="text-sm font-semibold">{ed.degree}, {ed.field}</p>
-                      <p className="text-xs text-muted-foreground">{ed.institution}</p>
-                      <p className="text-[11px] text-muted-foreground">{ed.startDate} — {ed.endDate}</p>
-                    </div>
-                    {ed.verified ? (
-                      <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-200 text-[10px] gap-1">
-                        <ShieldCheck className="h-3 w-3" /> Verified
-                      </Badge>
+          {/* About + editable sections */}
+          <div className="lg:col-span-2 space-y-4">
+            <Card>
+              <CardHeader className="pb-3">
+                <CardTitle className="text-sm">About</CardTitle>
+                <CardDescription>Edit your name, title, location, and bio.</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <div className="space-y-1.5">
+                    <Label htmlFor="name">Full name</Label>
+                    <Input id="name" value={name} onChange={(e) => setName(e.target.value)} placeholder="Your name" />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="title">Professional title</Label>
+                    <Input id="title" value={title} onChange={(e) => setTitle(e.target.value)} placeholder="e.g. Senior Frontend Engineer" />
+                  </div>
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="location">Location</Label>
+                  <Input id="location" value={location} onChange={(e) => setLocation(e.target.value)} placeholder="City, Country" />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="about">About / Bio</Label>
+                  <Textarea
+                    id="about"
+                    value={about}
+                    onChange={(e) => setAbout(e.target.value)}
+                    rows={4}
+                    className="resize-none"
+                    placeholder="Tell employers about your experience, strengths, and what you're looking for."
+                  />
+                </div>
+                {saveMsg && (
+                  <div className={cn(
+                    "rounded-md border px-3 py-2 text-xs",
+                    saveMsg.ok ? "border-emerald-200 bg-emerald-50 text-emerald-700" : "border-rose-200 bg-rose-50 text-rose-700"
+                  )}>
+                    {saveMsg.msg}
+                  </div>
+                )}
+                <div className="flex justify-end gap-2">
+                  <Button variant="ghost" size="sm" onClick={() => refetch()} disabled={saving}>Cancel</Button>
+                  <Button size="sm" onClick={save} disabled={saving}>
+                    {saving ? (
+                      <>
+                        <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-primary-foreground border-t-transparent" />
+                        Saving…
+                      </>
                     ) : (
-                      <Badge variant="outline" className="bg-amber-50 text-amber-700 border-amber-200 text-[10px] gap-1">
-                        <Clock className="h-3 w-3" /> Pending
-                      </Badge>
+                      "Save changes"
                     )}
-                  </div>
+                  </Button>
                 </div>
-              ))}
-            </CardContent>
-          </Card>
+              </CardContent>
+            </Card>
+
+            {/* Experience */}
+            <Card>
+              <CardHeader className="pb-3 flex flex-row items-center justify-between space-y-0">
+                <CardTitle className="text-sm flex items-center gap-2">
+                  <Briefcase className="h-4 w-4 text-primary" /> Experience
+                </CardTitle>
+                <Button variant="outline" size="sm" onClick={() => go("resume")}>
+                  <Plus className="h-3.5 w-3.5" /> Add via resume
+                </Button>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                {(profile?.experiences?.length ?? 0) === 0 ? (
+                  <EmptyState icon={<Briefcase className="h-5 w-5" />} title="No experience added" description="Upload your resume to auto-extract experience entries." />
+                ) : (
+                  profile.experiences.map((e: any) => (
+                    <div key={e.id} className="rounded-lg border border-border bg-card p-3">
+                      <div className="flex items-start justify-between gap-2">
+                        <div>
+                          <p className="text-sm font-semibold">{e.title}</p>
+                          <p className="text-xs text-muted-foreground">{e.company}</p>
+                          <p className="text-[11px] text-muted-foreground">{e.startDate} — {e.endDate}</p>
+                        </div>
+                        {e.current && <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-200 text-[10px]">Current</Badge>}
+                      </div>
+                      {e.description && <p className="mt-2 text-xs text-muted-foreground">{e.description}</p>}
+                    </div>
+                  ))
+                )}
+              </CardContent>
+            </Card>
+
+            {/* Education */}
+            <Card>
+              <CardHeader className="pb-3 flex flex-row items-center justify-between space-y-0">
+                <CardTitle className="text-sm flex items-center gap-2">
+                  <GraduationCap className="h-4 w-4 text-primary" /> Education
+                </CardTitle>
+                <Button variant="outline" size="sm" onClick={() => go("resume")}>
+                  <Plus className="h-3.5 w-3.5" /> Add via resume
+                </Button>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                {(profile?.educations?.length ?? 0) === 0 ? (
+                  <EmptyState icon={<GraduationCap className="h-5 w-5" />} title="No education added" description="Upload your resume to auto-extract education entries." />
+                ) : (
+                  profile.educations.map((ed: any) => (
+                    <div key={ed.id} className="rounded-lg border border-border bg-card p-3">
+                      <div className="flex items-start justify-between gap-2">
+                        <div>
+                          <p className="text-sm font-semibold">{ed.degree}, {ed.field}</p>
+                          <p className="text-xs text-muted-foreground">{ed.institution}</p>
+                          <p className="text-[11px] text-muted-foreground">{ed.startDate} — {ed.endDate}</p>
+                        </div>
+                        {ed.verified ? (
+                          <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-200 text-[10px] gap-1">
+                            <ShieldCheck className="h-3 w-3" /> Verified
+                          </Badge>
+                        ) : (
+                          <Badge variant="outline" className="bg-amber-50 text-amber-700 border-amber-200 text-[10px] gap-1">
+                            <Clock className="h-3 w-3" /> Pending
+                          </Badge>
+                        )}
+                      </div>
+                    </div>
+                  ))
+                )}
+              </CardContent>
+            </Card>
+          </div>
         </div>
-      </div>
+      )}
     </PageContainer>
   );
 }
@@ -476,31 +626,70 @@ export function SeekerProfile() {
 // SEEKER SKILLS
 // ============================================================
 export function SeekerSkills() {
-  const [skills, setSkills] = useState<Skill[]>(seekerSkills);
+  const { data, loading, refetch } = useFetch<any>("/api/skills");
+  const skills: any[] = data?.skills ?? [];
+
   const [addDialogOpen, setAddDialogOpen] = useState(false);
   const [newSkill, setNewSkill] = useState("");
   const [newProficiency, setNewProficiency] = useState<ProficiencyLevel>("intermediate");
+  const [newYears, setNewYears] = useState("");
+  const [addError, setAddError] = useState<string | null>(null);
+  const [adding, setAdding] = useState(false);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
-  const grouped = skills.reduce<Record<string, Skill[]>>((acc, s) => {
+  const grouped = skills.reduce<Record<string, any[]>>((acc, s) => {
     (acc[s.category] = acc[s.category] || []).push(s);
     return acc;
   }, {});
 
-  const addSkill = () => {
-    if (!newSkill.trim()) return;
-    setSkills([
-      ...skills,
-      {
-        id: `s${Date.now()}`,
-        name: newSkill.trim(),
-        category: "Custom",
-        proficiency: newProficiency,
-        verified: "unverified",
-        yearsOfExperience: 1,
-      },
-    ]);
-    setNewSkill("");
-    setAddDialogOpen(false);
+  const addSkill = async () => {
+    setAddError(null);
+    if (!newSkill.trim()) {
+      setAddError("Skill name is required.");
+      return;
+    }
+    if (newSkill.trim().length < 2) {
+      setAddError("Skill name must be at least 2 characters.");
+      return;
+    }
+    setAdding(true);
+    try {
+      const res = await fetch("/api/skills", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: newSkill.trim(),
+          proficiency: newProficiency,
+          category: "Custom",
+          yearsOfExperience: newYears ? Number(newYears) : null,
+        }),
+      });
+      const json = await res.json();
+      if (!json.ok) {
+        setAddError(json.error ?? "Failed to add skill.");
+        return;
+      }
+      setNewSkill("");
+      setNewYears("");
+      setAddDialogOpen(false);
+      refetch();
+    } catch {
+      setAddError("Network error.");
+    } finally {
+      setAdding(false);
+    }
+  };
+
+  const deleteSkill = async (id: string) => {
+    setDeletingId(id);
+    try {
+      await fetch(`/api/skills/${id}`, { method: "DELETE" });
+      refetch();
+    } catch {
+      /* ignore */
+    } finally {
+      setDeletingId(null);
+    }
   };
 
   const verifiedCount = skills.filter((s) => s.verified === "verified").length;
@@ -525,16 +714,17 @@ export function SeekerSkills() {
               </DialogHeader>
               <div className="space-y-3 py-2">
                 <div className="space-y-1.5">
-                  <Label htmlFor="skill-name">Skill name</Label>
+                  <Label htmlFor="skill-name">Skill name *</Label>
                   <Input
                     id="skill-name"
                     placeholder="e.g. Kubernetes"
                     value={newSkill}
                     onChange={(e) => setNewSkill(e.target.value)}
                   />
+                  {addError && <p className="text-xs text-rose-600">{addError}</p>}
                 </div>
                 <div className="space-y-1.5">
-                  <Label>Proficiency level</Label>
+                  <Label>Proficiency level *</Label>
                   <Select value={newProficiency} onValueChange={(v) => setNewProficiency(v as ProficiencyLevel)}>
                     <SelectTrigger>
                       <SelectValue />
@@ -547,13 +737,34 @@ export function SeekerSkills() {
                     </SelectContent>
                   </Select>
                 </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="skill-years">Years of experience (optional)</Label>
+                  <Input
+                    id="skill-years"
+                    type="number"
+                    min="0"
+                    max="50"
+                    placeholder="e.g. 3"
+                    value={newYears}
+                    onChange={(e) => setNewYears(e.target.value)}
+                  />
+                </div>
                 <InfoCallout>
                   New skills start as <span className="font-medium">unverified</span>. You can request verification through a short assessment.
                 </InfoCallout>
               </div>
               <DialogFooter>
-                <Button variant="outline" onClick={() => setAddDialogOpen(false)}>Cancel</Button>
-                <Button onClick={addSkill}>Add skill</Button>
+                <Button variant="outline" onClick={() => { setAddDialogOpen(false); setAddError(null); }}>Cancel</Button>
+                <Button onClick={addSkill} disabled={adding}>
+                  {adding ? (
+                    <>
+                      <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-primary-foreground border-t-transparent" />
+                      Adding…
+                    </>
+                  ) : (
+                    "Add skill"
+                  )}
+                </Button>
               </DialogFooter>
             </DialogContent>
           </Dialog>
@@ -566,43 +777,68 @@ export function SeekerSkills() {
         <StatCard label="Pending verification" value={pendingCount} icon={<Clock className="h-4 w-4" />} />
       </div>
 
-      <div className="mt-6 space-y-4">
-        {Object.entries(grouped).map(([category, items]) => (
-          <Card key={category}>
-            <CardHeader className="pb-3">
-              <CardTitle className="text-sm flex items-center gap-2">
-                {category}
-                <Badge variant="outline" className="text-[10px]">{items.length}</Badge>
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="flex flex-wrap gap-2">
-                {items.map((s) => (
-                  <div
-                    key={s.id}
-                    className="group inline-flex items-center gap-2 rounded-lg border border-border bg-card px-3 py-1.5 text-xs"
-                  >
-                    <SkillChip name={s.name} proficiency={s.proficiency} verified={s.verified} />
-                    {s.yearsOfExperience && (
-                      <span className="text-[10px] text-muted-foreground">· {s.yearsOfExperience}y</span>
-                    )}
-                    {s.verified === "pending" && (
-                      <Badge variant="outline" className="text-[9px] bg-amber-50 text-amber-700 border-amber-200">
-                        <Clock className="h-2.5 w-2.5" /> Pending
-                      </Badge>
-                    )}
-                    {s.verified === "verified" && (
-                      <Badge variant="outline" className="text-[9px] bg-emerald-50 text-emerald-700 border-emerald-200">
-                        <ShieldCheck className="h-2.5 w-2.5" /> Verified
-                      </Badge>
-                    )}
-                  </div>
-                ))}
-              </div>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
+      {loading ? (
+        <LoadingState label="Loading skills…" rows={3} />
+      ) : skills.length === 0 ? (
+        <EmptyState
+          className="mt-6"
+          icon={<Sparkles className="h-5 w-5" />}
+          title="No skills yet"
+          description="Add your first skill to start matching with jobs."
+          action={<Button size="sm" onClick={() => setAddDialogOpen(true)}><Plus className="h-3.5 w-3.5" /> Add skill</Button>}
+        />
+      ) : (
+        <div className="mt-6 space-y-4">
+          {Object.entries(grouped).map(([category, items]) => (
+            <Card key={category}>
+              <CardHeader className="pb-3">
+                <CardTitle className="text-sm flex items-center gap-2">
+                  {category}
+                  <Badge variant="outline" className="text-[10px]">{items.length}</Badge>
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="flex flex-wrap gap-2">
+                  {items.map((s) => (
+                    <div
+                      key={s.id}
+                      className="group inline-flex items-center gap-2 rounded-lg border border-border bg-card px-3 py-1.5 text-xs"
+                    >
+                      <SkillChip name={s.name} proficiency={s.proficiency} verified={s.verified} />
+                      {s.yearsOfExperience && (
+                        <span className="text-[10px] text-muted-foreground">· {s.yearsOfExperience}y</span>
+                      )}
+                      {s.verified === "pending" && (
+                        <Badge variant="outline" className="text-[9px] bg-amber-50 text-amber-700 border-amber-200">
+                          <Clock className="h-2.5 w-2.5" /> Pending
+                        </Badge>
+                      )}
+                      {s.verified === "verified" && (
+                        <Badge variant="outline" className="text-[9px] bg-emerald-50 text-emerald-700 border-emerald-200">
+                          <ShieldCheck className="h-2.5 w-2.5" /> Verified
+                        </Badge>
+                      )}
+                      <button
+                        onClick={() => deleteSkill(s.id)}
+                        disabled={deletingId === s.id}
+                        className="text-muted-foreground hover:text-rose-600 transition-colors"
+                        aria-label={`Delete ${s.name}`}
+                        title="Delete skill"
+                      >
+                        {deletingId === s.id ? (
+                          <span className="h-3 w-3 animate-spin rounded-full border-2 border-rose-500 border-t-transparent" />
+                        ) : (
+                          <X className="h-3 w-3" />
+                        )}
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      )}
     </PageContainer>
   );
 }
@@ -1219,12 +1455,14 @@ export function SeekerResumeAnalysis() {
 // ============================================================
 export function SeekerRecommended() {
   const { go } = useApp();
-  const [sortBy, setSortBy] = useState("match");
+  const { data, loading, refetch } = useFetch<any>("/api/jobs");
+  const [sortBy, setSortBy] = useState("recent");
   const [filter, setFilter] = useState("all");
-  const [jobs, setJobs] = useState<typeof recommendedJobs>(recommendedJobs);
   const [aiLoading, setAiLoading] = useState(false);
   const [aiError, setAiError] = useState<string | null>(null);
   const [aiReranked, setAiReranked] = useState(false);
+
+  const dbJobs: any[] = data?.jobs ?? [];
 
   // Re-rank jobs using the AI recommendation endpoint
   const refreshWithAI = async () => {
@@ -1250,13 +1488,13 @@ export function SeekerRecommended() {
           },
         }),
       });
-      const data = await res.json();
-      if (!data.ok) {
-        setAiError(data.error ?? "AI recommendation failed.");
+      const aiData = await res.json();
+      if (!aiData.ok) {
+        setAiError(aiData.error ?? "AI recommendation failed.");
         return;
       }
-      setJobs(data.jobs ?? recommendedJobs);
       setAiReranked(true);
+      refetch();
     } catch {
       setAiError("Network error. Please try again.");
     } finally {
@@ -1264,17 +1502,15 @@ export function SeekerRecommended() {
     }
   };
 
-  let filtered = [...jobs];
-  if (filter === "saved") filtered = filtered.filter((j) => j.isSaved);
+  let filtered = [...dbJobs];
   if (filter === "remote") filtered = filtered.filter((j) => j.remote === "remote");
-  if (sortBy === "match") filtered.sort((a, b) => (b.matchScore || 0) - (a.matchScore || 0));
   if (sortBy === "recent") filtered.sort((a, b) => new Date(b.postedAt).getTime() - new Date(a.postedAt).getTime());
 
   return (
     <PageContainer>
       <SectionHeader
-        title="Recommended Jobs"
-        description="Ranked by your AI match score. Click any job to see the full match explanation."
+        title="Open Jobs"
+        description="Browse all open jobs on the platform. Click any job to view details and apply."
         actions={
           <Button variant="outline" size="sm" onClick={refreshWithAI} disabled={aiLoading}>
             {aiLoading ? (
@@ -1309,9 +1545,8 @@ export function SeekerRecommended() {
       <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <Tabs value={filter} onValueChange={setFilter}>
           <TabsList>
-            <TabsTrigger value="all">All ({jobs.length})</TabsTrigger>
-            <TabsTrigger value="saved">Saved ({jobs.filter(j => j.isSaved).length})</TabsTrigger>
-            <TabsTrigger value="remote">Remote ({jobs.filter(j => j.remote === "remote").length})</TabsTrigger>
+            <TabsTrigger value="all">All ({dbJobs.length})</TabsTrigger>
+            <TabsTrigger value="remote">Remote ({dbJobs.filter(j => j.remote === "remote").length})</TabsTrigger>
           </TabsList>
         </Tabs>
         <div className="flex items-center gap-2 text-xs">
@@ -1321,19 +1556,20 @@ export function SeekerRecommended() {
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="match">Match score</SelectItem>
               <SelectItem value="recent">Most recent</SelectItem>
             </SelectContent>
           </Select>
         </div>
       </div>
 
-      {filtered.length === 0 ? (
+      {loading ? (
+        <LoadingState label="Loading jobs…" rows={3} />
+      ) : filtered.length === 0 ? (
         <EmptyState
           className="mt-6"
           icon={<Target className="h-5 w-5" />}
-          title="No recommended jobs yet"
-          description="Complete your skill profile and upload your resume to start receiving personalized recommendations."
+          title="No open jobs yet"
+          description="Check back soon — employers are posting new roles."
         />
       ) : (
         <div className="mt-4 space-y-3">
@@ -1341,7 +1577,7 @@ export function SeekerRecommended() {
             <Card key={j.id} className="overflow-hidden">
               <CardContent className="p-4">
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-start">
-                  <CompanyLogo initials={j.companyLogo || "CO"} size="lg" />
+                  <CompanyLogo initials={j.companyLogo || j.company?.slice(0, 2).toUpperCase() || "CO"} size="lg" />
                   <div className="min-w-0 flex-1">
                     <div className="flex items-start justify-between gap-2">
                       <div>
@@ -1356,27 +1592,12 @@ export function SeekerRecommended() {
                           <span className="flex items-center gap-1"><MapPin className="h-3 w-3" />{j.location}</span>
                           <span className="flex items-center gap-1"><Briefcase className="h-3 w-3" />{j.type}</span>
                           <span className="flex items-center gap-1"><Clock className="h-3 w-3" />{timeAgo(j.postedAt)}</span>
-                          <span className="font-medium text-foreground">${j.salary.min.toLocaleString()}–${j.salary.max.toLocaleString()}/{j.salary.period}</span>
+                          <span className="font-medium text-foreground">${j.salaryMin.toLocaleString()}–${j.salaryMax.toLocaleString()}/{j.salaryPeriod}</span>
                         </div>
                       </div>
-                      <MatchScore score={j.matchScore || 0} size="lg" />
                     </div>
 
                     <p className="mt-2 line-clamp-2 text-xs text-muted-foreground">{j.description}</p>
-
-                    <div className="mt-3 flex flex-wrap items-center gap-1.5">
-                      {j.matchExplanation?.matchingSkills.slice(0, 4).map((s) => (
-                        <SkillChip key={s.name} name={s.name} proficiency={s.proficiency} verified={s.verified} size="sm" />
-                      ))}
-                      {j.matchExplanation?.missingSkills.map((s) => (
-                        <span
-                          key={s.name}
-                          className="inline-flex items-center gap-1 rounded-md border border-rose-200 bg-rose-50 px-2 py-0.5 text-[11px] font-medium text-rose-700"
-                        >
-                          <AlertCircle className="h-3 w-3" /> {s.name}
-                        </span>
-                      ))}
-                    </div>
 
                     <div className="mt-3 flex flex-wrap items-center gap-2">
                       <Button size="sm" onClick={() => go("job-detail", { jobId: j.id })}>
@@ -1384,9 +1605,6 @@ export function SeekerRecommended() {
                       </Button>
                       <Button size="sm" variant="outline" onClick={() => go("match-explanation", { jobId: j.id })}>
                         <Sparkles className="h-3.5 w-3.5" /> Why this match?
-                      </Button>
-                      <Button size="sm" variant="ghost">
-                        <Star className="h-3.5 w-3.5" /> {j.isSaved ? "Saved" : "Save"}
                       </Button>
                     </div>
                   </div>
@@ -1720,9 +1938,11 @@ export function SeekerMatchExplanation() {
 // ============================================================
 export function SeekerApplications() {
   const { go } = useApp();
+  const { data, loading } = useFetch<any>("/api/applications");
   const [filter, setFilter] = useState("all");
 
-  let apps = [...seekerApplications];
+  const allApps: any[] = data?.applications ?? [];
+  let apps = [...allApps];
   if (filter !== "all") apps = apps.filter((a) => a.status === filter);
 
   return (
@@ -1734,21 +1954,23 @@ export function SeekerApplications() {
 
       <Tabs value={filter} onValueChange={setFilter} className="mt-6">
         <TabsList className="overflow-x-auto">
-          <TabsTrigger value="all">All ({seekerApplications.length})</TabsTrigger>
-          <TabsTrigger value="submitted">Submitted ({seekerApplications.filter(a=>a.status==="submitted").length})</TabsTrigger>
-          <TabsTrigger value="screening">Screening ({seekerApplications.filter(a=>a.status==="screening").length})</TabsTrigger>
-          <TabsTrigger value="shortlisted">Shortlisted ({seekerApplications.filter(a=>a.status==="shortlisted").length})</TabsTrigger>
-          <TabsTrigger value="interview">Interview ({seekerApplications.filter(a=>a.status==="interview").length})</TabsTrigger>
-          <TabsTrigger value="rejected">Closed ({seekerApplications.filter(a=>a.status==="rejected").length})</TabsTrigger>
+          <TabsTrigger value="all">All ({allApps.length})</TabsTrigger>
+          <TabsTrigger value="submitted">Submitted ({allApps.filter(a=>a.status==="submitted").length})</TabsTrigger>
+          <TabsTrigger value="screening">Screening ({allApps.filter(a=>a.status==="screening").length})</TabsTrigger>
+          <TabsTrigger value="shortlisted">Shortlisted ({allApps.filter(a=>a.status==="shortlisted").length})</TabsTrigger>
+          <TabsTrigger value="interview">Interview ({allApps.filter(a=>a.status==="interview").length})</TabsTrigger>
+          <TabsTrigger value="rejected">Closed ({allApps.filter(a=>a.status==="rejected").length})</TabsTrigger>
         </TabsList>
       </Tabs>
 
-      {apps.length === 0 ? (
+      {loading ? (
+        <LoadingState label="Loading applications…" rows={2} />
+      ) : apps.length === 0 ? (
         <EmptyState
           className="mt-6"
           icon={<Send className="h-5 w-5" />}
           title="No applications in this category"
-          description="Apply to recommended jobs to start tracking them here."
+          description="Apply to open jobs to start tracking them here."
           action={<Button size="sm" onClick={() => go("recommended")}>Browse jobs</Button>}
         />
       ) : (
@@ -1757,12 +1979,12 @@ export function SeekerApplications() {
             <Card key={a.id}>
               <CardContent className="p-4">
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-start">
-                  <CompanyLogo initials={a.job.companyLogo || "CO"} size="md" />
+                  <CompanyLogo initials={a.job?.companyLogo || "CO"} size="md" />
                   <div className="min-w-0 flex-1">
                     <div className="flex items-start justify-between gap-2">
                       <div>
-                        <p className="text-sm font-semibold">{a.job.title}</p>
-                        <p className="text-xs text-muted-foreground">{a.job.company} · {a.job.location}</p>
+                        <p className="text-sm font-semibold">{a.job?.title}</p>
+                        <p className="text-xs text-muted-foreground">{a.job?.company} · {a.job?.location}</p>
                       </div>
                       <ApplicationStatusBadge status={a.status} />
                     </div>
@@ -1770,41 +1992,24 @@ export function SeekerApplications() {
                     <div className="mt-2 flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
                       <span>Applied {timeAgo(a.appliedAt)}</span>
                       <span>Updated {timeAgo(a.updatedAt)}</span>
-                      <span className="flex items-center gap-1">
-                        <Sparkles className="h-3 w-3 text-primary" /> Match score: <span className="font-semibold text-foreground">{a.matchScore}%</span>
-                      </span>
-                    </div>
-
-                    {a.nextStep && (
-                      <div className="mt-3 rounded-md border border-blue-200 bg-blue-50 px-3 py-2 text-xs">
-                        <p className="font-semibold text-blue-900">Next step: {a.nextStep.label}</p>
-                        <p className="text-blue-700">{a.nextStep.date}</p>
-                      </div>
-                    )}
-
-                    {/* Timeline */}
-                    <div className="mt-3">
-                      <ol className="relative ml-2 border-l-2 border-border">
-                        {a.timeline.map((t, i) => (
-                          <li key={i} className="mb-3 ml-3 last:mb-0">
-                            <span className="absolute -left-[5px] mt-1 h-2 w-2 rounded-full bg-primary ring-2 ring-background" />
-                            <p className="text-xs font-semibold capitalize">{t.status}</p>
-                            <p className="text-[11px] text-muted-foreground">{t.date} · {t.note}</p>
-                          </li>
-                        ))}
-                      </ol>
+                      {a.matchScore && (
+                        <span className="flex items-center gap-1">
+                          <Sparkles className="h-3 w-3 text-primary" /> Match score: <span className="font-semibold text-foreground">{a.matchScore}%</span>
+                        </span>
+                      )}
                     </div>
 
                     <div className="mt-3 flex flex-wrap gap-2">
                       <Button size="sm" variant="outline" onClick={() => go("messages")}>
                         <MessageSquare className="h-3.5 w-3.5" /> Message
                       </Button>
-                      <Button size="sm" variant="ghost">Withdraw</Button>
                     </div>
                   </div>
-                  <div className="sm:pl-2">
-                    <MatchScore score={a.matchScore} size="md" />
-                  </div>
+                  {a.matchScore && (
+                    <div className="sm:pl-2">
+                      <MatchScore score={a.matchScore} size="md" />
+                    </div>
+                  )}
                 </div>
               </CardContent>
             </Card>
@@ -1902,14 +2107,29 @@ export function SeekerSkillGap() {
 // NOTIFICATIONS
 // ============================================================
 export function SeekerNotifications() {
-  const [items, setItems] = useState(seekerNotifications);
+  const { data, loading, refetch } = useFetch<any>("/api/notifications");
+  const items: any[] = data?.notifications ?? [];
   const [filter, setFilter] = useState("all");
 
   const filtered = filter === "unread" ? items.filter((n) => !n.read) : items;
 
-  const markAllRead = () => setItems(items.map((n) => ({ ...n, read: true })));
-  const toggleRead = (id: string) =>
-    setItems(items.map((n) => (n.id === id ? { ...n, read: !n.read } : n)));
+  const markAllRead = async () => {
+    await fetch("/api/notifications", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ markAllRead: true }),
+    });
+    refetch();
+  };
+
+  const toggleRead = async (id: string) => {
+    await fetch("/api/notifications", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id }),
+    });
+    refetch();
+  };
 
   return (
     <PageContainer>
@@ -1917,7 +2137,7 @@ export function SeekerNotifications() {
         title="Notifications"
         description={`${items.filter((n) => !n.read).length} unread`}
         actions={
-          <Button variant="outline" size="sm" onClick={markAllRead}>
+          <Button variant="outline" size="sm" onClick={markAllRead} disabled={items.filter((n) => !n.read).length === 0}>
             <Check className="h-3.5 w-3.5" /> Mark all read
           </Button>
         }
@@ -1930,7 +2150,9 @@ export function SeekerNotifications() {
         </TabsList>
       </Tabs>
 
-      {filtered.length === 0 ? (
+      {loading ? (
+        <LoadingState label="Loading notifications…" rows={3} />
+      ) : filtered.length === 0 ? (
         <EmptyState
           className="mt-6"
           icon={<Bell className="h-5 w-5" />}
@@ -1965,14 +2187,9 @@ export function SeekerNotifications() {
               <div className="min-w-0 flex-1">
                 <div className="flex items-start justify-between gap-2">
                   <p className="text-sm font-semibold">{n.title}</p>
-                  <span className="text-[10px] text-muted-foreground">{n.time}</span>
+                  <span className="text-[10px] text-muted-foreground">{timeAgo(n.createdAt)}</span>
                 </div>
                 <p className="mt-0.5 text-xs text-muted-foreground">{n.message}</p>
-                {n.actionLabel && (
-                  <Button size="sm" variant="link" className="mt-1 h-auto p-0 text-xs">
-                    {n.actionLabel} <ArrowRight className="h-3 w-3" />
-                  </Button>
-                )}
               </div>
               {!n.read && <span className="mt-1 h-2 w-2 shrink-0 rounded-full bg-primary" />}
             </button>

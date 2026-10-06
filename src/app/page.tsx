@@ -13,6 +13,8 @@ import {
   Register,
   PublicJobs,
   PublicJobDetail,
+  AboutPage,
+  ContactPage,
 } from "@/components/guest/views";
 // Seeker views
 import {
@@ -95,6 +97,8 @@ function Router() {
     if (view === "register") return <Register />;
     if (view === "public-jobs") return <PublicJobs />;
     if (view === "public-job-detail") return <PublicJobDetail />;
+    if (view === "about") return <AboutPage />;
+    if (view === "contact") return <ContactPage />;
     return <Landing />;
   }
 

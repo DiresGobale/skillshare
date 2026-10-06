@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect } from "react";
 import { cn } from "@/lib/utils";
 import { useApp } from "@/lib/app-context";
 import { Button } from "@/components/ui/button";
@@ -18,6 +18,7 @@ import {
   SectionHeader,
   StatCard,
   EmptyState,
+  LoadingState,
   SuccessBanner,
   InfoCallout,
   TableToolbar,
@@ -29,6 +30,7 @@ import {
   activityLogs,
   adminDashboardStats,
 } from "@/lib/mock-data";
+import { useFetch } from "@/lib/use-fetch";
 import type { AdminUser, ActivityLog, SkillOntologyItem } from "@/lib/types";
 import {
   Users,
@@ -79,6 +81,11 @@ function PageContainer({ children, className }: { children: React.ReactNode; cla
 // ============================================================
 export function AdminDashboard() {
   const { go } = useApp();
+  const { data, loading } = useFetch<any>("/api/admin/stats");
+  const stats = data?.stats;
+  const topSkills = data?.topSkills ?? [];
+  const recentActivity = data?.recentActivity ?? [];
+
   return (
     <PageContainer>
       <SectionHeader
@@ -86,131 +93,86 @@ export function AdminDashboard() {
         description="Health, usage, and key metrics for the SkillMatch AI platform."
       />
 
-      <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <StatCard label="Total users" value={adminDashboardStats.totalUsers.toLocaleString()} icon={<Users className="h-4 w-4" />} delta="+128 this week" deltaTone="up" />
-        <StatCard label="Active jobs" value={adminDashboardStats.activeJobs.toLocaleString()} icon={<Briefcase className="h-4 w-4" />} delta="+42 this week" deltaTone="up" />
-        <StatCard label="Applications" value={adminDashboardStats.totalApplications.toLocaleString()} icon={<Send className="h-4 w-4" />} delta="+1.2k this week" deltaTone="up" />
-        <StatCard label="Verified skills" value={adminDashboardStats.verifiedSkills.toLocaleString()} icon={<ShieldCheck className="h-4 w-4" />} hint="Across all users" />
-      </div>
+      {loading ? (
+        <LoadingState label="Loading platform stats…" rows={4} />
+      ) : (
+        <>
+          <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            <StatCard label="Total users" value={(stats?.totalUsers ?? 0).toLocaleString()} icon={<Users className="h-4 w-4" />} />
+            <StatCard label="Active jobs" value={(stats?.activeJobs ?? 0).toLocaleString()} icon={<Briefcase className="h-4 w-4" />} />
+            <StatCard label="Applications" value={(stats?.totalApplications ?? 0).toLocaleString()} icon={<Send className="h-4 w-4" />} />
+            <StatCard label="Verified skills" value={(stats?.verifiedSkills ?? 0).toLocaleString()} icon={<ShieldCheck className="h-4 w-4" />} hint="Across all users" />
+          </div>
 
-      <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <StatCard label="Job seekers" value={adminDashboardStats.jobSeekers.toLocaleString()} icon={<Users className="h-4 w-4" />} />
-        <StatCard label="Employers" value={adminDashboardStats.employers.toLocaleString()} icon={<Building2 className="h-4 w-4" />} hint={`${adminDashboardStats.pendingEmployers} pending`} />
-        <StatCard label="AI computations" value={`${(adminDashboardStats.matchComputations / 1000).toFixed(0)}k`} icon={<Cpu className="h-4 w-4" />} delta="+8.4k today" deltaTone="up" />
-        <StatCard label="System uptime" value={`${adminDashboardStats.systemUptime}%`} icon={<Server className="h-4 w-4" />} hint="30-day rolling" deltaTone="up" />
-      </div>
+          <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            <StatCard label="Job seekers" value={(stats?.jobSeekers ?? 0).toLocaleString()} icon={<Users className="h-4 w-4" />} />
+            <StatCard label="Employers" value={(stats?.employers ?? 0).toLocaleString()} icon={<Building2 className="h-4 w-4" />} hint={`${stats?.pendingEmployers ?? 0} pending`} />
+            <StatCard label="Audit events" value={(stats?.auditCount ?? 0).toLocaleString()} icon={<Activity className="h-4 w-4" />} hint="Total logged" />
+            <StatCard label="System status" value="Healthy" icon={<Server className="h-4 w-4" />} hint="All services operational" />
+          </div>
 
-      <div className="mt-6 grid gap-4 lg:grid-cols-3">
-        {/* User growth chart (mock) */}
-        <Card className="lg:col-span-2">
-          <CardHeader className="pb-3 flex flex-row items-center justify-between space-y-0">
-            <div>
-              <CardTitle className="text-sm">User growth</CardTitle>
-              <CardDescription>Last 8 weeks</CardDescription>
-            </div>
-            <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-200 text-[10px] gap-1">
-              <ArrowUpRight className="h-3 w-3" /> +14.2%
-            </Badge>
-          </CardHeader>
-          <CardContent>
-            <MockBarChart
-              data={[
-                { label: "W32", value: 3850 },
-                { label: "W33", value: 4010 },
-                { label: "W34", value: 4180 },
-                { label: "W35", value: 4320 },
-                { label: "W36", value: 4480 },
-                { label: "W37", value: 4590 },
-                { label: "W38", value: 4720 },
-                { label: "W39", value: 4872 },
-              ]}
-              color="oklch(0.55 0.22 285)"
-            />
-          </CardContent>
-        </Card>
+          <div className="mt-6 grid gap-4 lg:grid-cols-3">
+            {/* Recent activity */}
+            <Card className="lg:col-span-2">
+              <CardHeader className="pb-3 flex flex-row items-center justify-between space-y-0">
+                <CardTitle className="text-sm">Recent activity</CardTitle>
+                <Button variant="ghost" size="sm" onClick={() => go("activity")}>
+                  View all <ArrowRight className="h-3.5 w-3.5" />
+                </Button>
+              </CardHeader>
+              <CardContent className="space-y-2">
+                {recentActivity.length === 0 ? (
+                  <EmptyState icon={<Activity className="h-5 w-5" />} title="No activity yet" />
+                ) : (
+                  recentActivity.map((log: any) => (
+                    <div key={log.id} className="flex items-center gap-3 rounded-md border border-border bg-card p-2.5 text-xs">
+                      <div className={cn(
+                        "h-2 w-2 shrink-0 rounded-full",
+                        log.status === "success" ? "bg-emerald-500" : log.status === "warning" ? "bg-amber-500" : "bg-rose-500"
+                      )} />
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate">
+                          <span className="font-semibold">{log.user}</span>
+                          <span className="text-muted-foreground"> · {log.action} · </span>
+                          <span>{log.target}</span>
+                        </p>
+                        <p className="text-[10px] text-muted-foreground">{log.time}</p>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </CardContent>
+            </Card>
 
-        {/* Platform health */}
-        <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="text-sm">Platform health</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            {[
-              { label: "API uptime", value: 99.97, tone: "good" as const },
-              { label: "AI service latency", value: 92, tone: "good" as const, suffix: "p95 240ms" },
-              { label: "DB connections", value: 68, tone: "good" as const, suffix: "68/100" },
-              { label: "Queue backlog", value: 18, tone: "warning" as const, suffix: "18 jobs" },
-              { label: "Error rate", value: 4, tone: "warning" as const, suffix: "0.4%" },
-            ].map((m) => (
-              <div key={m.label}>
-                <div className="flex items-center justify-between text-xs">
-                  <span className="text-muted-foreground">{m.label}</span>
-                  <span className="font-semibold">{m.suffix ?? `${m.value}%`}</span>
-                </div>
-                <Progress
-                  value={m.value}
-                  className={cn(
-                    "mt-1 h-1.5",
-                    m.tone === "good" ? "[&>div]:bg-emerald-500" : "[&>div]:bg-amber-500"
-                  )}
-                />
-              </div>
-            ))}
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Activity feed + Top skills */}
-      <div className="mt-4 grid gap-4 lg:grid-cols-3">
-        <Card className="lg:col-span-2">
-          <CardHeader className="pb-3 flex flex-row items-center justify-between space-y-0">
-            <CardTitle className="text-sm">Recent activity</CardTitle>
-            <Button variant="ghost" size="sm" onClick={() => go("activity")}>
-              View all <ArrowRight className="h-3.5 w-3.5" />
-            </Button>
-          </CardHeader>
-          <CardContent className="space-y-2">
-            {activityLogs.slice(0, 5).map((log) => (
-              <div key={log.id} className="flex items-center gap-3 rounded-md border border-border bg-card p-2.5 text-xs">
-                <div className={cn(
-                  "h-2 w-2 shrink-0 rounded-full",
-                  log.status === "success" ? "bg-emerald-500" : log.status === "warning" ? "bg-amber-500" : "bg-rose-500"
-                )} />
-                <div className="min-w-0 flex-1">
-                  <p className="truncate">
-                    <span className="font-semibold">{log.user}</span>
-                    <span className="text-muted-foreground"> · {log.action} · </span>
-                    <span>{log.target}</span>
-                  </p>
-                  <p className="text-[10px] text-muted-foreground">{log.time} · {log.ip}</p>
-                </div>
-              </div>
-            ))}
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="pb-3 flex flex-row items-center justify-between space-y-0">
-            <CardTitle className="text-sm">Top skills</CardTitle>
-            <Button variant="ghost" size="sm" onClick={() => go("skills")}>
-              All <ArrowRight className="h-3.5 w-3.5" />
-            </Button>
-          </CardHeader>
-          <CardContent className="space-y-2">
-            {skillOntology.slice(0, 6).sort((a,b) => b.usageCount - a.usageCount).slice(0, 5).map((s) => (
-              <div key={s.id} className="flex items-center justify-between text-xs">
-                <span className="font-medium">{s.name}</span>
-                <div className="flex items-center gap-2">
-                  <div className="h-1.5 w-20 overflow-hidden rounded-full bg-muted">
-                    <div className="h-full bg-primary" style={{ width: `${(s.usageCount / 1500) * 100}%` }} />
-                  </div>
-                  <span className="w-12 text-right tabular-nums text-muted-foreground">{s.usageCount}</span>
-                </div>
-              </div>
-            ))}
-          </CardContent>
-        </Card>
-      </div>
+            {/* Top skills */}
+            <Card>
+              <CardHeader className="pb-3 flex flex-row items-center justify-between space-y-0">
+                <CardTitle className="text-sm">Top skills</CardTitle>
+                <Button variant="ghost" size="sm" onClick={() => go("skills")}>
+                  All <ArrowRight className="h-3.5 w-3.5" />
+                </Button>
+              </CardHeader>
+              <CardContent className="space-y-2">
+                {topSkills.length === 0 ? (
+                  <EmptyState icon={<Sparkles className="h-5 w-5" />} title="No skills yet" />
+                ) : (
+                  topSkills.map((s: any) => (
+                    <div key={s.name} className="flex items-center justify-between text-xs">
+                      <span className="font-medium">{s.name}</span>
+                      <div className="flex items-center gap-2">
+                        <div className="h-1.5 w-20 overflow-hidden rounded-full bg-muted">
+                          <div className="h-full bg-primary" style={{ width: `${Math.min(100, (s.count / 10) * 100)}%` }} />
+                        </div>
+                        <span className="w-8 text-right tabular-nums text-muted-foreground">{s.count}</span>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </CardContent>
+            </Card>
+          </div>
+        </>
+      )}
     </PageContainer>
   );
 }
@@ -244,39 +206,58 @@ export function AdminUsers() {
   const [roleFilter, setRoleFilter] = useState("all");
   const [query, setQuery] = useState("");
   const [debouncedQuery, setDebouncedQuery] = useState("");
-  const [selected, setSelected] = useState<AdminUser | null>(null);
-  const [confirmDelete, setConfirmDelete] = useState<AdminUser | null>(null);
-  const [confirmSuspend, setConfirmSuspend] = useState<AdminUser | null>(null);
+  const [selected, setSelected] = useState<any | null>(null);
+  const [confirmDelete, setConfirmDelete] = useState<any | null>(null);
+  const [confirmSuspend, setConfirmSuspend] = useState<any | null>(null);
   const [page, setPage] = useState(1);
+  const [actionLoading, setActionLoading] = useState<string | null>(null);
   const PAGE_SIZE = 8;
+
+  // Build the API URL with filters
+  const apiUrl = `/api/admin/users?role=${roleFilter}&status=${filter}&q=${encodeURIComponent(debouncedQuery)}`;
+  const { data, loading, refetch } = useFetch<any>(apiUrl);
+
+  const allUsers: any[] = data?.users ?? [];
 
   // Debounce search input for efficiency on large datasets
   useEffect(() => {
     const id = setTimeout(() => {
       setDebouncedQuery(query);
       setPage(1);
-    }, 200);
+    }, 250);
     return () => clearTimeout(id);
   }, [query]);
 
-  // Memoize the filtered list — avoids recompute on every render
-  const filtered = useMemo(() => {
-    let list = [...adminUsers];
-    if (filter !== "all") list = list.filter((u) => u.status === filter);
-    if (roleFilter !== "all") list = list.filter((u) => u.role === roleFilter);
-    if (debouncedQuery) {
-      const q = debouncedQuery.toLowerCase();
-      list = list.filter(
-        (u) => u.name.toLowerCase().includes(q) || u.email.toLowerCase().includes(q)
-      );
-    }
-    return list;
-  }, [filter, roleFilter, debouncedQuery]);
-
-  // Paginate — only render the current page's slice (efficient for large N)
-  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  // Paginate — only render the current page's slice
+  const totalPages = Math.max(1, Math.ceil(allUsers.length / PAGE_SIZE));
   const currentPage = Math.min(page, totalPages);
-  const paged = filtered.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
+  const paged = allUsers.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
+
+  const updateStatus = async (userId: string, status: string) => {
+    setActionLoading(userId + status);
+    try {
+      await fetch(`/api/admin/users/${userId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status }),
+      });
+      refetch();
+    } finally {
+      setActionLoading(null);
+      setConfirmSuspend(null);
+    }
+  };
+
+  const deleteUser = async (userId: string) => {
+    setActionLoading(userId + "delete");
+    try {
+      await fetch(`/api/admin/users/${userId}`, { method: "DELETE" });
+      refetch();
+    } finally {
+      setActionLoading(null);
+      setConfirmDelete(null);
+    }
+  };
 
   return (
     <PageContainer>
@@ -289,10 +270,10 @@ export function AdminUsers() {
       />
 
       <div className="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        <StatCard label="Total users" value={adminDashboardStats.totalUsers.toLocaleString()} icon={<Users className="h-4 w-4" />} />
-        <StatCard label="Active" value={adminUsers.filter(u => u.status === "active").length} icon={<UserCheck className="h-4 w-4" />} hint={`of ${adminUsers.length} sampled`} />
-        <StatCard label="Pending" value={adminUsers.filter(u => u.status === "pending").length} icon={<Clock className="h-4 w-4" />} />
-        <StatCard label="Suspended" value={adminUsers.filter(u => u.status === "suspended").length} icon={<UserX className="h-4 w-4" />} />
+        <StatCard label="Total users" value={(data?.total ?? allUsers.length).toLocaleString()} icon={<Users className="h-4 w-4" />} />
+        <StatCard label="Active" value={allUsers.filter(u => u.status === "active").length} icon={<UserCheck className="h-4 w-4" />} hint="of filtered" />
+        <StatCard label="Pending" value={allUsers.filter(u => u.status === "pending").length} icon={<Clock className="h-4 w-4" />} />
+        <StatCard label="Suspended" value={allUsers.filter(u => u.status === "suspended").length} icon={<UserX className="h-4 w-4" />} />
       </div>
 
       <Card className="mt-6">
@@ -329,123 +310,127 @@ export function AdminUsers() {
             </div>
           </TableToolbar>
 
-          <div className="mt-4 overflow-x-auto rounded-lg border border-border">
-            <table className="w-full text-sm">
-              <thead className="bg-muted/50 text-[11px] uppercase tracking-wide text-muted-foreground">
-                <tr>
-                  <th className="px-4 py-2.5 text-left font-medium">User</th>
-                  <th className="hidden px-4 py-2.5 text-left font-medium sm:table-cell">Role</th>
-                  <th className="hidden px-4 py-2.5 text-left font-medium md:table-cell">Joined</th>
-                  <th className="hidden px-4 py-2.5 text-left font-medium lg:table-cell">Last active</th>
-                  <th className="px-4 py-2.5 text-left font-medium">Status</th>
-                  <th className="px-4 py-2.5 text-right font-medium">Actions</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-border bg-card">
-                {paged.map((u) => (
-                  <tr key={u.id} className="hover:bg-accent/30">
-                    <td className="px-4 py-3">
-                      <div className="flex items-center gap-2.5">
-                        <Avatar initials={u.initials ?? u.name.slice(0,2).toUpperCase()} color={u.avatarColor} size="sm" />
-                        <div className="min-w-0">
-                          <p className="truncate text-sm font-semibold">{u.name}</p>
-                          <p className="truncate text-xs text-muted-foreground">{u.email}</p>
-                        </div>
-                      </div>
-                    </td>
-                    <td className="hidden px-4 py-3 sm:table-cell">
-                      <Badge variant="outline" className={cn(
-                        "capitalize text-[10px]",
-                        u.role === "employer" ? "bg-blue-50 text-blue-700 border-blue-200" :
-                        u.role === "seeker" ? "bg-violet-50 text-violet-700 border-violet-200" :
-                        "bg-amber-50 text-amber-700 border-amber-200"
-                      )}>
-                        {u.role}
-                      </Badge>
-                    </td>
-                    <td className="hidden px-4 py-3 text-xs text-muted-foreground md:table-cell">{u.joinedAt}</td>
-                    <td className="hidden px-4 py-3 text-xs text-muted-foreground lg:table-cell">{u.lastActive}</td>
-                    <td className="px-4 py-3">
-                      <Badge variant="outline" className={cn(
-                        "text-[10px]",
-                        u.status === "active" ? "bg-emerald-50 text-emerald-700 border-emerald-200" :
-                        u.status === "pending" ? "bg-amber-50 text-amber-700 border-amber-200" :
-                        "bg-rose-50 text-rose-700 border-rose-200"
-                      )}>
-                        {u.status}
-                      </Badge>
-                    </td>
-                    <td className="px-4 py-3 text-right">
-                      <div className="flex justify-end gap-1">
-                        <Button size="sm" variant="ghost" onClick={() => setSelected(u)} title="View / edit">
-                          <Edit className="h-3.5 w-3.5" />
-                        </Button>
-                        {u.status === "active" ? (
-                          <Button size="sm" variant="ghost" title="Suspend" onClick={() => setConfirmSuspend(u)}>
-                            <Pause className="h-3.5 w-3.5" />
-                          </Button>
-                        ) : (
-                          <Button size="sm" variant="ghost" title="Activate" onClick={() => setConfirmSuspend(u)}>
-                            <Play className="h-3.5 w-3.5" />
-                          </Button>
-                        )}
-                        <Button size="sm" variant="ghost" title="Delete" onClick={() => setConfirmDelete(u)}>
-                          <Trash2 className="h-3.5 w-3.5 text-rose-600" />
-                        </Button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-
-          {filtered.length === 0 && (
+          {loading ? (
+            <LoadingState label="Loading users…" rows={4} />
+          ) : paged.length === 0 ? (
             <EmptyState
               className="mt-4"
               icon={<Users className="h-5 w-5" />}
               title="No users match your filters"
               description="Try adjusting search or filters."
             />
+          ) : (
+            <div className="mt-4 overflow-x-auto rounded-lg border border-border">
+              <table className="w-full text-sm">
+                <thead className="bg-muted/50 text-[11px] uppercase tracking-wide text-muted-foreground">
+                  <tr>
+                    <th className="px-4 py-2.5 text-left font-medium">User</th>
+                    <th className="hidden px-4 py-2.5 text-left font-medium sm:table-cell">Role</th>
+                    <th className="hidden px-4 py-2.5 text-left font-medium md:table-cell">Joined</th>
+                    <th className="hidden px-4 py-2.5 text-left font-medium lg:table-cell">Last active</th>
+                    <th className="px-4 py-2.5 text-left font-medium">Status</th>
+                    <th className="px-4 py-2.5 text-right font-medium">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-border bg-card">
+                  {paged.map((u) => (
+                    <tr key={u.id} className="hover:bg-accent/30">
+                      <td className="px-4 py-3">
+                        <div className="flex items-center gap-2.5">
+                          <Avatar initials={u.initials ?? u.name.slice(0,2).toUpperCase()} color={u.avatarColor} size="sm" />
+                          <div className="min-w-0">
+                            <p className="truncate text-sm font-semibold">{u.name}</p>
+                            <p className="truncate text-xs text-muted-foreground">{u.email}</p>
+                          </div>
+                        </div>
+                      </td>
+                      <td className="hidden px-4 py-3 sm:table-cell">
+                        <Badge variant="outline" className={cn(
+                          "capitalize text-[10px]",
+                          u.role === "employer" ? "bg-blue-50 text-blue-700 border-blue-200" :
+                          u.role === "seeker" ? "bg-violet-50 text-violet-700 border-violet-200" :
+                          "bg-amber-50 text-amber-700 border-amber-200"
+                        )}>
+                          {u.role}
+                        </Badge>
+                      </td>
+                      <td className="hidden px-4 py-3 text-xs text-muted-foreground md:table-cell">{u.joinedAt}</td>
+                      <td className="hidden px-4 py-3 text-xs text-muted-foreground lg:table-cell">{u.lastActive}</td>
+                      <td className="px-4 py-3">
+                        <Badge variant="outline" className={cn(
+                          "text-[10px]",
+                          u.status === "active" ? "bg-emerald-50 text-emerald-700 border-emerald-200" :
+                          u.status === "pending" ? "bg-amber-50 text-amber-700 border-amber-200" :
+                          "bg-rose-50 text-rose-700 border-rose-200"
+                        )}>
+                          {u.status}
+                        </Badge>
+                      </td>
+                      <td className="px-4 py-3 text-right">
+                        <div className="flex justify-end gap-1">
+                          <Button size="sm" variant="ghost" onClick={() => setSelected(u)} title="View / edit">
+                            <Edit className="h-3.5 w-3.5" />
+                          </Button>
+                          {u.status === "active" ? (
+                            <Button size="sm" variant="ghost" title="Suspend" onClick={() => setConfirmSuspend(u)}>
+                              <Pause className="h-3.5 w-3.5" />
+                            </Button>
+                          ) : (
+                            <Button size="sm" variant="ghost" title="Activate" onClick={() => setConfirmSuspend(u)}>
+                              <Play className="h-3.5 w-3.5" />
+                            </Button>
+                          )}
+                          <Button size="sm" variant="ghost" title="Delete" onClick={() => setConfirmDelete(u)}>
+                            <Trash2 className="h-3.5 w-3.5 text-rose-600" />
+                          </Button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           )}
 
-          {/* Pagination footer — efficient slicing for large datasets */}
-          <div className="mt-4 flex flex-col gap-2 text-xs text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
-            <span>
-              Showing <span className="font-semibold text-foreground">{paged.length}</span> of{" "}
-              <span className="font-semibold text-foreground">{filtered.length}</span> filtered
-              (of {adminUsers.length} sampled) · page {currentPage}/{totalPages}
-            </span>
-            <div className="flex flex-wrap gap-1">
-              <Button
-                variant="outline"
-                size="sm"
-                disabled={currentPage === 1}
-                onClick={() => setPage((p) => Math.max(1, p - 1))}
-              >
-                Previous
-              </Button>
-              {Array.from({ length: totalPages }).map((_, i) => (
+          {/* Pagination footer */}
+          {!loading && allUsers.length > 0 && (
+            <div className="mt-4 flex flex-col gap-2 text-xs text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
+              <span>
+                Showing <span className="font-semibold text-foreground">{paged.length}</span> of{" "}
+                <span className="font-semibold text-foreground">{allUsers.length}</span> filtered
+                · page {currentPage}/{totalPages}
+              </span>
+              <div className="flex flex-wrap gap-1">
                 <Button
-                  key={i}
-                  variant={currentPage === i + 1 ? "default" : "outline"}
+                  variant="outline"
                   size="sm"
-                  className="h-7 w-7 p-0"
-                  onClick={() => setPage(i + 1)}
+                  disabled={currentPage === 1}
+                  onClick={() => setPage((p) => Math.max(1, p - 1))}
                 >
-                  {i + 1}
+                  Previous
                 </Button>
-              ))}
-              <Button
-                variant="outline"
-                size="sm"
-                disabled={currentPage === totalPages}
-                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-              >
-                Next
-              </Button>
+                {Array.from({ length: totalPages }).map((_, i) => (
+                  <Button
+                    key={i}
+                    variant={currentPage === i + 1 ? "default" : "outline"}
+                    size="sm"
+                    className="h-7 w-7 p-0"
+                    onClick={() => setPage(i + 1)}
+                  >
+                    {i + 1}
+                  </Button>
+                ))}
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={currentPage === totalPages}
+                  onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                >
+                  Next
+                </Button>
+              </div>
             </div>
-          </div>
+          )}
         </CardContent>
       </Card>
 
@@ -510,8 +495,17 @@ export function AdminUsers() {
           </DialogHeader>
           <div className="flex justify-end gap-2 pt-2">
             <Button variant="outline" onClick={() => setConfirmDelete(null)}>Cancel</Button>
-            <Button variant="destructive" onClick={() => setConfirmDelete(null)}>
-              <Trash2 className="h-3.5 w-3.5" /> Delete permanently
+            <Button variant="destructive" onClick={() => deleteUser(confirmDelete?.id)} disabled={!!actionLoading}>
+              {actionLoading?.endsWith("delete") ? (
+                <>
+                  <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-white border-t-transparent" />
+                  Deleting…
+                </>
+              ) : (
+                <>
+                  <Trash2 className="h-3.5 w-3.5" /> Delete permanently
+                </>
+              )}
             </Button>
           </div>
         </DialogContent>
@@ -534,11 +528,19 @@ export function AdminUsers() {
             <Button variant="outline" onClick={() => setConfirmSuspend(null)}>Cancel</Button>
             <Button
               variant={confirmSuspend?.status === "active" ? "destructive" : "default"}
-              onClick={() => setConfirmSuspend(null)}
+              onClick={() => updateStatus(confirmSuspend?.id, confirmSuspend?.status === "active" ? "suspended" : "active")}
+              disabled={!!actionLoading}
             >
-              {confirmSuspend?.status === "active"
-                ? <><Pause className="h-3.5 w-3.5" /> Suspend</>
-                : <><Play className="h-3.5 w-3.5" /> Activate</>}
+              {actionLoading ? (
+                <>
+                  <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-primary-foreground border-t-transparent" />
+                  Updating…
+                </>
+              ) : confirmSuspend?.status === "active" ? (
+                <><Pause className="h-3.5 w-3.5" /> Suspend</>
+              ) : (
+                <><Play className="h-3.5 w-3.5" /> Activate</>
+              )}
             </Button>
           </div>
         </DialogContent>
@@ -942,13 +944,16 @@ export function AdminReports() {
 export function AdminActivity() {
   const [filter, setFilter] = useState("all");
   const [query, setQuery] = useState("");
+  const [debouncedQuery, setDebouncedQuery] = useState("");
 
-  let logs = [...activityLogs];
-  if (filter !== "all") logs = logs.filter((l) => l.type === filter);
-  if (query) {
-    const q = query.toLowerCase();
-    logs = logs.filter((l) => l.user.toLowerCase().includes(q) || l.target.toLowerCase().includes(q) || l.action.toLowerCase().includes(q));
-  }
+  useEffect(() => {
+    const id = setTimeout(() => setDebouncedQuery(query), 250);
+    return () => clearTimeout(id);
+  }, [query]);
+
+  const apiUrl = `/api/admin/audit?type=${filter}&q=${encodeURIComponent(debouncedQuery)}`;
+  const { data, loading } = useFetch<any>(apiUrl);
+  const logs: any[] = data?.logs ?? [];
 
   return (
     <PageContainer>
@@ -958,10 +963,10 @@ export function AdminActivity() {
       />
 
       <div className="mt-6 grid gap-3 sm:grid-cols-4">
-        <StatCard label="Events today" value="1,284" icon={<Activity className="h-4 w-4" />} />
-        <StatCard label="Errors today" value="12" icon={<AlertCircle className="h-4 w-4" />} hint="0.9% of events" />
-        <StatCard label="Auth events" value="412" icon={<Lock className="h-4 w-4" />} />
-        <StatCard label="AI computations" value="8,402" icon={<Cpu className="h-4 w-4" />} />
+        <StatCard label="Total events" value={logs.length} icon={<Activity className="h-4 w-4" />} />
+        <StatCard label="Errors" value={logs.filter(l => l.status === "error").length} icon={<AlertCircle className="h-4 w-4" />} />
+        <StatCard label="Warnings" value={logs.filter(l => l.status === "warning").length} icon={<AlertTriangle className="h-4 w-4" />} />
+        <StatCard label="Success" value={logs.filter(l => l.status === "success").length} icon={<CheckCircle2 className="h-4 w-4" />} />
       </div>
 
       <Card className="mt-6">
@@ -987,12 +992,17 @@ export function AdminActivity() {
             </div>
           </TableToolbar>
 
-          <div className="mt-4 overflow-x-auto rounded-lg border border-border">
-            <table className="w-full text-sm">
-              <thead className="bg-muted/50 text-[11px] uppercase tracking-wide text-muted-foreground">
-                <tr>
-                  <th className="px-4 py-2.5 text-left font-medium">User</th>
-                  <th className="px-4 py-2.5 text-left font-medium">Action</th>
+          {loading ? (
+            <LoadingState label="Loading audit logs…" rows={4} />
+          ) : logs.length === 0 ? (
+            <EmptyState className="mt-4" icon={<Activity className="h-5 w-5" />} title="No events match your filters" />
+          ) : (
+            <div className="mt-4 overflow-x-auto rounded-lg border border-border">
+              <table className="w-full text-sm">
+                <thead className="bg-muted/50 text-[11px] uppercase tracking-wide text-muted-foreground">
+                  <tr>
+                    <th className="px-4 py-2.5 text-left font-medium">User</th>
+                    <th className="px-4 py-2.5 text-left font-medium">Action</th>
                   <th className="hidden px-4 py-2.5 text-left font-medium sm:table-cell">Target</th>
                   <th className="hidden px-4 py-2.5 text-left font-medium md:table-cell">Type</th>
                   <th className="hidden px-4 py-2.5 text-left font-medium lg:table-cell">IP</th>
@@ -1025,6 +1035,7 @@ export function AdminActivity() {
               </tbody>
             </table>
           </div>
+          )}
         </CardContent>
       </Card>
     </PageContainer>
