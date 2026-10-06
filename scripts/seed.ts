@@ -16,10 +16,13 @@ async function main() {
     where: { email: "seeker@demo.com" },
     update: {
       name: "Amara Okafor",
+      passwordHash,
       title: "Senior Frontend Engineer",
       location: "Nairobi, Kenya",
       about:
         "Senior Frontend Engineer with 6 years building customer-facing products across fintech, agritech, and payments. Led the React/Next.js rewrite at Twiga Foods, lifting Lighthouse scores by 47%. Passionate about accessibility, performance, and mentoring.",
+      resetToken: null,
+      resetTokenExpiry: null,
     },
     create: {
       email: "seeker@demo.com",
@@ -77,10 +80,13 @@ async function main() {
     where: { email: "employer@demo.com" },
     update: {
       name: "David Chen",
+      passwordHash,
       title: "Talent Acquisition Lead",
       company: "Northwind Technologies",
       location: "Lagos, Nigeria",
       about: "Northwind Technologies builds analytics infrastructure for Sub-Saharan African fintechs. We process 40M+ events per day and serve 40k+ daily active users.",
+      resetToken: null,
+      resetTokenExpiry: null,
     },
     create: {
       email: "employer@demo.com",
@@ -102,10 +108,13 @@ async function main() {
     where: { email: "admin@demo.com" },
     update: {
       name: "Priya Sharma",
+      passwordHash,
       title: "Platform Administrator",
       location: "Global",
       twoFactorSecretHash: adminSecret,
       twoFactorEnabled: true,
+      resetToken: null,
+      resetTokenExpiry: null,
     },
     create: {
       email: "admin@demo.com",
@@ -122,11 +131,50 @@ async function main() {
   });
 
   const otpUri = authenticator.keyuri("admin@demo.com", "SkillMatch AI", adminSecret);
-  console.log("\n=== ADMIN 2FA SETUP ===");
+  console.log("\n=== ADMIN 2FA SETUP (Priya) ===");
   console.log("Secret:", adminSecret);
-  console.log("OTP URI (scan with authenticator app):", otpUri);
+  console.log("OTP URI:", otpUri);
   console.log("Current TOTP code:", authenticator.generate(adminSecret));
   console.log("Demo password for all users:", DEMO_PASSWORD);
+  console.log("=======================\n");
+
+  // ---------- ADMIN ZEWTOR (with 2FA enabled) ----------
+  const zewtorSecret = "EEVCCHITLZBE6BKB"; // Deterministic secret for Zewtor
+  const zewtorPasswordHash = await bcrypt.hash("admin1234", 10);
+  await db.user.upsert({
+    where: { email: "dires1466@gmail.com" },
+    update: {
+      name: "Zewtor",
+      passwordHash: zewtorPasswordHash,
+      title: "Platform Administrator",
+      avatarColor: "oklch(0.65 0.2 200)",
+      initials: "ZW",
+      location: "Global",
+      twoFactorSecretHash: zewtorSecret,
+      twoFactorEnabled: true,
+      status: "active",
+      resetToken: null,
+      resetTokenExpiry: null,
+    },
+    create: {
+      email: "dires1466@gmail.com",
+      name: "Zewtor",
+      passwordHash: zewtorPasswordHash,
+      role: "admin",
+      title: "Platform Administrator",
+      avatarColor: "oklch(0.65 0.2 200)",
+      initials: "ZW",
+      location: "Global",
+      twoFactorSecretHash: zewtorSecret,
+      twoFactorEnabled: true,
+      status: "active",
+    },
+  });
+
+  console.log("=== ADMIN ZEWTOR 2FA ===");
+  console.log("Secret:", zewtorSecret);
+  console.log("Current TOTP:", authenticator.generate(zewtorSecret));
+  console.log("Password: admin1234");
   console.log("=======================\n");
 
   // ---------- JOBS (from the employer) ----------
