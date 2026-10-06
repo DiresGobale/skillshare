@@ -20,6 +20,15 @@ import {
 } from "@/components/ui/select";
 import { BrandMark, HamburgerToggle } from "@/components/chrome/app-shell";
 import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import {
   CompanyLogo,
   SkillChip,
   MatchScore,
@@ -95,7 +104,7 @@ function PublicHeader({ onAuth }: { onAuth: (r: "login" | "register") => void })
           <HamburgerToggle
             open={mobileOpen}
             onClick={() => setMobileOpen((v) => !v)}
-            className="md:hidden"
+            className="lg:hidden"
           />
 
           <button onClick={() => go("landing")} className="flex items-center">
@@ -124,7 +133,7 @@ function PublicHeader({ onAuth }: { onAuth: (r: "login" | "register") => void })
       {/* Mobile slide-down nav panel */}
       <div
         className={cn(
-          "fixed inset-0 z-30 bg-black/50 backdrop-blur-sm transition-opacity duration-300 md:hidden",
+          "fixed inset-0 z-30 bg-black/50 backdrop-blur-sm transition-opacity duration-300 lg:hidden",
           mobileOpen ? "opacity-100" : "pointer-events-none opacity-0"
         )}
         onClick={() => setMobileOpen(false)}
@@ -133,7 +142,7 @@ function PublicHeader({ onAuth }: { onAuth: (r: "login" | "register") => void })
       <nav
         aria-label="Mobile public navigation"
         className={cn(
-          "fixed inset-x-0 top-16 z-30 border-b border-border bg-background shadow-lg transition-transform duration-300 ease-in-out md:hidden",
+          "fixed inset-x-0 top-16 z-30 border-b border-border bg-background shadow-lg transition-transform duration-300 ease-in-out lg:hidden",
           mobileOpen ? "translate-y-0" : "-translate-y-full pointer-events-none"
         )}
       >
@@ -520,6 +529,10 @@ export function Login() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [status, setStatus] = useState<string | null>(null);
+  const [forgotOpen, setForgotOpen] = useState(false);
+  const [forgotEmail, setForgotEmail] = useState("");
+  const [forgotSent, setForgotSent] = useState(false);
+  const [forgotError, setForgotError] = useState<string | null>(null);
 
   // Core sign-in logic: pre-check credentials, then call NextAuth
   const doLogin = async (emailVal: string, passwordVal: string, totpVal?: string) => {
@@ -629,9 +642,68 @@ export function Login() {
             <div className="space-y-1.5">
               <div className="flex items-center justify-between">
                 <Label htmlFor="password">Password</Label>
-                <button type="button" className="text-xs text-primary hover:underline">
-                  Forgot password?
-                </button>
+                <Dialog open={forgotOpen} onOpenChange={(o) => { setForgotOpen(o); if (!o) { setForgotSent(false); setForgotError(null); } }}>
+                  <button
+                    type="button"
+                    onClick={() => setForgotOpen(true)}
+                    className="text-xs text-primary hover:underline"
+                  >
+                    Forgot password?
+                  </button>
+                  <DialogContent>
+                    <DialogHeader>
+                      <DialogTitle>Reset your password</DialogTitle>
+                      <DialogDescription>
+                        Enter your email and we'll send you a reset link.
+                      </DialogDescription>
+                    </DialogHeader>
+                    {forgotSent ? (
+                      <div className="flex flex-col items-center py-6 text-center">
+                        <CheckCircle2 className="h-12 w-12 text-emerald-600" />
+                        <p className="mt-3 text-sm font-semibold">Reset link sent!</p>
+                        <p className="mt-1 text-xs text-muted-foreground">
+                          Check <span className="font-medium">{forgotEmail}</span> for instructions.
+                          For demo accounts, the password is always <code className="rounded bg-muted px-1">demo1234</code>.
+                        </p>
+                        <Button className="mt-4" size="sm" onClick={() => setForgotOpen(false)}>Close</Button>
+                      </div>
+                    ) : (
+                      <form
+                        onSubmit={(e) => {
+                          e.preventDefault();
+                          setForgotError(null);
+                          if (!forgotEmail.trim()) {
+                            setForgotError("Please enter your email.");
+                            return;
+                          }
+                          if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(forgotEmail)) {
+                            setForgotError("Please enter a valid email.");
+                            return;
+                          }
+                          setForgotSent(true);
+                        }}
+                        className="space-y-3"
+                      >
+                        <div className="space-y-1.5">
+                          <Label htmlFor="forgot-email">Email</Label>
+                          <Input
+                            id="forgot-email"
+                            type="email"
+                            placeholder="you@example.com"
+                            value={forgotEmail}
+                            onChange={(e) => setForgotEmail(e.target.value)}
+                            autoComplete="email"
+                          />
+                          {forgotError && <p className="text-xs text-rose-600">{forgotError}</p>}
+                        </div>
+                        <DialogFooter>
+                          <Button type="button" variant="outline" onClick={() => setForgotOpen(false)}>Cancel</Button>
+                          <Button type="submit">Send reset link</Button>
+                        </DialogFooter>
+                      </form>
+                    )}
+                  </DialogContent>
+                </Dialog>
               </div>
               <Input
                 id="password"

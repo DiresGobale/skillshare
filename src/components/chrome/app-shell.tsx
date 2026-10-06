@@ -124,30 +124,30 @@ export function HamburgerToggle({
       aria-expanded={open}
       aria-controls="mobile-navbar"
       className={cn(
-        "relative inline-flex h-9 w-9 items-center justify-center rounded-md border border-border bg-background transition-colors hover:bg-accent",
+        "relative inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-lg border-2 border-primary/30 bg-primary/5 transition-all hover:bg-primary/10 active:scale-95",
         className
       )}
     >
-      <span className="relative block h-4 w-5">
+      <span className="relative block h-5 w-6">
         {/* Line 1 */}
         <span
           className={cn(
-            "absolute left-0 block h-0.5 w-5 rounded-full bg-foreground transition-all duration-300 ease-in-out",
-            open ? "top-1.5 rotate-45" : "top-0"
+            "absolute left-0 block h-[3px] w-6 rounded-full bg-primary transition-all duration-300 ease-in-out",
+            open ? "top-2 rotate-45" : "top-0"
           )}
         />
         {/* Line 2 */}
         <span
           className={cn(
-            "absolute left-0 top-1.5 block h-0.5 w-5 rounded-full bg-foreground transition-all duration-200 ease-in-out",
+            "absolute left-0 top-2 block h-[3px] w-6 rounded-full bg-primary transition-all duration-200 ease-in-out",
             open ? "opacity-0 scale-x-0" : "opacity-100 scale-x-100"
           )}
         />
         {/* Line 3 */}
         <span
           className={cn(
-            "absolute left-0 block h-0.5 w-5 rounded-full bg-foreground transition-all duration-300 ease-in-out",
-            open ? "top-1.5 -rotate-45" : "top-3"
+            "absolute left-0 block h-[3px] w-6 rounded-full bg-primary transition-all duration-300 ease-in-out",
+            open ? "top-2 -rotate-45" : "top-4"
           )}
         />
       </span>

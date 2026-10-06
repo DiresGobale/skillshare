@@ -194,19 +194,23 @@
    ============================================================ */
 
 /* Base button enhancement — smooth scale + shadow on every button */
-button, [role="button"], a.btn {
+button:not(:disabled), [role="button"]:not(:disabled), a.btn {
   transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1),
               box-shadow 0.3s ease,
               background 0.3s ease,
               filter 0.2s ease !important;
 }
 
-button:active, [role="button"]:active, a.btn:active {
-  transform: scale(0.93) !important;
+button:active:not(:disabled), [role="button"]:active:not(:disabled), a.btn:active {
+  transform: scale(0.95) !important;
 }
 
-/* Ripple effect on click */
-button::after {
+/* Colorful ripple effect on click — only for .btn-ripple class */
+.btn-ripple {
+  position: relative;
+  overflow: hidden;
+}
+.btn-ripple::after {
   content: '';
   position: absolute;
   width: 0;
@@ -221,7 +225,7 @@ button::after {
   transition: width 0.5s ease, height 0.5s ease, opacity 0.8s ease;
 }
 
-button:active::after {
+.btn-ripple:active::after {
   width: 300px;
   height: 300px;
   opacity: 0;
@@ -461,8 +465,8 @@ button, a, input, select, textarea, [role="button"] {
   transition: all 0.2s ease !important;
 }
 
-/* Scale-up hover for icon buttons */
-button:has(svg):hover {
+/* Scale-up hover for icon-only buttons with the .icon-btn-hover class */
+.icon-btn-hover:hover {
   transform: scale(1.08);
 }
 

@@ -22,6 +22,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { Switch } from "@/components/ui/switch";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   TooltipProvider,
   MatchScore,
@@ -387,6 +388,18 @@ export function SeekerProfile() {
   const [saving, setSaving] = useState(false);
   const [saveMsg, setSaveMsg] = useState<{ ok: boolean; msg: string } | null>(null);
 
+  // Add experience dialog state
+  const [expOpen, setExpOpen] = useState(false);
+  const [expForm, setExpForm] = useState({ company: "", title: "", startDate: "", endDate: "", description: "", current: false });
+  const [expError, setExpError] = useState<string | null>(null);
+  const [expSaving, setExpSaving] = useState(false);
+
+  // Add education dialog state
+  const [eduOpen, setEduOpen] = useState(false);
+  const [eduForm, setEduForm] = useState({ institution: "", degree: "", field: "", startDate: "", endDate: "" });
+  const [eduError, setEduError] = useState<string | null>(null);
+  const [eduSaving, setEduSaving] = useState(false);
+
   // Sync form state when profile loads
   useEffect(() => {
     if (profile) {
@@ -417,6 +430,59 @@ export function SeekerProfile() {
       setSaveMsg({ ok: false, msg: "Network error." });
     } finally {
       setSaving(false);
+    }
+  };
+
+  const addExperience = async () => {
+    setExpError(null);
+    if (!expForm.company.trim()) { setExpError("Company is required."); return; }
+    if (!expForm.title.trim()) { setExpError("Job title is required."); return; }
+    setExpSaving(true);
+    try {
+      const res = await fetch("/api/profile/experience", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(expForm),
+      });
+      const json = await res.json();
+      if (json.ok) {
+        setExpOpen(false);
+        setExpForm({ company: "", title: "", startDate: "", endDate: "", description: "", current: false });
+        refetch();
+      } else {
+        setExpError(json.error ?? "Failed to add experience.");
+      }
+    } catch {
+      setExpError("Network error.");
+    } finally {
+      setExpSaving(false);
+    }
+  };
+
+  const addEducation = async () => {
+    setEduError(null);
+    if (!eduForm.institution.trim()) { setEduError("Institution is required."); return; }
+    if (!eduForm.degree.trim()) { setEduError("Degree is required."); return; }
+    if (!eduForm.field.trim()) { setEduError("Field of study is required."); return; }
+    setEduSaving(true);
+    try {
+      const res = await fetch("/api/profile/education", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(eduForm),
+      });
+      const json = await res.json();
+      if (json.ok) {
+        setEduOpen(false);
+        setEduForm({ institution: "", degree: "", field: "", startDate: "", endDate: "" });
+        refetch();
+      } else {
+        setEduError(json.error ?? "Failed to add education.");
+      }
+    } catch {
+      setEduError("Network error.");
+    } finally {
+      setEduSaving(false);
     }
   };
 
@@ -536,7 +602,7 @@ export function SeekerProfile() {
                 )}
                 <div className="flex justify-end gap-2">
                   <Button variant="ghost" size="sm" onClick={() => refetch()} disabled={saving}>Cancel</Button>
-                  <Button size="sm" onClick={save} disabled={saving}>
+                  <Button size="sm" onClick={save} disabled={saving} className="btn-blue">
                     {saving ? (
                       <>
                         <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-primary-foreground border-t-transparent" />
@@ -556,13 +622,58 @@ export function SeekerProfile() {
                 <CardTitle className="text-sm flex items-center gap-2">
                   <Briefcase className="h-4 w-4 text-primary" /> Experience
                 </CardTitle>
-                <Button variant="outline" size="sm" onClick={() => go("resume")}>
-                  <Plus className="h-3.5 w-3.5" /> Add via resume
-                </Button>
+                <Dialog open={expOpen} onOpenChange={(o) => { setExpOpen(o); setExpError(null); }}>
+                  <DialogTrigger asChild>
+                    <Button variant="outline" size="sm" className="btn-green">
+                      <Plus className="h-3.5 w-3.5" /> Add experience
+                    </Button>
+                  </DialogTrigger>
+                  <DialogContent>
+                    <DialogHeader>
+                      <DialogTitle>Add work experience</DialogTitle>
+                      <DialogDescription>Fill in the details of your work experience.</DialogDescription>
+                    </DialogHeader>
+                    <div className="space-y-3 py-2">
+                      <div className="grid gap-3 sm:grid-cols-2">
+                        <div className="space-y-1.5">
+                          <Label htmlFor="exp-title">Job title *</Label>
+                          <Input id="exp-title" value={expForm.title} onChange={(e) => setExpForm({ ...expForm, title: e.target.value })} placeholder="e.g. Senior Frontend Engineer" />
+                        </div>
+                        <div className="space-y-1.5">
+                          <Label htmlFor="exp-company">Company *</Label>
+                          <Input id="exp-company" value={expForm.company} onChange={(e) => setExpForm({ ...expForm, company: e.target.value })} placeholder="e.g. Twiga Foods" />
+                        </div>
+                        <div className="space-y-1.5">
+                          <Label htmlFor="exp-start">Start date</Label>
+                          <Input id="exp-start" type="month" value={expForm.startDate} onChange={(e) => setExpForm({ ...expForm, startDate: e.target.value })} />
+                        </div>
+                        <div className="space-y-1.5">
+                          <Label htmlFor="exp-end">End date</Label>
+                          <Input id="exp-end" type="month" value={expForm.endDate} onChange={(e) => setExpForm({ ...expForm, endDate: e.target.value })} disabled={expForm.current} />
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Checkbox id="exp-current" checked={expForm.current} onCheckedChange={(v) => setExpForm({ ...expForm, current: Boolean(v), endDate: Boolean(v) ? "Present" : "" })} />
+                        <label htmlFor="exp-current" className="text-xs">I currently work here</label>
+                      </div>
+                      <div className="space-y-1.5">
+                        <Label htmlFor="exp-desc">Description</Label>
+                        <Textarea id="exp-desc" rows={3} value={expForm.description} onChange={(e) => setExpForm({ ...expForm, description: e.target.value })} placeholder="What did you do?" className="resize-none" />
+                      </div>
+                      {expError && <p className="text-xs text-rose-600">{expError}</p>}
+                    </div>
+                    <DialogFooter>
+                      <Button variant="outline" onClick={() => setExpOpen(false)}>Cancel</Button>
+                      <Button onClick={addExperience} disabled={expSaving} className="btn-green">
+                        {expSaving ? "Saving…" : "Add experience"}
+                      </Button>
+                    </DialogFooter>
+                  </DialogContent>
+                </Dialog>
               </CardHeader>
               <CardContent className="space-y-3">
                 {(profile?.experiences?.length ?? 0) === 0 ? (
-                  <EmptyState icon={<Briefcase className="h-5 w-5" />} title="No experience added" description="Upload your resume to auto-extract experience entries." />
+                  <EmptyState icon={<Briefcase className="h-5 w-5" />} title="No experience added" description="Click 'Add experience' above or upload your resume to auto-extract." />
                 ) : (
                   profile.experiences.map((e: any) => (
                     <div key={e.id} className="rounded-lg border border-border bg-card p-3">
@@ -587,13 +698,54 @@ export function SeekerProfile() {
                 <CardTitle className="text-sm flex items-center gap-2">
                   <GraduationCap className="h-4 w-4 text-primary" /> Education
                 </CardTitle>
-                <Button variant="outline" size="sm" onClick={() => go("resume")}>
-                  <Plus className="h-3.5 w-3.5" /> Add via resume
-                </Button>
+                <Dialog open={eduOpen} onOpenChange={(o) => { setEduOpen(o); setEduError(null); }}>
+                  <DialogTrigger asChild>
+                    <Button variant="outline" size="sm" className="btn-blue">
+                      <Plus className="h-3.5 w-3.5" /> Add education
+                    </Button>
+                  </DialogTrigger>
+                  <DialogContent>
+                    <DialogHeader>
+                      <DialogTitle>Add education</DialogTitle>
+                      <DialogDescription>Fill in your education details.</DialogDescription>
+                    </DialogHeader>
+                    <div className="space-y-3 py-2">
+                      <div className="space-y-1.5">
+                        <Label htmlFor="edu-institution">Institution *</Label>
+                        <Input id="edu-institution" value={eduForm.institution} onChange={(e) => setEduForm({ ...eduForm, institution: e.target.value })} placeholder="e.g. University of Nairobi" />
+                      </div>
+                      <div className="grid gap-3 sm:grid-cols-2">
+                        <div className="space-y-1.5">
+                          <Label htmlFor="edu-degree">Degree *</Label>
+                          <Input id="edu-degree" value={eduForm.degree} onChange={(e) => setEduForm({ ...eduForm, degree: e.target.value })} placeholder="e.g. B.Sc." />
+                        </div>
+                        <div className="space-y-1.5">
+                          <Label htmlFor="edu-field">Field of study *</Label>
+                          <Input id="edu-field" value={eduForm.field} onChange={(e) => setEduForm({ ...eduForm, field: e.target.value })} placeholder="e.g. Computer Science" />
+                        </div>
+                        <div className="space-y-1.5">
+                          <Label htmlFor="edu-start">Start date</Label>
+                          <Input id="edu-start" type="month" value={eduForm.startDate} onChange={(e) => setEduForm({ ...eduForm, startDate: e.target.value })} />
+                        </div>
+                        <div className="space-y-1.5">
+                          <Label htmlFor="edu-end">End date</Label>
+                          <Input id="edu-end" type="month" value={eduForm.endDate} onChange={(e) => setEduForm({ ...eduForm, endDate: e.target.value })} />
+                        </div>
+                      </div>
+                      {eduError && <p className="text-xs text-rose-600">{eduError}</p>}
+                    </div>
+                    <DialogFooter>
+                      <Button variant="outline" onClick={() => setEduOpen(false)}>Cancel</Button>
+                      <Button onClick={addEducation} disabled={eduSaving} className="btn-blue">
+                        {eduSaving ? "Saving…" : "Add education"}
+                      </Button>
+                    </DialogFooter>
+                  </DialogContent>
+                </Dialog>
               </CardHeader>
               <CardContent className="space-y-3">
                 {(profile?.educations?.length ?? 0) === 0 ? (
-                  <EmptyState icon={<GraduationCap className="h-5 w-5" />} title="No education added" description="Upload your resume to auto-extract education entries." />
+                  <EmptyState icon={<GraduationCap className="h-5 w-5" />} title="No education added" description="Click 'Add education' above or upload your resume to auto-extract." />
                 ) : (
                   profile.educations.map((ed: any) => (
                     <div key={ed.id} className="rounded-lg border border-border bg-card p-3">
@@ -706,7 +858,7 @@ export function SeekerSkills() {
         actions={
           <Dialog open={addDialogOpen} onOpenChange={setAddDialogOpen}>
             <DialogTrigger asChild>
-              <Button>
+              <Button className="btn-rainbow">
                 <Plus className="h-4 w-4" /> Add skill
               </Button>
             </DialogTrigger>
@@ -758,7 +910,7 @@ export function SeekerSkills() {
               </div>
               <DialogFooter>
                 <Button variant="outline" onClick={() => { setAddDialogOpen(false); setAddError(null); }}>Cancel</Button>
-                <Button onClick={addSkill} disabled={adding}>
+                <Button onClick={addSkill} disabled={adding} className="btn-green">
                   {adding ? (
                     <>
                       <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-primary-foreground border-t-transparent" />

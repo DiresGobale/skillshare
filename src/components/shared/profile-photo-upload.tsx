@@ -95,7 +95,7 @@ export function ProfilePhotoUpload({
         ref={fileInputRef}
         type="file"
         accept="image/png,image/jpeg,image/jpg,image/webp,image/gif"
-        className="hidden"
+        className="sr-only"
         onChange={(e) => {
           const file = e.target.files?.[0];
           if (file) handleFile(file);
