@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
 import { extractResume } from "@/lib/ai-service";
-import { db } from "@/lib/db";
 
 // POST /api/ai/extract-resume
 // Body (JSON): { text: string }
@@ -21,24 +20,21 @@ export async function POST(req: NextRequest) {
       }
       fileName = file.name;
 
-      // Try to extract text from the file.
-      // For .txt / .md / unknown text files: read as text.
-      // For .pdf: use pdf-parse to extract text from the binary stream.
-      // For .docx: not supported in this demo (would need mammoth).
       const arrayBuffer = await file.arrayBuffer();
       const buffer = Buffer.from(arrayBuffer);
 
       const isPdf =
         file.type === "application/pdf" ||
         file.name.toLowerCase().endsWith(".pdf");
+      const isDocx =
+        file.type === "application/vnd.openxmlformats-officedocument.wordprocessingml.document" ||
+        file.name.toLowerCase().endsWith(".docx");
 
       if (isPdf) {
         try {
-          // Dynamic import — pdf-parse is server-only and somewhat heavy
-          const pdfParse = (await import("pdf-parse")).default;
-          const pdfData = await pdfParse(buffer);
-          text = pdfData.text || "";
+          text = await extractTextFromPdf(buffer);
         } catch (pdfErr) {
+          console.error("PDF parse error:", pdfErr);
           return NextResponse.json(
             {
               ok: false,
@@ -48,8 +44,17 @@ export async function POST(req: NextRequest) {
             { status: 422 }
           );
         }
+      } else if (isDocx) {
+        return NextResponse.json(
+          {
+            ok: false,
+            error:
+              ".docx files are not supported yet. Please upload a PDF or .txt file, or use 'Try with sample resume'.",
+          },
+          { status: 422 }
+        );
       } else {
-        // Treat as text
+        // Treat as text (.txt, .md, etc.)
         text = buffer.toString("utf-8");
       }
 
@@ -73,21 +78,44 @@ export async function POST(req: NextRequest) {
     }
 
     const result = await extractResume(text);
-
-    // Try to associate the extraction with the logged-in user (best-effort audit)
-    try {
-      // We can't easily get the session here without importing getServerSession,
-      // but we can leave the audit log to a follow-up call if needed.
-      void fileName;
-    } catch {
-      /* ignore */
-    }
-
-    return NextResponse.json({ ok: true, result });
+    return NextResponse.json({ ok: true, result, fileName });
   } catch (e) {
+    console.error("Resume extraction error:", e);
     return NextResponse.json(
       { ok: false, error: e instanceof Error ? e.message : "AI extraction failed." },
       { status: 500 }
     );
   }
+}
+
+// Extract text from a PDF buffer using pdfjs-dist directly.
+// We use the legacy build which is more compatible with different PDF formats
+// and doesn't require a separate worker file.
+async function extractTextFromPdf(buffer: Buffer): Promise<string> {
+  // Dynamic import of pdfjs-dist legacy build
+  const pdfjsLib = await import("pdfjs-dist/legacy/build/pdf.mjs");
+
+  // Disable worker — run inline (slower but no worker file needed)
+  const loadingTask = pdfjsLib.getDocument({
+    data: new Uint8Array(buffer),
+    useWorkerFetch: false,
+    isEvalSupported: false,
+    useSystemFonts: true,
+  });
+
+  const pdfDocument = await loadingTask.promise;
+  const numPages = pdfDocument.numPages;
+  const textParts: string[] = [];
+
+  for (let i = 1; i <= numPages; i++) {
+    const page = await pdfDocument.getPage(i);
+    const textContent = await page.getTextContent();
+    const pageText = textContent.items
+      .map((item: any) => item.str)
+      .join(" ");
+    textParts.push(pageText);
+  }
+
+  await pdfDocument.destroy();
+  return textParts.join("\n\n");
 }
