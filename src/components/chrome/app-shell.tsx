@@ -6,6 +6,7 @@ import { useApp, type View } from "@/lib/app-context";
 import { Button } from "@/components/ui/button";
 import { Avatar } from "@/components/shared/ui";
 import { demoAccounts } from "@/lib/demo-accounts";
+import { useFetch } from "@/lib/use-fetch";
 import {
   LayoutDashboard,
   User,
@@ -158,6 +159,8 @@ export function HamburgerToggle({
 function SidebarNav({ role, view, onNavigate }: { role: Role; view: View; onNavigate?: (v: View) => void }) {
   const nav = getNav(role);
   const { user } = useApp();
+  const { data: profileData } = useFetch<any>("/api/profile");
+  const profilePhoto = profileData?.profile?.profilePhoto;
   return (
     <div className="flex h-full flex-col">
       <div className="flex h-16 items-center border-b border-sidebar-border px-5">
@@ -200,7 +203,7 @@ function SidebarNav({ role, view, onNavigate }: { role: Role; view: View; onNavi
       </nav>
       <div className="border-t border-sidebar-border p-3">
         <div className="flex items-center gap-2.5 rounded-md px-2 py-2">
-          {user && <Avatar initials={user.initials ?? user.name.slice(0,2).toUpperCase()} color={user.avatarColor} size="sm" />}
+          {user && <Avatar initials={user.initials ?? user.name.slice(0,2).toUpperCase()} color={user.avatarColor} size="sm" photo={profilePhoto} />}
           {user && (
             <div className="min-w-0 flex-1">
               <p className="truncate text-xs font-semibold">{user.name}</p>
@@ -231,8 +234,8 @@ function MobileNavbar({
 }) {
   const nav = getNav(role);
   const { user } = useApp();
-
-  // Lock body scroll when open
+  const { data: profileData } = useFetch<any>("/api/profile");
+  const profilePhoto = profileData?.profile?.profilePhoto;
   useEffect(() => {
     if (open) {
       document.body.style.overflow = "hidden";
@@ -333,7 +336,7 @@ function MobileNavbar({
         {user && (
           <div className="border-t border-sidebar-border p-3">
             <div className="flex items-center gap-2.5 rounded-md px-2 py-2">
-              <Avatar initials={user.initials ?? user.name.slice(0,2).toUpperCase()} color={user.avatarColor} size="sm" />
+              <Avatar initials={user.initials ?? user.name.slice(0,2).toUpperCase()} color={user.avatarColor} size="sm" photo={profilePhoto} />
               <div className="min-w-0 flex-1">
                 <p className="truncate text-xs font-semibold">{user.name}</p>
                 <p className="truncate text-[10px] text-muted-foreground">{user.title ?? user.email}</p>
@@ -353,6 +356,8 @@ function Topbar({ onToggleMobile, mobileOpen }: { onToggleMobile: () => void; mo
 
   // Determine display user — prefer session user
   const displayUser = user;
+  const { data: profileData } = useFetch<any>("/api/profile");
+  const profilePhoto = profileData?.profile?.profilePhoto;
 
   return (
     <header className="sticky top-0 z-30 flex h-16 items-center gap-3 border-b border-border bg-background/95 px-4 backdrop-blur supports-[backdrop-filter]:bg-background/80 lg:px-6">
@@ -453,7 +458,7 @@ function Topbar({ onToggleMobile, mobileOpen }: { onToggleMobile: () => void; mo
 
         {displayUser && (
           <div className="flex items-center gap-2 pl-1">
-            <Avatar initials={displayUser.initials ?? displayUser.name.slice(0,2).toUpperCase()} color={displayUser.avatarColor} size="sm" />
+            <Avatar initials={displayUser.initials ?? displayUser.name.slice(0,2).toUpperCase()} color={displayUser.avatarColor} size="sm" photo={profilePhoto} />
             <div className="hidden lg:block">
               <p className="text-xs font-semibold leading-tight">{displayUser.name}</p>
               <p className="text-[10px] text-muted-foreground leading-tight">{displayUser.email}</p>

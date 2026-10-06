@@ -31,6 +31,7 @@ export async function GET() {
       about: user.about,
       avatarColor: user.avatarColor,
       initials: user.initials,
+      profilePhoto: user.profilePhoto,
       skills: user.skills,
       experiences: user.experiences,
       educations: user.educations,

@@ -290,13 +290,25 @@ export function Avatar({
   initials,
   color,
   size = "md",
+  photo,
 }: {
   initials: string;
   color: string;
   size?: "sm" | "md" | "lg";
+  photo?: string | null;
 }) {
   const dims = { sm: 32, md: 40, lg: 56 }[size];
   const fontSize = { sm: "text-xs", md: "text-sm", lg: "text-base" }[size];
+  if (photo) {
+    return (
+      <img
+        src={photo}
+        alt={initials}
+        className={cn("shrink-0 rounded-full object-cover", fontSize)}
+        style={{ width: dims, height: dims }}
+      />
+    );
+  }
   return (
     <span
       className={cn(

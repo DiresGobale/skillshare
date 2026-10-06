@@ -54,6 +54,7 @@ import {
   currentUser,
 } from "@/lib/mock-data";
 import { useFetch } from "@/lib/use-fetch";
+import { ProfilePhotoUpload } from "@/components/shared/profile-photo-upload";
 import type {
   Job,
   Application,
@@ -453,11 +454,13 @@ export function SeekerProfile() {
           {/* Profile card */}
           <Card className="lg:col-span-1">
             <CardContent className="p-6">
+              {/* Profile photo with upload */}
               <div className="flex flex-col items-center text-center">
-                <Avatar
+                <ProfilePhotoUpload
+                  photo={profile?.profilePhoto}
                   initials={profile?.initials ?? sessionUser?.initials ?? "U"}
                   color={profile?.avatarColor ?? sessionUser?.avatarColor ?? "oklch(0.55 0.22 285)"}
-                  size="lg"
+                  onUploaded={() => refetch()}
                 />
                 <h2 className="mt-3 text-base font-semibold">{profile?.name ?? "—"}</h2>
                 <p className="text-xs text-muted-foreground">{profile?.title ?? "—"}</p>

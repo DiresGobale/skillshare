@@ -27,6 +27,7 @@ model User {
   location      String?
   status        String   @default("active") // active | suspended | pending
   about         String?
+  profilePhoto  String?  // base64-encoded image data URL
 
   // Relations
   sessions     Session[]

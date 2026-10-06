@@ -187,3 +187,301 @@
   .no-scrollbar::-webkit-scrollbar { display: none; }
   .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
 }
+
+/* ============================================================
+   COLORFUL BUTTON ANIMATIONS
+   Beautiful mix of green, yellow, red, blue
+   ============================================================ */
+
+/* Base button enhancement — smooth scale + shadow on every button */
+button, [role="button"], a.btn {
+  transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1),
+              box-shadow 0.3s ease,
+              background 0.3s ease,
+              filter 0.2s ease !important;
+}
+
+button:active, [role="button"]:active, a.btn:active {
+  transform: scale(0.93) !important;
+}
+
+/* Ripple effect on click */
+button::after {
+  content: '';
+  position: absolute;
+  width: 0;
+  height: 0;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.5);
+  transform: translate(-50%, -50%);
+  left: var(--ripple-x, 50%);
+  top: var(--ripple-y, 50%);
+  opacity: 0;
+  pointer-events: none;
+  transition: width 0.5s ease, height 0.5s ease, opacity 0.8s ease;
+}
+
+button:active::after {
+  width: 300px;
+  height: 300px;
+  opacity: 0;
+  transition: width 0s, height 0s, opacity 0s;
+}
+
+/* Primary button — vibrant gradient with color shift */
+.btn-primary-animated, button.btn-primary-animated {
+  background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 50%, #6366f1 100%) !important;
+  background-size: 200% 200% !important;
+  animation: gradientShift 3s ease infinite;
+  border: none !important;
+  box-shadow: 0 4px 15px rgba(99, 102, 241, 0.4) !important;
+}
+
+.btn-primary-animated:hover {
+  filter: brightness(1.15);
+  box-shadow: 0 6px 25px rgba(99, 102, 241, 0.6) !important;
+}
+
+/* Rainbow button — cycles through green/yellow/red/blue */
+.btn-rainbow, button.btn-rainbow {
+  background: linear-gradient(135deg, #22c55e, #eab308, #ef4444, #3b82f6) !important;
+  background-size: 300% 300% !important;
+  animation: rainbowShift 4s ease infinite;
+  border: none !important;
+  color: white !important;
+  font-weight: 600 !important;
+  box-shadow: 0 4px 15px rgba(59, 130, 246, 0.3) !important;
+}
+
+.btn-rainbow:hover {
+  filter: brightness(1.1) saturate(1.2);
+  transform: translateY(-2px) scale(1.02);
+  box-shadow: 0 8px 30px rgba(239, 68, 68, 0.4) !important;
+}
+
+/* Green button */
+.btn-green, button.btn-green {
+  background: linear-gradient(135deg, #22c55e, #16a34a) !important;
+  border: none !important;
+  box-shadow: 0 4px 12px rgba(34, 197, 94, 0.35) !important;
+}
+.btn-green:hover {
+  filter: brightness(1.1);
+  box-shadow: 0 6px 20px rgba(34, 197, 94, 0.5) !important;
+}
+
+/* Yellow button */
+.btn-yellow, button.btn-yellow {
+  background: linear-gradient(135deg, #fbbf24, #f59e0b) !important;
+  border: none !important;
+  color: #1a1a1a !important;
+  box-shadow: 0 4px 12px rgba(251, 191, 36, 0.35) !important;
+}
+.btn-yellow:hover {
+  filter: brightness(1.08);
+  box-shadow: 0 6px 20px rgba(251, 191, 36, 0.5) !important;
+}
+
+/* Red button */
+.btn-red, button.btn-red {
+  background: linear-gradient(135deg, #f87171, #ef4444) !important;
+  border: none !important;
+  box-shadow: 0 4px 12px rgba(239, 68, 68, 0.35) !important;
+}
+.btn-red:hover {
+  filter: brightness(1.1);
+  box-shadow: 0 6px 20px rgba(239, 68, 68, 0.5) !important;
+}
+
+/* Blue button */
+.btn-blue, button.btn-blue {
+  background: linear-gradient(135deg, #60a5fa, #3b82f6) !important;
+  border: none !important;
+  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.35) !important;
+}
+.btn-blue:hover {
+  filter: brightness(1.1);
+  box-shadow: 0 6px 20px rgba(59, 130, 246, 0.5) !important;
+}
+
+/* Outline button hover — colorful glow */
+.btn-outline-colorful {
+  border: 2px solid #6366f1 !important;
+  background: transparent !important;
+  transition: all 0.3s ease !important;
+}
+.btn-outline-colorful:hover {
+  background: linear-gradient(135deg, #22c55e, #eab308, #ef4444, #3b82f6) !important;
+  background-size: 300% 300% !important;
+  animation: rainbowShift 4s ease infinite;
+  border-color: transparent !important;
+  color: white !important;
+  transform: translateY(-2px);
+}
+
+/* Card hover — lift + colorful shadow */
+.card-hover-lift {
+  transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1),
+              box-shadow 0.3s ease !important;
+}
+.card-hover-lift:hover {
+  transform: translateY(-4px) scale(1.01);
+  box-shadow: 0 12px 40px rgba(99, 102, 241, 0.15),
+              0 4px 12px rgba(34, 197, 94, 0.1),
+              0 4px 12px rgba(239, 68, 68, 0.08) !important;
+}
+
+/* Keyframe animations */
+@keyframes gradientShift {
+  0% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+
+@keyframes rainbowShift {
+  0% { background-position: 0% 50%; }
+  25% { background-position: 50% 100%; }
+  50% { background-position: 100% 50%; }
+  75% { background-position: 50% 0%; }
+  100% { background-position: 0% 50%; }
+}
+
+/* ============================================================
+   PAGE ZOOM-IN / ZOOM-OUT TRANSITION
+   ============================================================ */
+
+@keyframes pageZoomIn {
+  0% {
+    opacity: 0;
+    transform: scale(0.92) translateY(10px);
+    filter: blur(4px);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+    filter: blur(0);
+  }
+}
+
+@keyframes pageZoomOut {
+  0% {
+    opacity: 1;
+    transform: scale(1);
+    filter: blur(0);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(1.05);
+    filter: blur(4px);
+  }
+}
+
+.page-zoom-in {
+  animation: pageZoomIn 0.4s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+}
+
+.page-zoom-out {
+  animation: pageZoomOut 0.25s ease-in forwards;
+}
+
+/* ============================================================
+   ADDITIONAL COLORFUL EFFECTS
+   ============================================================ */
+
+/* Animated gradient border for cards */
+.gradient-border {
+  position: relative;
+  background: white;
+  border-radius: 12px;
+  z-index: 0;
+}
+.gradient-border::before {
+  content: '';
+  position: absolute;
+  inset: -2px;
+  border-radius: 14px;
+  background: linear-gradient(135deg, #22c55e, #eab308, #ef4444, #3b82f6);
+  background-size: 300% 300%;
+  animation: rainbowShift 4s ease infinite;
+  z-index: -1;
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+.gradient-border:hover::before {
+  opacity: 1;
+}
+
+/* Glow pulse for important elements */
+@keyframes glowPulse {
+  0%, 100% {
+    box-shadow: 0 0 5px rgba(99, 102, 241, 0.3),
+                0 0 10px rgba(34, 197, 94, 0.2);
+  }
+  50% {
+    box-shadow: 0 0 15px rgba(99, 102, 241, 0.5),
+                0 0 30px rgba(234, 179, 8, 0.2),
+                0 0 45px rgba(239, 68, 68, 0.15);
+  }
+}
+
+.glow-pulse {
+  animation: glowPulse 3s ease-in-out infinite;
+}
+
+/* Bounce-in for notifications/badges */
+@keyframes bounceIn {
+  0% { transform: scale(0.3); opacity: 0; }
+  50% { transform: scale(1.15); }
+  70% { transform: scale(0.95); }
+  100% { transform: scale(1); opacity: 1; }
+}
+
+.bounce-in {
+  animation: bounceIn 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+}
+
+/* Shimmer effect for loading states */
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+.shimmer {
+  background: linear-gradient(90deg,
+    rgba(99, 102, 241, 0.05) 25%,
+    rgba(34, 197, 94, 0.08) 50%,
+    rgba(99, 102, 241, 0.05) 75%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+}
+
+/* Smooth color transition for all interactive elements */
+button, a, input, select, textarea, [role="button"] {
+  transition: all 0.2s ease !important;
+}
+
+/* Scale-up hover for icon buttons */
+button:has(svg):hover {
+  transform: scale(1.08);
+}
+
+/* Focus ring with colorful glow */
+button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible {
+  outline: 2px solid #6366f1 !important;
+  outline-offset: 2px !important;
+  box-shadow: 0 0 0 4px rgba(99, 102, 241, 0.15) !important;
+}
+
+/* Tab trigger active state — colorful underline */
+[role="tab"][data-state="active"] {
+  background: linear-gradient(135deg, #6366f1, #8b5cf6) !important;
+  color: white !important;
+  box-shadow: 0 2px 8px rgba(99, 102, 241, 0.3) !important;
+}
+
+/* Badge animations */
+.badge-pulse {
+  animation: glowPulse 2s ease-in-out infinite;
+}
+

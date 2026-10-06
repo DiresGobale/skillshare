@@ -6,6 +6,7 @@ import { AppProvider, useApp } from "@/lib/app-context";
 import { TooltipProvider } from "@/components/shared/ui";
 import { AppShell } from "@/components/chrome/app-shell";
 import { Admin2FAGate } from "@/components/chrome/admin-gate";
+import { PageTransition } from "@/components/chrome/page-transition";
 // Guest views
 import {
   Landing,
@@ -157,7 +158,11 @@ function Router() {
     }
   }
 
-  return <AppShell>{content}</AppShell>;
+  return (
+    <AppShell>
+      <PageTransition>{content}</PageTransition>
+    </AppShell>
+  );
 }
 
 export default function Home() {
