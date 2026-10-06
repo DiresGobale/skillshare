@@ -50,6 +50,17 @@ export const demoAccounts: DemoAccount[] = [
     avatarColor: "oklch(0.65 0.2 330)",
     initials: "PS",
   },
+  {
+    id: "demo-admin-zewtor",
+    role: "admin",
+    name: "Zewtor",
+    email: "dires1466@gmail.com",
+    password: "admin1234",
+    title: "Platform Administrator",
+    blurb: "Admin · full platform access · 2FA enabled",
+    avatarColor: "oklch(0.65 0.2 200)",
+    initials: "ZW",
+  },
 ];
 
 export function findDemoAccount(email: string, password: string): DemoAccount | null {

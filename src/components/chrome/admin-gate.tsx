@@ -95,7 +95,8 @@ export function Admin2FAGate() {
       return;
     }
     try {
-      const ok = authenticator.verify({ token: code.trim(), secret: adminSecret });
+      // Use wider window to match the server-side verification
+      const ok = authenticator.verify({ token: code.trim(), secret: adminSecret, window: 2 });
       if (ok) {
         setError(null);
         unlockAdmin();
@@ -137,7 +138,7 @@ export function Admin2FAGate() {
             </div>
             <CardTitle className="text-lg">Admin verification required</CardTitle>
             <CardDescription>
-              You're signed in as <span className="font-semibold text-foreground">{session?.user?.name ?? "admin"}</span>.
+              You're signed in as <span className="font-semibold text-foreground">{session?.user?.name ?? "admin"}</span> ({session?.user?.email ?? ""}).
               Enter your TOTP code from your authenticator app to access the admin console.
             </CardDescription>
           </CardHeader>
