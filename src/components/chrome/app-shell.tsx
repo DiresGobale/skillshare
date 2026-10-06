@@ -1,12 +1,12 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { cn } from "@/lib/utils";
 import { useApp, type View } from "@/lib/app-context";
 import { Button } from "@/components/ui/button";
-import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
 import { Avatar } from "@/components/shared/ui";
 import { currentUser } from "@/lib/mock-data";
+import { demoAccounts } from "@/lib/demo-accounts";
 import {
   LayoutDashboard,
   User,
@@ -26,11 +26,13 @@ import {
   Settings,
   Search,
   Menu,
+  X,
   LogOut,
   ChevronDown,
   Zap,
   ShieldCheck,
   CalendarClock,
+  Lock,
 } from "lucide-react";
 import type { Role } from "@/lib/types";
 
@@ -108,6 +110,58 @@ export function BrandMark({ compact = false }: { compact?: boolean }) {
   );
 }
 
+// ============================================================
+// 3-LINE HAMBURGER TOGGLE BUTTON
+// Three horizontal lines that animate into an X when active
+// ============================================================
+function HamburgerToggle({
+  open,
+  onClick,
+  className,
+}: {
+  open: boolean;
+  onClick: () => void;
+  className?: string;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-label={open ? "Close menu" : "Open menu"}
+      aria-expanded={open}
+      aria-controls="mobile-navbar"
+      className={cn(
+        "relative inline-flex h-9 w-9 items-center justify-center rounded-md border border-border bg-background transition-colors hover:bg-accent",
+        className
+      )}
+    >
+      <span className="relative block h-4 w-5">
+        {/* Line 1 */}
+        <span
+          className={cn(
+            "absolute left-0 block h-0.5 w-5 rounded-full bg-foreground transition-all duration-300 ease-in-out",
+            open ? "top-1.5 rotate-45" : "top-0"
+          )}
+        />
+        {/* Line 2 */}
+        <span
+          className={cn(
+            "absolute left-0 top-1.5 block h-0.5 w-5 rounded-full bg-foreground transition-all duration-200 ease-in-out",
+            open ? "opacity-0 scale-x-0" : "opacity-100 scale-x-100"
+          )}
+        />
+        {/* Line 3 */}
+        <span
+          className={cn(
+            "absolute left-0 block h-0.5 w-5 rounded-full bg-foreground transition-all duration-300 ease-in-out",
+            open ? "top-1.5 -rotate-45" : "top-3"
+          )}
+        />
+      </span>
+    </button>
+  );
+}
+
 // Sidebar (desktop)
 function SidebarNav({ role, view, onNavigate }: { role: Role; view: View; onNavigate?: (v: View) => void }) {
   const nav = getNav(role);
@@ -167,21 +221,155 @@ function SidebarNav({ role, view, onNavigate }: { role: Role; view: View; onNavi
   );
 }
 
-// Top bar (search + actions + role switcher)
-function Topbar({ onOpenMobile }: { onOpenMobile: () => void }) {
-  const { role, setRole } = useApp();
+// ============================================================
+// MOBILE NAVBAR — slide-in panel controlled by hamburger toggle
+// ============================================================
+function MobileNavbar({
+  open,
+  onClose,
+  role,
+  view,
+  onNavigate,
+}: {
+  open: boolean;
+  onClose: () => void;
+  role: Role;
+  view: View;
+  onNavigate: (v: View) => void;
+}) {
+  const nav = getNav(role);
   const user = getUser(role);
+
+  // Lock body scroll when open
+  useEffect(() => {
+    if (open) {
+      document.body.style.overflow = "hidden";
+    } else {
+      document.body.style.overflow = "";
+    }
+    return () => {
+      document.body.style.overflow = "";
+    };
+  }, [open]);
+
+  // Close on Escape
+  useEffect(() => {
+    if (!open) return;
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [open, onClose]);
+
+  return (
+    <>
+      {/* Backdrop */}
+      <div
+        className={cn(
+          "fixed inset-0 z-40 bg-black/50 backdrop-blur-sm transition-opacity duration-300 lg:hidden",
+          open ? "opacity-100" : "pointer-events-none opacity-0"
+        )}
+        onClick={onClose}
+        aria-hidden="true"
+      />
+
+      {/* Slide-in panel */}
+      <nav
+        id="mobile-navbar"
+        aria-label="Mobile navigation"
+        className={cn(
+          "fixed inset-y-0 left-0 z-50 flex w-72 max-w-[85vw] flex-col border-r border-sidebar-border bg-sidebar shadow-xl transition-transform duration-300 ease-in-out lg:hidden",
+          open ? "translate-x-0" : "-translate-x-full"
+        )}
+      >
+        {/* Header with brand + close button */}
+        <div className="flex h-16 items-center justify-between border-b border-sidebar-border px-5">
+          <BrandMark />
+          <button
+            onClick={onClose}
+            aria-label="Close menu"
+            className="inline-flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+
+        {/* Nav items */}
+        <div className="flex-1 overflow-y-auto px-3 py-4">
+          <p className="px-3 pb-2 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+            {role === "seeker" ? "Job seeker" : role === "employer" ? "Employer" : "Administrator"}
+          </p>
+          <div className="space-y-0.5">
+            {nav.map((item) => {
+              const active = view === item.view;
+              return (
+                <button
+                  key={item.view}
+                  onClick={() => {
+                    onNavigate(item.view);
+                    onClose();
+                  }}
+                  className={cn(
+                    "group flex w-full items-center gap-2.5 rounded-md px-3 py-2.5 text-sm font-medium transition-colors",
+                    active
+                      ? "bg-primary text-primary-foreground shadow-sm"
+                      : "text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+                  )}
+                >
+                  <span className={cn(active ? "text-primary-foreground" : "text-muted-foreground group-hover:text-sidebar-accent-foreground")}>
+                    {item.icon}
+                  </span>
+                  <span className="flex-1 text-left">{item.label}</span>
+                  {item.badge && (
+                    <span
+                      className={cn(
+                        "inline-flex h-5 min-w-5 items-center justify-center rounded-full px-1.5 text-[10px] font-semibold",
+                        active ? "bg-primary-foreground/20 text-primary-foreground" : "bg-primary text-primary-foreground"
+                      )}
+                    >
+                      {item.badge}
+                    </span>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* User card */}
+        {user && (
+          <div className="border-t border-sidebar-border p-3">
+            <div className="flex items-center gap-2.5 rounded-md px-2 py-2">
+              <Avatar initials={user.initials} color={user.avatarColor} size="sm" />
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-xs font-semibold">{user.name}</p>
+                <p className="truncate text-[10px] text-muted-foreground">{user.title}</p>
+              </div>
+            </div>
+          </div>
+        )}
+      </nav>
+    </>
+  );
+}
+
+// Top bar (search + actions + role switcher)
+function Topbar({ onToggleMobile, mobileOpen }: { onToggleMobile: () => void; mobileOpen: boolean }) {
+  const { role, user, signOut, signIn } = useApp();
   const [roleMenuOpen, setRoleMenuOpen] = useState(false);
+
+  // Determine display user — prefer session user, fall back to mock for demo
+  const displayUser = user ?? getUser(role);
 
   return (
     <header className="sticky top-0 z-30 flex h-16 items-center gap-3 border-b border-border bg-background/95 px-4 backdrop-blur supports-[backdrop-filter]:bg-background/80 lg:px-6">
-      <button
-        onClick={onOpenMobile}
-        className="lg:hidden inline-flex h-9 w-9 items-center justify-center rounded-md border border-border hover:bg-accent"
-        aria-label="Open menu"
-      >
-        <Menu className="h-5 w-5" />
-      </button>
+      {/* 3-line hamburger toggle (mobile only) */}
+      <HamburgerToggle
+        open={mobileOpen}
+        onClick={onToggleMobile}
+        className="lg:hidden"
+      />
 
       {/* Search (desktop) */}
       <div className="relative hidden flex-1 max-w-md sm:block">
@@ -209,26 +397,45 @@ function Topbar({ onOpenMobile }: { onOpenMobile: () => void }) {
           {roleMenuOpen && (
             <>
               <div className="fixed inset-0 z-40" onClick={() => setRoleMenuOpen(false)} />
-              <div className="absolute right-0 top-11 z-50 w-48 overflow-hidden rounded-md border border-border bg-popover shadow-md">
+              <div className="absolute right-0 top-11 z-50 w-64 overflow-hidden rounded-md border border-border bg-popover shadow-md">
                 <p className="px-3 py-2 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-                  Switch role (demo)
+                  Switch demo role
                 </p>
-                {(["guest", "seeker", "employer", "admin"] as Role[]).map((r) => (
+                {demoAccounts.map((acc) => (
                   <button
-                    key={r}
+                    key={acc.id}
                     onClick={() => {
-                      setRole(r);
+                      signIn(acc);
                       setRoleMenuOpen(false);
                     }}
                     className={cn(
-                      "flex w-full items-center justify-between px-3 py-2 text-sm hover:bg-accent capitalize",
-                      r === role && "bg-primary/5 text-primary font-medium"
+                      "flex w-full items-center gap-2 px-3 py-2 text-sm hover:bg-accent",
+                      acc.role === role && "bg-primary/5 text-primary font-medium"
                     )}
                   >
-                    {r}
-                    {r === role && <span className="h-1.5 w-1.5 rounded-full bg-primary" />}
+                    <span
+                      className="flex h-6 w-6 items-center justify-center rounded-full text-[10px] font-semibold text-white"
+                      style={{ background: acc.avatarColor }}
+                    >
+                      {acc.initials}
+                    </span>
+                    <div className="flex-1 text-left">
+                      <p className="text-xs font-semibold capitalize">{acc.role}</p>
+                      <p className="text-[10px] text-muted-foreground">{acc.email}</p>
+                    </div>
                   </button>
                 ))}
+                <div className="border-t border-border p-1.5">
+                  <button
+                    onClick={() => {
+                      signOut();
+                      setRoleMenuOpen(false);
+                    }}
+                    className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-xs text-rose-600 hover:bg-rose-50"
+                  >
+                    <LogOut className="h-3.5 w-3.5" /> Sign out
+                  </button>
+                </div>
               </div>
             </>
           )}
@@ -243,12 +450,12 @@ function Topbar({ onOpenMobile }: { onOpenMobile: () => void }) {
           <MessageSquare className="h-4 w-4" />
         </Button>
 
-        {user && (
+        {displayUser && (
           <div className="flex items-center gap-2 pl-1">
-            <Avatar initials={user.initials} color={user.avatarColor} size="sm" />
+            <Avatar initials={displayUser.initials} color={displayUser.avatarColor} size="sm" />
             <div className="hidden lg:block">
-              <p className="text-xs font-semibold leading-tight">{user.name}</p>
-              <p className="text-[10px] text-muted-foreground leading-tight">{user.email}</p>
+              <p className="text-xs font-semibold leading-tight">{displayUser.name}</p>
+              <p className="text-[10px] text-muted-foreground leading-tight">{displayUser.email ?? displayUser.title}</p>
             </div>
           </div>
         )}
@@ -256,7 +463,7 @@ function Topbar({ onOpenMobile }: { onOpenMobile: () => void }) {
           variant="ghost"
           size="icon"
           className="h-9 w-9 text-muted-foreground hover:text-foreground"
-          onClick={() => setRole("guest")}
+          onClick={() => signOut()}
           aria-label="Sign out"
         >
           <LogOut className="h-4 w-4" />
@@ -270,7 +477,7 @@ function Topbar({ onOpenMobile }: { onOpenMobile: () => void }) {
 // MAIN LAYOUT — sidebar + topbar + content
 // ============================================================
 export function AppShell({ children }: { children: React.ReactNode }) {
-  const { role, view, go, setRole } = useApp();
+  const { role, view, go, isAdminUnlocked, lockAdmin } = useApp();
   const [mobileOpen, setMobileOpen] = useState(false);
 
   return (
@@ -280,24 +487,34 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         <SidebarNav role={role} view={view} onNavigate={(v) => go(v)} />
       </aside>
 
-      {/* Mobile sidebar (sheet) */}
-      <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
-        <SheetContent side="left" className="w-72 p-0" aria-describedby={undefined}>
-          <SheetTitle className="sr-only">Navigation menu</SheetTitle>
-          <SidebarNav
-            role={role}
-            view={view}
-            onNavigate={(v) => {
-              go(v);
-              setMobileOpen(false);
-            }}
-          />
-        </SheetContent>
-      </Sheet>
+      {/* Mobile navbar (toggle-controlled, slide-in) */}
+      <MobileNavbar
+        open={mobileOpen}
+        onClose={() => setMobileOpen(false)}
+        role={role}
+        view={view}
+        onNavigate={(v) => go(v)}
+      />
 
       {/* Main */}
       <div className="flex min-w-0 flex-1 flex-col">
-        <Topbar onOpenMobile={() => setMobileOpen(true)} />
+        <Topbar onToggleMobile={() => setMobileOpen((v) => !v)} mobileOpen={mobileOpen} />
+        {/* Admin security banner */}
+        {role === "admin" && isAdminUnlocked && (
+          <div className="flex items-center justify-between gap-3 border-b border-amber-200 bg-amber-50 px-4 py-1.5 text-xs text-amber-900 lg:px-6">
+            <div className="flex items-center gap-2">
+              <ShieldCheck className="h-3.5 w-3.5" />
+              <span className="font-medium">Admin session unlocked</span>
+              <span className="hidden text-amber-700 sm:inline">· auto-locks after 30 min of inactivity</span>
+            </div>
+            <button
+              onClick={() => lockAdmin()}
+              className="flex items-center gap-1 rounded px-2 py-0.5 font-medium text-amber-900 hover:bg-amber-100"
+            >
+              <Lock className="h-3 w-3" /> Lock now
+            </button>
+          </div>
+        )}
         <main className="flex-1">{children}</main>
       </div>
     </div>

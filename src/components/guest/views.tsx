@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Card, CardContent, CardHeader, CardFooter } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardFooter, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
@@ -26,6 +26,7 @@ import {
   InfoCallout,
 } from "@/components/shared/ui";
 import { publicJobs, recommendedJobs } from "@/lib/mock-data";
+import { demoAccounts } from "@/lib/demo-accounts";
 import type { Job, Role } from "@/lib/types";
 import {
   Search,
@@ -431,26 +432,54 @@ function AuthShell({ title, subtitle, children }: { title: string; subtitle: str
 }
 
 export function Login() {
-  const { go, setRole } = useApp();
+  const { go, signIn, setRole } = useApp();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
 
-  const submit = (e: React.FormEvent) => {
+  const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!email || !password) {
       setError("Please enter both email and password.");
       return;
     }
-    if (password.length < 6) {
-      setError("Password must be at least 6 characters.");
-      return;
-    }
     setError(null);
-    // Demo: route by email hint
-    if (email.includes("employer")) setRole("employer");
-    else if (email.includes("admin")) setRole("admin");
-    else setRole("seeker");
+    setLoading(true);
+    try {
+      const res = await fetch("/api/auth/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, password }),
+      });
+      const data = await res.json();
+      if (!data.ok) {
+        setError(data.error ?? "Login failed.");
+        return;
+      }
+      // Pass the full account (password is "demo1234" for all demo accounts)
+      signIn({
+        id: data.account.id,
+        role: data.account.role,
+        name: data.account.name,
+        email: data.account.email,
+        password: "demo1234",
+        title: data.account.title,
+        blurb: data.account.blurb,
+        avatarColor: data.account.avatarColor,
+        initials: data.account.initials,
+      });
+    } catch {
+      setError("Network error. Please try again.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const fillDemo = (acc: typeof demoAccounts[number]) => {
+    setEmail(acc.email);
+    setPassword(acc.password);
+    setError(null);
   };
 
   return (
@@ -491,8 +520,15 @@ export function Login() {
                 {error}
               </div>
             )}
-            <Button type="submit" className="w-full h-10">
-              Sign in
+            <Button type="submit" className="w-full h-10" disabled={loading}>
+              {loading ? (
+                <>
+                  <span className="h-4 w-4 animate-spin rounded-full border-2 border-primary-foreground border-t-transparent" />
+                  Signing in…
+                </>
+              ) : (
+                "Sign in"
+              )}
             </Button>
           </form>
           <div className="my-4 flex items-center gap-2 text-xs text-muted-foreground">
@@ -516,15 +552,62 @@ export function Login() {
           </p>
         </CardContent>
       </Card>
-      <InfoCallout>
-        <span className="font-medium">Demo tip:</span> include <code className="rounded bg-blue-100 px-1">employer</code> or <code className="rounded bg-blue-100 px-1">admin</code> in your email to land on the corresponding dashboard.
-      </InfoCallout>
+
+      {/* Demo credentials picker */}
+      <Card className="mt-4 border-primary/20">
+        <CardHeader className="pb-3">
+          <CardTitle className="text-sm flex items-center gap-2">
+            <Sparkles className="h-4 w-4 text-primary" /> Try a demo account
+          </CardTitle>
+          <CardDescription>Click any card to autofill — password is <code className="rounded bg-muted px-1 py-0.5 text-[10px]">demo1234</code> for all roles.</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-2">
+          {demoAccounts.map((acc) => (
+            <button
+              key={acc.id}
+              onClick={() => fillDemo(acc)}
+              className="group flex w-full items-center gap-3 rounded-lg border border-border bg-card p-3 text-left transition-all hover:border-primary/40 hover:bg-accent"
+            >
+              <span
+                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-xs font-semibold text-white"
+                style={{ background: acc.avatarColor }}
+              >
+                {acc.initials}
+              </span>
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-2">
+                  <p className="text-sm font-semibold">{acc.name}</p>
+                  <Badge
+                    variant="outline"
+                    className={cn(
+                      "text-[10px] capitalize",
+                      acc.role === "seeker" ? "bg-violet-50 text-violet-700 border-violet-200" :
+                      acc.role === "employer" ? "bg-blue-50 text-blue-700 border-blue-200" :
+                      "bg-amber-50 text-amber-700 border-amber-200"
+                    )}
+                  >
+                    {acc.role}
+                  </Badge>
+                  {acc.role === "admin" && (
+                    <Badge variant="outline" className="text-[10px] bg-emerald-50 text-emerald-700 border-emerald-200 gap-1">
+                      <ShieldCheck className="h-2.5 w-2.5" /> 2FA
+                    </Badge>
+                  )}
+                </div>
+                <p className="truncate text-xs text-muted-foreground">{acc.blurb}</p>
+                <p className="truncate text-[10px] text-muted-foreground font-mono mt-0.5">{acc.email}</p>
+              </div>
+              <ArrowRight className="h-3.5 w-3.5 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100" />
+            </button>
+          ))}
+        </CardContent>
+      </Card>
     </AuthShell>
   );
 }
 
 export function Register() {
-  const { go, setRole } = useApp();
+  const { go, signIn } = useApp();
   const [role, setRoleChoice] = useState<Role>("seeker");
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
@@ -542,7 +625,18 @@ export function Register() {
     if (!agree) next.terms = "You must accept the terms to continue.";
     setErrors(next);
     if (Object.keys(next).length > 0) return;
-    setRole(role);
+    // Create a session for the new (mock) account
+    signIn({
+      id: `new-${Date.now()}`,
+      role,
+      name: name.trim(),
+      email: email.trim(),
+      password: password,
+      title: role === "employer" ? "Employer" : "Job Seeker",
+      blurb: role === "employer" ? "Employer · new account" : "Job seeker · new account",
+      avatarColor: role === "employer" ? "oklch(0.6 0.18 240)" : "oklch(0.55 0.22 285)",
+      initials: name.trim().split(" ").map((w) => w[0]).slice(0, 2).join("").toUpperCase(),
+    });
   };
 
   return (

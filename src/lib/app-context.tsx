@@ -1,7 +1,8 @@
 "use client";
 
-import React, { createContext, useContext, useMemo, useState, useCallback } from "react";
+import React, { createContext, useContext, useMemo, useState, useCallback, useEffect } from "react";
 import type { Role } from "./types";
+import type { DemoAccount } from "./demo-accounts";
 
 // All navigable views keyed by role
 export type GuestView = "landing" | "login" | "register" | "public-jobs" | "public-job-detail";
@@ -41,13 +42,31 @@ export type AdminView =
 
 export type View = GuestView | SeekerView | EmployerView | AdminView;
 
+interface SessionUser {
+  id: string;
+  role: Role;
+  name: string;
+  email: string;
+  initials: string;
+  avatarColor: string;
+  title: string;
+}
+
 interface AppState {
+  // Session
+  user: SessionUser | null;
+  isAdminUnlocked: boolean; // 2FA-style gate for admin dashboard
+  // Navigation
   role: Role;
   view: View;
   selectedJobId?: string;
   selectedCandidateId?: string;
   selectedConversationId?: string;
-  // Auth banner shown above the working area (used for confirmations etc.)
+  // Actions
+  signIn: (acc: DemoAccount) => void;
+  signOut: () => void;
+  unlockAdmin: () => void;
+  lockAdmin: () => void;
   setRole: (r: Role) => void;
   setView: (v: View) => void;
   go: (v: View, opts?: { jobId?: string; candidateId?: string; conversationId?: string }) => void;
@@ -55,19 +74,102 @@ interface AppState {
 
 const AppContext = createContext<AppState | null>(null);
 
+const STORAGE_KEY = "skillmatch.session";
+const ADMIN_KEY = "skillmatch.admin-unlocked";
+
 export function AppProvider({ children }: { children: React.ReactNode }) {
+  const [user, setUser] = useState<SessionUser | null>(null);
+  const [isAdminUnlocked, setIsAdminUnlocked] = useState<boolean>(false);
   const [role, setRole] = useState<Role>("guest");
   const [view, setView] = useState<View>("landing");
   const [selectedJobId, setSelectedJobId] = useState<string | undefined>();
   const [selectedCandidateId, setSelectedCandidateId] = useState<string | undefined>();
   const [selectedConversationId, setSelectedConversationId] = useState<string | undefined>();
 
+  // Hydrate from localStorage on mount
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if (raw) {
+        const parsed = JSON.parse(raw) as SessionUser;
+        // eslint-disable-next-line react-hooks/set-state-in-effect
+        setUser(parsed);
+        setRole(parsed.role);
+        setView("dashboard");
+      }
+      if (localStorage.getItem(ADMIN_KEY) === "1") {
+        setIsAdminUnlocked(true);
+      }
+    } catch {
+      /* ignore */
+    }
+  }, []);
+
+  const persist = useCallback((u: SessionUser | null) => {
+    try {
+      if (u) localStorage.setItem(STORAGE_KEY, JSON.stringify(u));
+      else localStorage.removeItem(STORAGE_KEY);
+    } catch {
+      /* ignore */
+    }
+  }, []);
+
+  const signIn = useCallback(
+    (acc: DemoAccount) => {
+      const session: SessionUser = {
+        id: acc.id,
+        role: acc.role,
+        name: acc.name,
+        email: acc.email,
+        initials: acc.initials,
+        avatarColor: acc.avatarColor,
+        title: acc.title,
+      };
+      setUser(session);
+      setRole(acc.role);
+      setView("dashboard");
+      persist(session);
+      // Auto-unlock admin session if the admin previously unlocked in this browser
+      if (acc.role === "admin" && localStorage.getItem(ADMIN_KEY) === "1") {
+        setIsAdminUnlocked(true);
+      } else if (acc.role !== "admin") {
+        // Non-admins don't need the gate; keep it cleared
+        setIsAdminUnlocked(false);
+      }
+    },
+    [persist]
+  );
+
+  const signOut = useCallback(() => {
+    setUser(null);
+    setRole("guest");
+    setView("landing");
+    setIsAdminUnlocked(false);
+    persist(null);
+  }, [persist]);
+
+  const unlockAdmin = useCallback(() => {
+    setIsAdminUnlocked(true);
+    try {
+      localStorage.setItem(ADMIN_KEY, "1");
+    } catch {
+      /* ignore */
+    }
+  }, []);
+
+  const lockAdmin = useCallback(() => {
+    setIsAdminUnlocked(false);
+    try {
+      localStorage.removeItem(ADMIN_KEY);
+    } catch {
+      /* ignore */
+    }
+  }, []);
+
   const setRoleAndDefault: (r: Role) => void = useCallback((r) => {
     setRole(r);
     if (r === "guest") setView("landing");
-    if (r === "seeker") setView("dashboard");
-    if (r === "employer") setView("dashboard");
-    if (r === "admin") setView("dashboard");
+    else setView("dashboard");
   }, []);
 
   const go = useCallback<AppState["go"]>((v, opts) => {
@@ -82,16 +184,22 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   const value = useMemo<AppState>(
     () => ({
+      user,
+      isAdminUnlocked,
       role,
       view,
       selectedJobId,
       selectedCandidateId,
       selectedConversationId,
+      signIn,
+      signOut,
+      unlockAdmin,
+      lockAdmin,
       setRole: setRoleAndDefault,
       setView: go,
       go,
     }),
-    [role, view, selectedJobId, selectedCandidateId, selectedConversationId, setRoleAndDefault, go]
+    [user, isAdminUnlocked, role, view, selectedJobId, selectedCandidateId, selectedConversationId, signIn, signOut, unlockAdmin, lockAdmin, setRoleAndDefault, go]
   );
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;

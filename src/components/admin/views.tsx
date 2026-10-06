@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { cn } from "@/lib/utils";
 import { useApp } from "@/lib/app-context";
 import { Button } from "@/components/ui/button";
@@ -243,15 +243,40 @@ export function AdminUsers() {
   const [filter, setFilter] = useState("all");
   const [roleFilter, setRoleFilter] = useState("all");
   const [query, setQuery] = useState("");
+  const [debouncedQuery, setDebouncedQuery] = useState("");
   const [selected, setSelected] = useState<AdminUser | null>(null);
+  const [confirmDelete, setConfirmDelete] = useState<AdminUser | null>(null);
+  const [confirmSuspend, setConfirmSuspend] = useState<AdminUser | null>(null);
+  const [page, setPage] = useState(1);
+  const PAGE_SIZE = 8;
 
-  let users = [...adminUsers];
-  if (filter !== "all") users = users.filter((u) => u.status === filter);
-  if (roleFilter !== "all") users = users.filter((u) => u.role === roleFilter);
-  if (query) {
-    const q = query.toLowerCase();
-    users = users.filter((u) => u.name.toLowerCase().includes(q) || u.email.toLowerCase().includes(q));
-  }
+  // Debounce search input for efficiency on large datasets
+  useEffect(() => {
+    const id = setTimeout(() => {
+      setDebouncedQuery(query);
+      setPage(1);
+    }, 200);
+    return () => clearTimeout(id);
+  }, [query]);
+
+  // Memoize the filtered list — avoids recompute on every render
+  const filtered = useMemo(() => {
+    let list = [...adminUsers];
+    if (filter !== "all") list = list.filter((u) => u.status === filter);
+    if (roleFilter !== "all") list = list.filter((u) => u.role === roleFilter);
+    if (debouncedQuery) {
+      const q = debouncedQuery.toLowerCase();
+      list = list.filter(
+        (u) => u.name.toLowerCase().includes(q) || u.email.toLowerCase().includes(q)
+      );
+    }
+    return list;
+  }, [filter, roleFilter, debouncedQuery]);
+
+  // Paginate — only render the current page's slice (efficient for large N)
+  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  const currentPage = Math.min(page, totalPages);
+  const paged = filtered.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
 
   return (
     <PageContainer>
@@ -265,7 +290,7 @@ export function AdminUsers() {
 
       <div className="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <StatCard label="Total users" value={adminDashboardStats.totalUsers.toLocaleString()} icon={<Users className="h-4 w-4" />} />
-        <StatCard label="Active" value={adminUsers.filter(u => u.status === "active").length} icon={<UserCheck className="h-4 w-4" />} hint="of {adminUsers.length} sampled" />
+        <StatCard label="Active" value={adminUsers.filter(u => u.status === "active").length} icon={<UserCheck className="h-4 w-4" />} hint={`of ${adminUsers.length} sampled`} />
         <StatCard label="Pending" value={adminUsers.filter(u => u.status === "pending").length} icon={<Clock className="h-4 w-4" />} />
         <StatCard label="Suspended" value={adminUsers.filter(u => u.status === "suspended").length} icon={<UserX className="h-4 w-4" />} />
       </div>
@@ -277,13 +302,13 @@ export function AdminUsers() {
               <div className="relative flex-1 max-w-md">
                 <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                 <Input
-                  placeholder="Search by name or email…"
+                  placeholder="Search by name or email… (debounced)"
                   className="pl-9"
                   value={query}
                   onChange={(e) => setQuery(e.target.value)}
                 />
               </div>
-              <Select value={roleFilter} onValueChange={setRoleFilter}>
+              <Select value={roleFilter} onValueChange={(v) => { setRoleFilter(v); setPage(1); }}>
                 <SelectTrigger className="w-40"><SelectValue placeholder="Role" /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">All roles</SelectItem>
@@ -292,7 +317,7 @@ export function AdminUsers() {
                   <SelectItem value="admin">Admins</SelectItem>
                 </SelectContent>
               </Select>
-              <Select value={filter} onValueChange={setFilter}>
+              <Select value={filter} onValueChange={(v) => { setFilter(v); setPage(1); }}>
                 <SelectTrigger className="w-40"><SelectValue placeholder="Status" /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">All statuses</SelectItem>
@@ -317,7 +342,7 @@ export function AdminUsers() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-border bg-card">
-                {users.map((u) => (
+                {paged.map((u) => (
                   <tr key={u.id} className="hover:bg-accent/30">
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-2.5">
@@ -352,19 +377,19 @@ export function AdminUsers() {
                     </td>
                     <td className="px-4 py-3 text-right">
                       <div className="flex justify-end gap-1">
-                        <Button size="sm" variant="ghost" onClick={() => setSelected(u)}>
+                        <Button size="sm" variant="ghost" onClick={() => setSelected(u)} title="View / edit">
                           <Edit className="h-3.5 w-3.5" />
                         </Button>
                         {u.status === "active" ? (
-                          <Button size="sm" variant="ghost" title="Suspend">
+                          <Button size="sm" variant="ghost" title="Suspend" onClick={() => setConfirmSuspend(u)}>
                             <Pause className="h-3.5 w-3.5" />
                           </Button>
                         ) : (
-                          <Button size="sm" variant="ghost" title="Activate">
+                          <Button size="sm" variant="ghost" title="Activate" onClick={() => setConfirmSuspend(u)}>
                             <Play className="h-3.5 w-3.5" />
                           </Button>
                         )}
-                        <Button size="sm" variant="ghost" title="Delete">
+                        <Button size="sm" variant="ghost" title="Delete" onClick={() => setConfirmDelete(u)}>
                           <Trash2 className="h-3.5 w-3.5 text-rose-600" />
                         </Button>
                       </div>
@@ -375,7 +400,7 @@ export function AdminUsers() {
             </table>
           </div>
 
-          {users.length === 0 && (
+          {filtered.length === 0 && (
             <EmptyState
               className="mt-4"
               icon={<Users className="h-5 w-5" />}
@@ -384,11 +409,41 @@ export function AdminUsers() {
             />
           )}
 
-          <div className="mt-4 flex items-center justify-between text-xs text-muted-foreground">
-            <span>Showing {users.length} of {adminUsers.length} sampled users</span>
-            <div className="flex gap-1">
-              <Button variant="outline" size="sm" disabled>Previous</Button>
-              <Button variant="outline" size="sm">Next</Button>
+          {/* Pagination footer — efficient slicing for large datasets */}
+          <div className="mt-4 flex flex-col gap-2 text-xs text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
+            <span>
+              Showing <span className="font-semibold text-foreground">{paged.length}</span> of{" "}
+              <span className="font-semibold text-foreground">{filtered.length}</span> filtered
+              (of {adminUsers.length} sampled) · page {currentPage}/{totalPages}
+            </span>
+            <div className="flex flex-wrap gap-1">
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={currentPage === 1}
+                onClick={() => setPage((p) => Math.max(1, p - 1))}
+              >
+                Previous
+              </Button>
+              {Array.from({ length: totalPages }).map((_, i) => (
+                <Button
+                  key={i}
+                  variant={currentPage === i + 1 ? "default" : "outline"}
+                  size="sm"
+                  className="h-7 w-7 p-0"
+                  onClick={() => setPage(i + 1)}
+                >
+                  {i + 1}
+                </Button>
+              ))}
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={currentPage === totalPages}
+                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+              >
+                Next
+              </Button>
             </div>
           </div>
         </CardContent>
@@ -417,14 +472,24 @@ export function AdminUsers() {
                 {selected.title && <div className="rounded-md border border-border p-2"><p className="text-muted-foreground">Title</p><p className="font-semibold">{selected.title}</p></div>}
               </div>
               <div className="flex gap-2 pt-2">
-                <Button size="sm" variant="outline" className="flex-1">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="flex-1"
+                  onClick={() => { setConfirmSuspend(selected); setSelected(null); }}
+                >
                   {selected.status === "active" ? (
                     <><Pause className="h-3.5 w-3.5" /> Suspend</>
                   ) : (
                     <><Play className="h-3.5 w-3.5" /> Activate</>
                   )}
                 </Button>
-                <Button size="sm" variant="outline" className="flex-1 text-rose-600">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="flex-1 text-rose-600"
+                  onClick={() => { setConfirmDelete(selected); setSelected(null); }}
+                >
                   <Trash2 className="h-3.5 w-3.5" /> Delete
                 </Button>
               </div>
@@ -432,6 +497,52 @@ export function AdminUsers() {
           </DialogContent>
         </Dialog>
       )}
+
+      {/* Confirm delete dialog */}
+      <Dialog open={!!confirmDelete} onOpenChange={(o) => !o && setConfirmDelete(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Delete user account?</DialogTitle>
+            <DialogDescription>
+              You're about to permanently delete <span className="font-semibold text-foreground">{confirmDelete?.name}</span> ({confirmDelete?.email}).
+              This action is logged in the audit trail and cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex justify-end gap-2 pt-2">
+            <Button variant="outline" onClick={() => setConfirmDelete(null)}>Cancel</Button>
+            <Button variant="destructive" onClick={() => setConfirmDelete(null)}>
+              <Trash2 className="h-3.5 w-3.5" /> Delete permanently
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Confirm suspend/activate dialog */}
+      <Dialog open={!!confirmSuspend} onOpenChange={(o) => !o && setConfirmSuspend(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{confirmSuspend?.status === "active" ? "Suspend" : "Activate"} user account?</DialogTitle>
+            <DialogDescription>
+              {confirmSuspend?.status === "active" ? (
+                <>Suspending <span className="font-semibold text-foreground">{confirmSuspend?.name}</span> will revoke their access immediately. They will not be able to log in until reactivated.</>
+              ) : (
+                <>Reactivating <span className="font-semibold text-foreground">{confirmSuspend?.name}</span> will restore their access.</>
+              )}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex justify-end gap-2 pt-2">
+            <Button variant="outline" onClick={() => setConfirmSuspend(null)}>Cancel</Button>
+            <Button
+              variant={confirmSuspend?.status === "active" ? "destructive" : "default"}
+              onClick={() => setConfirmSuspend(null)}
+            >
+              {confirmSuspend?.status === "active"
+                ? <><Pause className="h-3.5 w-3.5" /> Suspend</>
+                : <><Play className="h-3.5 w-3.5" /> Activate</>}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </PageContainer>
   );
 }

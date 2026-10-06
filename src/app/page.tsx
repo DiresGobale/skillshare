@@ -1,9 +1,10 @@
 "use client";
 
-import React from "react";
+import React, { useEffect } from "react";
 import { AppProvider, useApp } from "@/lib/app-context";
 import { TooltipProvider } from "@/components/shared/ui";
 import { AppShell } from "@/components/chrome/app-shell";
+import { Admin2FAGate } from "@/components/chrome/admin-gate";
 // Guest views
 import {
   Landing,
@@ -53,9 +54,28 @@ import {
 } from "@/components/admin/views";
 
 function Router() {
-  const { role, view } = useApp();
+  const { role, view, user, isAdminUnlocked, lockAdmin, go } = useApp();
 
-  // Guest
+  // ---------- ADMIN AUTO-LOCK AFTER 30 MIN INACTIVITY ----------
+  useEffect(() => {
+    if (role !== "admin" || !isAdminUnlocked) return;
+    let timer: ReturnType<typeof setTimeout>;
+    const reset = () => {
+      clearTimeout(timer);
+      timer = setTimeout(() => {
+        lockAdmin();
+      }, 30 * 60 * 1000); // 30 minutes
+    };
+    const events = ["mousedown", "keydown", "touchstart", "scroll"];
+    events.forEach((e) => window.addEventListener(e, reset, { passive: true }));
+    reset();
+    return () => {
+      clearTimeout(timer);
+      events.forEach((e) => window.removeEventListener(e, reset));
+    };
+  }, [role, isAdminUnlocked, lockAdmin]);
+
+  // ---------- GUEST ROUTING ----------
   if (role === "guest") {
     if (view === "login") return <Login />;
     if (view === "register") return <Register />;
@@ -64,7 +84,19 @@ function Router() {
     return <Landing />;
   }
 
-  // Authenticated views share the AppShell
+  // ---------- AUTH GUARD ----------
+  // If a non-guest role is set but there's no session user (e.g. after reload
+  // in a fresh browser), send back to login.
+  if (!user) {
+    return <Login />;
+  }
+
+  // ---------- ADMIN 2FA GATE ----------
+  if (role === "admin" && !isAdminUnlocked) {
+    return <Admin2FAGate />;
+  }
+
+  // ---------- AUTHENTICATED VIEWS ----------
   let content: React.ReactNode = null;
   if (role === "seeker") {
     switch (view) {

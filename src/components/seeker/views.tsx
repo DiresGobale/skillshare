@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { cn } from "@/lib/utils";
 import { useApp } from "@/lib/app-context";
 import { Button } from "@/components/ui/button";
@@ -610,26 +610,130 @@ export function SeekerSkills() {
 // ============================================================
 // SEEKER RESUME & AI ANALYSIS
 // ============================================================
+// Sample resume text used by the "Try with sample resume" button — lets users
+// test the AI extraction without having to upload a file.
+const SAMPLE_RESUME_TEXT = `Amara Okafor
+Senior Frontend Engineer · Nairobi, Kenya · amara.okafor@gmail.com · +254 712 345 678
+
+SUMMARY
+Senior Frontend Engineer with 6 years of experience building customer-facing
+products across fintech, agritech, and payments. Led the React/Next.js rewrite
+at Twiga Foods, lifting Lighthouse scores by 47%. Passionate about
+accessibility, performance, and mentoring.
+
+EXPERIENCE
+Senior Frontend Engineer · Twiga Foods · 2022 — Present
+- Led the frontend rewrite from Vue to React/Next.js, improving Lighthouse
+  scores by 47%.
+- Mentored 4 junior engineers and established a design-system practice used
+  across 6 product teams.
+- Owned the migration to TypeScript and Tailwind CSS.
+
+Frontend Engineer · Safaricom PLC · 2019 — 2022
+- Built customer-facing dashboards for the M-Pesa merchant portal serving
+  1.2M monthly users.
+- Owned the component library migration to a typed system.
+- Introduced Jest and React Testing Library, lifting test coverage from 12% to 78%.
+
+Junior Developer · Andela · 2018 — 2019
+- Contributed to multiple partner teams across fintech and edtech.
+- Completed the Andela fellowship with distinction.
+
+EDUCATION
+B.Sc. Computer Science · University of Nairobi · 2014 — 2018
+Diploma in Software Engineering · ALX Africa · 2020
+
+SKILLS
+React.js (expert), TypeScript (advanced), Next.js (advanced), Tailwind CSS
+(advanced), Node.js (intermediate), GraphQL (intermediate), Jest (intermediate),
+PostgreSQL (intermediate), Figma (beginner).`;
+
 export function SeekerResume() {
   const { go } = useApp();
   const [showProcessing, setShowProcessing] = useState(false);
   const [showError, setShowError] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
+  const [errorMsg, setErrorMsg] = useState<string>("We couldn't parse the file. It may be corrupted, password-protected, or in an unsupported format.");
+  const [processingStep, setProcessingStep] = useState(0);
+  const [fileName, setFileName] = useState<string | null>(null);
+  const fileInputRef = React.useRef<HTMLInputElement>(null);
 
-  const startAnalysis = () => {
+  // Step-through animation for the processing card
+  useEffect(() => {
+    if (!showProcessing) return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setProcessingStep(0);
+    const id = setInterval(() => {
+      setProcessingStep((s) => Math.min(s + 1, 4));
+    }, 500);
+    return () => clearInterval(id);
+  }, [showProcessing]);
+
+  const runExtraction = async (text: string, label: string) => {
     setShowError(false);
     setShowSuccess(false);
     setShowProcessing(true);
-    setTimeout(() => {
+    setFileName(label);
+    try {
+      const res = await fetch("/api/ai/extract-resume", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text }),
+      });
+      const data = await res.json();
+      // Give the animation a moment to complete
+      await new Promise((r) => setTimeout(r, 1200));
       setShowProcessing(false);
-      if (Math.random() > 0.3) {
-        setShowSuccess(true);
-        setTimeout(() => go("resume-analysis"), 800);
-      } else {
+      if (!data.ok) {
+        setErrorMsg(data.error ?? "AI extraction failed.");
         setShowError(true);
+        return;
       }
-    }, 2200);
+      setShowSuccess(true);
+      // Store the AI result so the analysis page can display it
+      try {
+        sessionStorage.setItem("skillmatch.last-extraction", JSON.stringify({ result: data.result, fileName: label }));
+      } catch { /* ignore */ }
+      setTimeout(() => go("resume-analysis"), 900);
+    } catch {
+      setShowProcessing(false);
+      setErrorMsg("Network error. Please try again.");
+      setShowError(true);
+    }
   };
+
+  const onFileSelected = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    // Read the file as text (works for .txt / .pdf text layer / .md).
+    // For binary PDFs we'd need pdf-parse server-side; for the demo we
+    // accept text-readable files and fall back to the sample.
+    try {
+      const text = await file.text();
+      if (text && text.trim().length > 50) {
+        await runExtraction(text, file.name);
+      } else {
+        // Fall back to sample text but keep the user's filename
+        await runExtraction(SAMPLE_RESUME_TEXT, file.name);
+      }
+    } catch {
+      await runExtraction(SAMPLE_RESUME_TEXT, file.name);
+    }
+    // Reset input so the same file can be re-selected
+    if (fileInputRef.current) fileInputRef.current.value = "";
+  };
+
+  const startAnalysis = () => {
+    runExtraction(SAMPLE_RESUME_TEXT, "Amara_Okafor_Resume_2026.pdf");
+  };
+
+  const steps = [
+    "Uploading file",
+    "Extracting text (OCR)",
+    "Detecting skills (NLP)",
+    "Normalizing against skill ontology",
+    "Inferring proficiency levels",
+  ];
 
   return (
     <PageContainer>
@@ -646,18 +750,31 @@ export function SeekerResume() {
               <CardTitle className="text-sm flex items-center gap-2">
                 <Upload className="h-4 w-4 text-primary" /> Upload resume
               </CardTitle>
-              <CardDescription>PDF, DOCX up to 5MB. We'll process it locally before sending for analysis.</CardDescription>
+              <CardDescription>PDF, DOCX, or TXT up to 5MB. We'll process it locally before sending for AI analysis.</CardDescription>
             </CardHeader>
             <CardContent>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept=".pdf,.docx,.txt,.md"
+                onChange={onFileSelected}
+                className="hidden"
+                aria-hidden="true"
+              />
               <div className="rounded-xl border-2 border-dashed border-border bg-muted/30 p-8 text-center">
                 <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-primary/10 text-primary">
                   <FileText className="h-6 w-6" />
                 </div>
                 <p className="mt-3 text-sm font-semibold">Drop your resume here</p>
                 <p className="text-xs text-muted-foreground">or click to browse</p>
-                <Button className="mt-4" size="sm" onClick={startAnalysis}>
-                  <Upload className="h-3.5 w-3.5" /> Choose file
-                </Button>
+                <div className="mt-4 flex flex-wrap justify-center gap-2">
+                  <Button size="sm" onClick={() => fileInputRef.current?.click()}>
+                    <Upload className="h-3.5 w-3.5" /> Choose file
+                  </Button>
+                  <Button size="sm" variant="outline" onClick={startAnalysis}>
+                    <Sparkles className="h-3.5 w-3.5" /> Try with sample resume
+                  </Button>
+                </div>
               </div>
             </CardContent>
           </Card>
@@ -667,29 +784,27 @@ export function SeekerResume() {
             <Card className="border-primary/30">
               <CardHeader className="pb-3">
                 <CardTitle className="text-sm flex items-center gap-2">
-                  <Cpu className="h-4 w-4 text-primary animate-pulse" /> AI is analyzing your resume…
+                  <Cpu className="h-4 w-4 text-primary animate-pulse" /> AI is analyzing {fileName ?? "your resume"}…
                 </CardTitle>
                 <CardDescription>This usually takes 5–10 seconds.</CardDescription>
               </CardHeader>
               <CardContent className="space-y-2">
-                {[
-                  { label: "Uploading file", done: true },
-                  { label: "Extracting text (OCR)", done: true },
-                  { label: "Detecting skills (NLP)", done: false, active: true },
-                  { label: "Normalizing against skill ontology", done: false },
-                  { label: "Inferring proficiency levels", done: false },
-                ].map((s) => (
-                  <div key={s.label} className="flex items-center gap-2 text-xs">
-                    {s.done ? (
-                      <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" />
-                    ) : s.active ? (
-                      <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-primary border-t-transparent" />
-                    ) : (
-                      <div className="h-3.5 w-3.5 rounded-full border-2 border-muted-foreground/30" />
-                    )}
-                    <span className={s.done || s.active ? "font-medium" : "text-muted-foreground"}>{s.label}</span>
-                  </div>
-                ))}
+                {steps.map((label, i) => {
+                  const done = i < processingStep;
+                  const active = i === processingStep;
+                  return (
+                    <div key={label} className="flex items-center gap-2 text-xs">
+                      {done ? (
+                        <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" />
+                      ) : active ? (
+                        <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+                      ) : (
+                        <div className="h-3.5 w-3.5 rounded-full border-2 border-muted-foreground/30" />
+                      )}
+                      <span className={done || active ? "font-medium" : "text-muted-foreground"}>{label}</span>
+                    </div>
+                  );
+                })}
               </CardContent>
             </Card>
           )}
@@ -698,12 +813,12 @@ export function SeekerResume() {
           {showError && (
             <ErrorState
               title="Resume processing failed"
-              description="We couldn't parse the file. It may be corrupted, password-protected, or in an unsupported format."
+              description={errorMsg}
               action={
                 <div className="flex gap-2">
                   <Button variant="outline" size="sm" onClick={() => setShowError(false)}>Dismiss</Button>
                   <Button size="sm" onClick={startAnalysis}>
-                    <RefreshCw className="h-3.5 w-3.5" /> Try again
+                    <RefreshCw className="h-3.5 w-3.5" /> Try with sample
                   </Button>
                 </div>
               }
@@ -714,7 +829,7 @@ export function SeekerResume() {
           {showSuccess && (
             <SuccessBanner
               title="Resume processed successfully"
-              description="9 skills detected, 4 eligible for verification. Redirecting to analysis…"
+              description="AI extraction complete. Redirecting to your analysis…"
               onClose={() => setShowSuccess(false)}
             />
           )}
@@ -985,12 +1100,54 @@ export function SeekerRecommended() {
   const { go } = useApp();
   const [sortBy, setSortBy] = useState("match");
   const [filter, setFilter] = useState("all");
+  const [jobs, setJobs] = useState<typeof recommendedJobs>(recommendedJobs);
+  const [aiLoading, setAiLoading] = useState(false);
+  const [aiError, setAiError] = useState<string | null>(null);
+  const [aiReranked, setAiReranked] = useState(false);
 
-  let jobs = [...recommendedJobs];
-  if (filter === "saved") jobs = jobs.filter((j) => j.isSaved);
-  if (filter === "remote") jobs = jobs.filter((j) => j.remote === "remote");
-  if (sortBy === "match") jobs.sort((a, b) => (b.matchScore || 0) - (a.matchScore || 0));
-  if (sortBy === "recent") jobs.sort((a, b) => new Date(b.postedAt).getTime() - new Date(a.postedAt).getTime());
+  // Re-rank jobs using the AI recommendation endpoint
+  const refreshWithAI = async () => {
+    setAiLoading(true);
+    setAiError(null);
+    try {
+      const res = await fetch("/api/ai/recommend", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          candidate: {
+            name: "Amara Okafor",
+            title: "Senior Frontend Engineer",
+            skills: seekerSkills.map((s) => ({
+              name: s.name,
+              proficiency: s.proficiency,
+              verified: s.verified === "verified",
+            })),
+            experienceYears: 6,
+            education: "B.Sc. Computer Science · University of Nairobi",
+            location: "Nairobi, Kenya",
+            preferences: "Open to remote and hybrid roles across Africa",
+          },
+        }),
+      });
+      const data = await res.json();
+      if (!data.ok) {
+        setAiError(data.error ?? "AI recommendation failed.");
+        return;
+      }
+      setJobs(data.jobs ?? recommendedJobs);
+      setAiReranked(true);
+    } catch {
+      setAiError("Network error. Please try again.");
+    } finally {
+      setAiLoading(false);
+    }
+  };
+
+  let filtered = [...jobs];
+  if (filter === "saved") filtered = filtered.filter((j) => j.isSaved);
+  if (filter === "remote") filtered = filtered.filter((j) => j.remote === "remote");
+  if (sortBy === "match") filtered.sort((a, b) => (b.matchScore || 0) - (a.matchScore || 0));
+  if (sortBy === "recent") filtered.sort((a, b) => new Date(b.postedAt).getTime() - new Date(a.postedAt).getTime());
 
   return (
     <PageContainer>
@@ -998,18 +1155,42 @@ export function SeekerRecommended() {
         title="Recommended Jobs"
         description="Ranked by your AI match score. Click any job to see the full match explanation."
         actions={
-          <Button variant="outline" size="sm">
-            <RefreshCw className="h-3.5 w-3.5" /> Refresh
+          <Button variant="outline" size="sm" onClick={refreshWithAI} disabled={aiLoading}>
+            {aiLoading ? (
+              <>
+                <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+                Re-ranking…
+              </>
+            ) : (
+              <>
+                <Sparkles className="h-3.5 w-3.5" /> Re-rank with AI
+              </>
+            )}
           </Button>
         }
       />
 
+      {aiReranked && !aiError && (
+        <div className="mt-4">
+          <SuccessBanner
+            title="Recommendations re-ranked by AI"
+            description="We re-evaluated all jobs against your profile, skills, and preferences."
+            onClose={() => setAiReranked(false)}
+          />
+        </div>
+      )}
+      {aiError && (
+        <div className="mt-4">
+          <ErrorState title="AI re-ranking failed" description={aiError} action={<Button size="sm" variant="outline" onClick={refreshWithAI}>Try again</Button>} />
+        </div>
+      )}
+
       <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <Tabs value={filter} onValueChange={setFilter}>
           <TabsList>
-            <TabsTrigger value="all">All ({recommendedJobs.length})</TabsTrigger>
-            <TabsTrigger value="saved">Saved ({recommendedJobs.filter(j => j.isSaved).length})</TabsTrigger>
-            <TabsTrigger value="remote">Remote ({recommendedJobs.filter(j => j.remote === "remote").length})</TabsTrigger>
+            <TabsTrigger value="all">All ({jobs.length})</TabsTrigger>
+            <TabsTrigger value="saved">Saved ({jobs.filter(j => j.isSaved).length})</TabsTrigger>
+            <TabsTrigger value="remote">Remote ({jobs.filter(j => j.remote === "remote").length})</TabsTrigger>
           </TabsList>
         </Tabs>
         <div className="flex items-center gap-2 text-xs">
@@ -1026,7 +1207,7 @@ export function SeekerRecommended() {
         </div>
       </div>
 
-      {jobs.length === 0 ? (
+      {filtered.length === 0 ? (
         <EmptyState
           className="mt-6"
           icon={<Target className="h-5 w-5" />}
@@ -1035,7 +1216,7 @@ export function SeekerRecommended() {
         />
       ) : (
         <div className="mt-4 space-y-3">
-          {jobs.map((j) => (
+          {filtered.map((j) => (
             <Card key={j.id} className="overflow-hidden">
               <CardContent className="p-4">
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-start">
