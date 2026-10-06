@@ -4,7 +4,7 @@ import React, { useState } from "react";
 import { cn } from "@/lib/utils";
 import { useApp, type View } from "@/lib/app-context";
 import { Button } from "@/components/ui/button";
-import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
+import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
 import { Avatar } from "@/components/shared/ui";
 import { currentUser } from "@/lib/mock-data";
 import {
@@ -282,7 +282,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
       {/* Mobile sidebar (sheet) */}
       <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
-        <SheetContent side="left" className="w-72 p-0">
+        <SheetContent side="left" className="w-72 p-0" aria-describedby={undefined}>
+          <SheetTitle className="sr-only">Navigation menu</SheetTitle>
           <SidebarNav
             role={role}
             view={view}
