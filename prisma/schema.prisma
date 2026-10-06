@@ -1,9 +1,6 @@
 // This is your Prisma schema file,
 // learn more about it in the docs: https://pris.ly/d/prisma-schema
 
-// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
-// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
-
 generator client {
   provider = "prisma-client-js"
 }
@@ -13,20 +10,180 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+// ============================================================
+// USERS & AUTH
+// ============================================================
+
 model User {
-  id        String   @id @default(cuid())
-  email     String   @unique
-  name      String?
+  id            String   @id @default(cuid())
+  email         String   @unique
+  name          String
+  passwordHash  String
+  role          String   @default("seeker") // seeker | employer | admin
+  title         String?
+  company       String?
+  avatarColor   String   @default("oklch(0.55 0.22 285)")
+  initials      String?
+  location      String?
+  status        String   @default("active") // active | suspended | pending
+  about         String?
+
+  // Relations
+  sessions     Session[]
+  skills       Skill[]
+  experiences  Experience[]
+  educations   Education[]
+  applications Application[]
+  jobsPosted   Job[]      @relation("JobEmployer")
+  notifications Notification[]
+  auditLogs    AuditLog[]
+
+  // 2FA
+  twoFactorSecretHash String?
+  twoFactorEnabled    Boolean @default(false)
+  twoFactorBackupHash String? // JSON array of hashed backup codes
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
 
-model Post {
+model Session {
   id        String   @id @default(cuid())
-  title     String
-  content   String?
-  published Boolean  @default(false)
-  authorId  String
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt DateTime
   createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([expiresAt])
+}
+
+// ============================================================
+// SEEKER PROFILE
+// ============================================================
+
+model Skill {
+  id           String   @id @default(cuid())
+  userId       String
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name         String
+  category     String   @default("General")
+  proficiency  String   @default("intermediate") // beginner | intermediate | advanced | expert
+  verified     String   @default("unverified")    // verified | pending | unverified
+  yearsOfExperience Int?
+  source       String   @default("manual") // manual | ai_extraction | assessment
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([userId])
+  @@index([name])
+}
+
+model Experience {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  company     String
+  title       String
+  startDate   String
+  endDate     String
+  description String?
+  current     Boolean  @default(false)
+  createdAt   DateTime @default(now())
+
+  @@index([userId])
+}
+
+model Education {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  institution String
+  degree      String
+  field       String
+  startDate   String
+  endDate     String
+  verified    Boolean  @default(false)
+  createdAt   DateTime @default(now())
+
+  @@index([userId])
+}
+
+// ============================================================
+// JOBS & APPLICATIONS
+// ============================================================
+
+model Job {
+  id          String   @id @default(cuid())
+  employerId  String
+  employer    User     @relation("JobEmployer", fields: [employerId], references: [id], onDelete: Cascade)
+  title       String
+  company     String
+  companyLogo String?
+  location    String
+  remote      String   @default("onsite") // onsite | hybrid | remote
+  type        String   @default("full-time")
+  category    String
+  salaryMin   Int
+  salaryMax   Int
+  currency    String   @default("USD")
+  salaryPeriod String  @default("month")
+  description String
+  status      String   @default("draft") // draft | published | paused | closed
+  postedAt    DateTime @default(now())
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  applications Application[]
+
+  @@index([employerId])
+  @@index([status])
+}
+
+model Application {
+  id        String   @id @default(cuid())
+  jobId     String
+  job       Job      @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  status    String   @default("submitted") // submitted | screening | shortlisted | interview | offer | rejected | withdrawn
+  matchScore Int?
+  appliedAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  @@index([jobId])
+  @@index([userId])
+}
+
+// ============================================================
+// NOTIFICATIONS & AUDIT
+// ============================================================
+
+model Notification {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type      String   // application | message | interview | system | match
+  title     String
+  message   String
+  read      Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+}
+
+model AuditLog {
+  id        String   @id @default(cuid())
+  userId    String?
+  user      User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  action    String
+  target    String
+  type      String   @default("admin") // auth | job | application | ai | admin | message
+  ip        String?
+  status    String   @default("success") // success | warning | error
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([type])
+  @@index([createdAt])
 }

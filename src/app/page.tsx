@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useEffect } from "react";
+import { useSession } from "next-auth/react";
 import { AppProvider, useApp } from "@/lib/app-context";
 import { TooltipProvider } from "@/components/shared/ui";
 import { AppShell } from "@/components/chrome/app-shell";
@@ -54,6 +55,7 @@ import {
 } from "@/components/admin/views";
 
 function Router() {
+  const { data: session, status } = useSession();
   const { role, view, user, isAdminUnlocked, lockAdmin, go } = useApp();
 
   // ---------- ADMIN AUTO-LOCK AFTER 30 MIN INACTIVITY ----------
@@ -75,8 +77,20 @@ function Router() {
     };
   }, [role, isAdminUnlocked, lockAdmin]);
 
+  // ---------- LOADING STATE ----------
+  if (status === "loading") {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-background">
+        <div className="flex flex-col items-center gap-3">
+          <div className="h-8 w-8 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+          <p className="text-sm text-muted-foreground">Loading…</p>
+        </div>
+      </div>
+    );
+  }
+
   // ---------- GUEST ROUTING ----------
-  if (role === "guest") {
+  if (status === "unauthenticated" || !session?.user) {
     if (view === "login") return <Login />;
     if (view === "register") return <Register />;
     if (view === "public-jobs") return <PublicJobs />;
@@ -84,14 +98,11 @@ function Router() {
     return <Landing />;
   }
 
-  // ---------- AUTH GUARD ----------
-  // If a non-guest role is set but there's no session user (e.g. after reload
-  // in a fresh browser), send back to login.
-  if (!user) {
-    return <Login />;
-  }
-
   // ---------- ADMIN 2FA GATE ----------
+  // Show the 2FA gate if the user is an admin and hasn't unlocked the session yet.
+  // NextAuth has already validated the password+TOTP at login, but we keep a
+  // soft client-side gate that re-locks after 30 min of inactivity without
+  // forcing a full re-login.
   if (role === "admin" && !isAdminUnlocked) {
     return <Admin2FAGate />;
   }

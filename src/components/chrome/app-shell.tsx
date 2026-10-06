@@ -5,7 +5,6 @@ import { cn } from "@/lib/utils";
 import { useApp, type View } from "@/lib/app-context";
 import { Button } from "@/components/ui/button";
 import { Avatar } from "@/components/shared/ui";
-import { currentUser } from "@/lib/mock-data";
 import { demoAccounts } from "@/lib/demo-accounts";
 import {
   LayoutDashboard,
@@ -84,13 +83,6 @@ function getNav(role: Role): NavItem[] {
   return [];
 }
 
-function getUser(role: Role) {
-  if (role === "seeker") return currentUser.seeker;
-  if (role === "employer") return currentUser.employer;
-  if (role === "admin") return currentUser.admin;
-  return null;
-}
-
 // Brand mark
 export function BrandMark({ compact = false }: { compact?: boolean }) {
   return (
@@ -114,7 +106,7 @@ export function BrandMark({ compact = false }: { compact?: boolean }) {
 // 3-LINE HAMBURGER TOGGLE BUTTON
 // Three horizontal lines that animate into an X when active
 // ============================================================
-function HamburgerToggle({
+export function HamburgerToggle({
   open,
   onClick,
   className,
@@ -165,7 +157,7 @@ function HamburgerToggle({
 // Sidebar (desktop)
 function SidebarNav({ role, view, onNavigate }: { role: Role; view: View; onNavigate?: (v: View) => void }) {
   const nav = getNav(role);
-  const user = getUser(role);
+  const { user } = useApp();
   return (
     <div className="flex h-full flex-col">
       <div className="flex h-16 items-center border-b border-sidebar-border px-5">
@@ -208,11 +200,11 @@ function SidebarNav({ role, view, onNavigate }: { role: Role; view: View; onNavi
       </nav>
       <div className="border-t border-sidebar-border p-3">
         <div className="flex items-center gap-2.5 rounded-md px-2 py-2">
-          {user && <Avatar initials={user.initials} color={user.avatarColor} size="sm" />}
+          {user && <Avatar initials={user.initials ?? user.name.slice(0,2).toUpperCase()} color={user.avatarColor} size="sm" />}
           {user && (
             <div className="min-w-0 flex-1">
               <p className="truncate text-xs font-semibold">{user.name}</p>
-              <p className="truncate text-[10px] text-muted-foreground">{user.title}</p>
+              <p className="truncate text-[10px] text-muted-foreground">{user.title ?? user.email}</p>
             </div>
           )}
         </div>
@@ -238,7 +230,7 @@ function MobileNavbar({
   onNavigate: (v: View) => void;
 }) {
   const nav = getNav(role);
-  const user = getUser(role);
+  const { user } = useApp();
 
   // Lock body scroll when open
   useEffect(() => {
@@ -341,10 +333,10 @@ function MobileNavbar({
         {user && (
           <div className="border-t border-sidebar-border p-3">
             <div className="flex items-center gap-2.5 rounded-md px-2 py-2">
-              <Avatar initials={user.initials} color={user.avatarColor} size="sm" />
+              <Avatar initials={user.initials ?? user.name.slice(0,2).toUpperCase()} color={user.avatarColor} size="sm" />
               <div className="min-w-0 flex-1">
                 <p className="truncate text-xs font-semibold">{user.name}</p>
-                <p className="truncate text-[10px] text-muted-foreground">{user.title}</p>
+                <p className="truncate text-[10px] text-muted-foreground">{user.title ?? user.email}</p>
               </div>
             </div>
           </div>
@@ -356,11 +348,11 @@ function MobileNavbar({
 
 // Top bar (search + actions + role switcher)
 function Topbar({ onToggleMobile, mobileOpen }: { onToggleMobile: () => void; mobileOpen: boolean }) {
-  const { role, user, signOut, signIn } = useApp();
+  const { role, user, signOut } = useApp();
   const [roleMenuOpen, setRoleMenuOpen] = useState(false);
 
-  // Determine display user — prefer session user, fall back to mock for demo
-  const displayUser = user ?? getUser(role);
+  // Determine display user — prefer session user
+  const displayUser = user;
 
   return (
     <header className="sticky top-0 z-30 flex h-16 items-center gap-3 border-b border-border bg-background/95 px-4 backdrop-blur supports-[backdrop-filter]:bg-background/80 lg:px-6">
@@ -399,14 +391,23 @@ function Topbar({ onToggleMobile, mobileOpen }: { onToggleMobile: () => void; mo
               <div className="fixed inset-0 z-40" onClick={() => setRoleMenuOpen(false)} />
               <div className="absolute right-0 top-11 z-50 w-64 overflow-hidden rounded-md border border-border bg-popover shadow-md">
                 <p className="px-3 py-2 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-                  Switch demo role
+                  Switch demo account
                 </p>
                 {demoAccounts.map((acc) => (
                   <button
                     key={acc.id}
-                    onClick={() => {
-                      signIn(acc);
+                    onClick={async () => {
                       setRoleMenuOpen(false);
+                      // Sign out current session, then sign in as the demo account
+                      await signOut();
+                      // Use NextAuth credentials sign-in
+                      const { signIn: nextAuthSignIn } = await import("next-auth/react");
+                      await nextAuthSignIn("credentials", {
+                        email: acc.email,
+                        password: acc.password,
+                        redirect: false,
+                      });
+                      window.location.href = "/";
                     }}
                     className={cn(
                       "flex w-full items-center gap-2 px-3 py-2 text-sm hover:bg-accent",
@@ -452,10 +453,10 @@ function Topbar({ onToggleMobile, mobileOpen }: { onToggleMobile: () => void; mo
 
         {displayUser && (
           <div className="flex items-center gap-2 pl-1">
-            <Avatar initials={displayUser.initials} color={displayUser.avatarColor} size="sm" />
+            <Avatar initials={displayUser.initials ?? displayUser.name.slice(0,2).toUpperCase()} color={displayUser.avatarColor} size="sm" />
             <div className="hidden lg:block">
               <p className="text-xs font-semibold leading-tight">{displayUser.name}</p>
-              <p className="text-[10px] text-muted-foreground leading-tight">{displayUser.email ?? displayUser.title}</p>
+              <p className="text-[10px] text-muted-foreground leading-tight">{displayUser.email}</p>
             </div>
           </div>
         )}

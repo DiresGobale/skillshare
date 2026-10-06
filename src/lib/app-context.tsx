@@ -1,8 +1,8 @@
 "use client";
 
-import React, { createContext, useContext, useMemo, useState, useCallback, useEffect } from "react";
+import React, { createContext, useContext, useMemo, useState, useCallback } from "react";
+import { useSession, signOut as nextAuthSignOut } from "next-auth/react";
 import type { Role } from "./types";
-import type { DemoAccount } from "./demo-accounts";
 
 // All navigable views keyed by role
 export type GuestView = "landing" | "login" | "register" | "public-jobs" | "public-job-detail";
@@ -42,31 +42,31 @@ export type AdminView =
 
 export type View = GuestView | SeekerView | EmployerView | AdminView;
 
-interface SessionUser {
-  id: string;
-  role: Role;
-  name: string;
-  email: string;
-  initials: string;
-  avatarColor: string;
-  title: string;
-}
-
 interface AppState {
-  // Session
-  user: SessionUser | null;
-  isAdminUnlocked: boolean; // 2FA-style gate for admin dashboard
   // Navigation
   role: Role;
   view: View;
   selectedJobId?: string;
   selectedCandidateId?: string;
   selectedConversationId?: string;
-  // Actions
-  signIn: (acc: DemoAccount) => void;
-  signOut: () => void;
+  // User (derived from NextAuth session, with fallback for guest)
+  user: {
+    id: string;
+    name: string;
+    email: string;
+    role: Role;
+    title?: string;
+    avatarColor: string;
+    initials?: string;
+  } | null;
+  // Admin 2FA unlock state (still tracked client-side — NextAuth credential
+  // already validated the TOTP, but we keep a soft "unlocked" flag so the
+  // 2FA gate can be re-shown after inactivity without forcing a full re-login)
+  isAdminUnlocked: boolean;
   unlockAdmin: () => void;
   lockAdmin: () => void;
+  // Actions
+  signOut: () => void;
   setRole: (r: Role) => void;
   setView: (v: View) => void;
   go: (v: View, opts?: { jobId?: string; candidateId?: string; conversationId?: string }) => void;
@@ -74,84 +74,49 @@ interface AppState {
 
 const AppContext = createContext<AppState | null>(null);
 
-const STORAGE_KEY = "skillmatch.session";
 const ADMIN_KEY = "skillmatch.admin-unlocked";
 
 export function AppProvider({ children }: { children: React.ReactNode }) {
-  const [user, setUser] = useState<SessionUser | null>(null);
-  const [isAdminUnlocked, setIsAdminUnlocked] = useState<boolean>(false);
-  const [role, setRole] = useState<Role>("guest");
+  const { data: session, status } = useSession();
   const [view, setView] = useState<View>("landing");
   const [selectedJobId, setSelectedJobId] = useState<string | undefined>();
   const [selectedCandidateId, setSelectedCandidateId] = useState<string | undefined>();
   const [selectedConversationId, setSelectedConversationId] = useState<string | undefined>();
+  const [isAdminUnlocked, setIsAdminUnlocked] = useState<boolean>(false);
 
-  // Hydrate from localStorage on mount
-  useEffect(() => {
+  // Derive user + role from session
+  const user = useMemo(() => {
+    if (status !== "authenticated" || !session?.user) return null;
+    return {
+      id: (session.user as any).id,
+      name: session.user.name ?? "",
+      email: session.user.email ?? "",
+      role: (session.user as any).role as Role,
+      title: (session.user as any).title,
+      avatarColor: (session.user as any).avatarColor ?? "oklch(0.55 0.22 285)",
+      initials: (session.user as any).initials,
+    };
+  }, [session, status]);
+
+  const role: Role = user?.role ?? "guest";
+
+  // Hydrate admin unlock state from sessionStorage on mount + when role changes
+  React.useEffect(() => {
     try {
-      const raw = localStorage.getItem(STORAGE_KEY);
-      if (raw) {
-        const parsed = JSON.parse(raw) as SessionUser;
-        // eslint-disable-next-line react-hooks/set-state-in-effect
-        setUser(parsed);
-        setRole(parsed.role);
-        setView("dashboard");
-      }
-      if (localStorage.getItem(ADMIN_KEY) === "1") {
+      if (sessionStorage.getItem(ADMIN_KEY) === "1" && role === "admin") {
         setIsAdminUnlocked(true);
-      }
-    } catch {
-      /* ignore */
-    }
-  }, []);
-
-  const persist = useCallback((u: SessionUser | null) => {
-    try {
-      if (u) localStorage.setItem(STORAGE_KEY, JSON.stringify(u));
-      else localStorage.removeItem(STORAGE_KEY);
-    } catch {
-      /* ignore */
-    }
-  }, []);
-
-  const signIn = useCallback(
-    (acc: DemoAccount) => {
-      const session: SessionUser = {
-        id: acc.id,
-        role: acc.role,
-        name: acc.name,
-        email: acc.email,
-        initials: acc.initials,
-        avatarColor: acc.avatarColor,
-        title: acc.title,
-      };
-      setUser(session);
-      setRole(acc.role);
-      setView("dashboard");
-      persist(session);
-      // Auto-unlock admin session if the admin previously unlocked in this browser
-      if (acc.role === "admin" && localStorage.getItem(ADMIN_KEY) === "1") {
-        setIsAdminUnlocked(true);
-      } else if (acc.role !== "admin") {
-        // Non-admins don't need the gate; keep it cleared
+      } else if (role !== "admin") {
         setIsAdminUnlocked(false);
       }
-    },
-    [persist]
-  );
-
-  const signOut = useCallback(() => {
-    setUser(null);
-    setRole("guest");
-    setView("landing");
-    setIsAdminUnlocked(false);
-    persist(null);
-  }, [persist]);
+    } catch {
+      /* ignore */
+    }
+  }, [role]);
 
   const unlockAdmin = useCallback(() => {
     setIsAdminUnlocked(true);
     try {
-      localStorage.setItem(ADMIN_KEY, "1");
+      sessionStorage.setItem(ADMIN_KEY, "1");
     } catch {
       /* ignore */
     }
@@ -160,16 +125,26 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const lockAdmin = useCallback(() => {
     setIsAdminUnlocked(false);
     try {
-      localStorage.removeItem(ADMIN_KEY);
+      sessionStorage.removeItem(ADMIN_KEY);
     } catch {
       /* ignore */
     }
   }, []);
 
-  const setRoleAndDefault: (r: Role) => void = useCallback((r) => {
-    setRole(r);
-    if (r === "guest") setView("landing");
-    else setView("dashboard");
+  const signOut = useCallback(() => {
+    try {
+      sessionStorage.removeItem(ADMIN_KEY);
+    } catch {
+      /* ignore */
+    }
+    setIsAdminUnlocked(false);
+    setView("landing");
+    nextAuthSignOut({ redirect: false });
+  }, []);
+
+  const setRole = useCallback((r: Role) => {
+    // Just a no-op for compatibility — real role changes go through sign-in
+    void r;
   }, []);
 
   const go = useCallback<AppState["go"]>((v, opts) => {
@@ -184,22 +159,21 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   const value = useMemo<AppState>(
     () => ({
-      user,
-      isAdminUnlocked,
       role,
       view,
       selectedJobId,
       selectedCandidateId,
       selectedConversationId,
-      signIn,
-      signOut,
+      user,
+      isAdminUnlocked,
       unlockAdmin,
       lockAdmin,
-      setRole: setRoleAndDefault,
+      signOut,
+      setRole,
       setView: go,
       go,
     }),
-    [user, isAdminUnlocked, role, view, selectedJobId, selectedCandidateId, selectedConversationId, signIn, signOut, unlockAdmin, lockAdmin, setRoleAndDefault, go]
+    [role, view, selectedJobId, selectedCandidateId, selectedConversationId, user, isAdminUnlocked, unlockAdmin, lockAdmin, signOut, setRole, go]
   );
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;

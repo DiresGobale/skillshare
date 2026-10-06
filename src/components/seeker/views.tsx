@@ -702,23 +702,44 @@ export function SeekerResume() {
     }
   };
 
+  const runFileExtraction = async (file: File) => {
+    setShowError(false);
+    setShowSuccess(false);
+    setShowProcessing(true);
+    setFileName(file.name);
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      const res = await fetch("/api/ai/extract-resume", {
+        method: "POST",
+        body: formData,
+      });
+      const data = await res.json();
+      await new Promise((r) => setTimeout(r, 1200));
+      setShowProcessing(false);
+      if (!data.ok) {
+        setErrorMsg(data.error ?? "AI extraction failed.");
+        setShowError(true);
+        return;
+      }
+      setShowSuccess(true);
+      try {
+        sessionStorage.setItem("skillmatch.last-extraction", JSON.stringify({ result: data.result, fileName: file.name }));
+      } catch { /* ignore */ }
+      setTimeout(() => go("resume-analysis"), 900);
+    } catch {
+      setShowProcessing(false);
+      setErrorMsg("Network error. Please try again.");
+      setShowError(true);
+    }
+  };
+
   const onFileSelected = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    // Read the file as text (works for .txt / .pdf text layer / .md).
-    // For binary PDFs we'd need pdf-parse server-side; for the demo we
-    // accept text-readable files and fall back to the sample.
-    try {
-      const text = await file.text();
-      if (text && text.trim().length > 50) {
-        await runExtraction(text, file.name);
-      } else {
-        // Fall back to sample text but keep the user's filename
-        await runExtraction(SAMPLE_RESUME_TEXT, file.name);
-      }
-    } catch {
-      await runExtraction(SAMPLE_RESUME_TEXT, file.name);
-    }
+    // Upload the file to the server which uses pdf-parse for PDFs and
+    // text-decoding for .txt/.md files.
+    await runFileExtraction(file);
     // Reset input so the same file can be re-selected
     if (fileInputRef.current) fileInputRef.current.value = "";
   };
@@ -886,7 +907,84 @@ export function SeekerResume() {
 }
 
 export function SeekerResumeAnalysis() {
+  const { go } = useApp();
   const [editingSkill, setEditingSkill] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [saveResult, setSaveResult] = useState<{ ok: boolean; msg: string } | null>(null);
+
+  // Try to load the last extraction from sessionStorage (set by SeekerResume)
+  const [extractionData, setExtractionData] = useState<{
+    skills: typeof resumeAnalysis.extractedSkills;
+    education: typeof resumeAnalysis.extractedEducation;
+    experience: typeof resumeAnalysis.extractedExperience;
+    fileName: string;
+  } | null>(null);
+
+  useEffect(() => {
+    try {
+      const raw = sessionStorage.getItem("skillmatch.last-extraction");
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (parsed.result) {
+          setExtractionData({
+            skills: parsed.result.skills ?? resumeAnalysis.extractedSkills,
+            education: parsed.result.education ?? resumeAnalysis.extractedEducation,
+            experience: parsed.result.experience ?? resumeAnalysis.extractedExperience,
+            fileName: parsed.fileName ?? "resume.pdf",
+          });
+        }
+      }
+    } catch { /* ignore */ }
+  }, []);
+
+  const saveToProfile = async () => {
+    setSaving(true);
+    setSaveResult(null);
+    try {
+      const payload = {
+        skills: (extractionData?.skills ?? resumeAnalysis.extractedSkills).map((s) => ({
+          name: s.raw,
+          normalized: s.normalized,
+          proficiency: s.proficiency,
+          source: "ai_extraction",
+        })),
+        education: (extractionData?.education ?? resumeAnalysis.extractedEducation).map((e) => ({
+          institution: e.institution,
+          degree: e.degree,
+          field: e.field,
+          startDate: e.startDate,
+          endDate: e.endDate,
+        })),
+        experience: (extractionData?.experience ?? resumeAnalysis.extractedExperience).map((e) => ({
+          company: e.company,
+          title: e.title,
+          startDate: e.startDate,
+          endDate: e.endDate,
+          description: e.description,
+        })),
+      };
+      const res = await fetch("/api/profile/save-extraction", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      const data = await res.json();
+      if (data.ok) {
+        setSaveResult({
+          ok: true,
+          msg: `Saved ${data.skillsSaved} new skills (${data.skillsSkipped} already existed), ${data.educationSaved} education entries, ${data.experienceSaved} experience entries to your profile.`,
+        });
+        // Redirect to skills page after a moment
+        setTimeout(() => go("skills"), 1800);
+      } else {
+        setSaveResult({ ok: false, msg: data.error ?? "Save failed." });
+      }
+    } catch {
+      setSaveResult({ ok: false, msg: "Network error. Please try again." });
+    } finally {
+      setSaving(false);
+    }
+  };
 
   return (
     <PageContainer>
@@ -895,15 +993,38 @@ export function SeekerResumeAnalysis() {
         description="Review and edit the extracted information before saving to your profile."
         icon={<Cpu className="h-4 w-4" />}
         actions={
-          <Button>
-            <Check className="h-4 w-4" /> Save to profile
+          <Button onClick={saveToProfile} disabled={saving}>
+            {saving ? (
+              <>
+                <span className="h-4 w-4 animate-spin rounded-full border-2 border-primary-foreground border-t-transparent" />
+                Saving…
+              </>
+            ) : (
+              <>
+                <Check className="h-4 w-4" /> Save to profile
+              </>
+            )}
           </Button>
         }
       />
 
+      {saveResult && (
+        <div className="mt-4">
+          {saveResult.ok ? (
+            <SuccessBanner
+              title="Saved to profile"
+              description={saveResult.msg + " Redirecting to your skills…"}
+              onClose={() => setSaveResult(null)}
+            />
+          ) : (
+            <ErrorState title="Save failed" description={saveResult.msg} action={<Button size="sm" variant="outline" onClick={saveToProfile}>Try again</Button>} />
+          )}
+        </div>
+      )}
+
       <SuccessBanner
         title="Resume processed successfully"
-        description="9 skills detected, 2 education entries, 3 experience entries. Please review for accuracy."
+        description={`${(extractionData?.skills ?? resumeAnalysis.extractedSkills).length} skills detected, ${(extractionData?.education ?? resumeAnalysis.extractedEducation).length} education entries, ${(extractionData?.experience ?? resumeAnalysis.extractedExperience).length} experience entries. Please review for accuracy.`}
       />
 
       <div className="mt-6 grid gap-4 lg:grid-cols-3">

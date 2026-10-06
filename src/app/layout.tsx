@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
 import { Toaster } from "@/components/ui/toaster";
+import { AuthProvider } from "@/lib/auth/auth-provider";
 
 const inter = Inter({
   variable: "--font-geist-sans",
@@ -32,8 +33,10 @@ export default function RootLayout({
       <body
         className={`${inter.variable} antialiased bg-background text-foreground`}
       >
-        {children}
-        <Toaster />
+        <AuthProvider>
+          {children}
+          <Toaster />
+        </AuthProvider>
       </body>
     </html>
   );

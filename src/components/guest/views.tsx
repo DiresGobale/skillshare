@@ -1,6 +1,7 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
+import { signIn as nextAuthSignIn } from "next-auth/react";
 import { cn } from "@/lib/utils";
 import { useApp } from "@/lib/app-context";
 import { Button } from "@/components/ui/button";
@@ -17,7 +18,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { BrandMark } from "@/components/chrome/app-shell";
+import { BrandMark, HamburgerToggle } from "@/components/chrome/app-shell";
 import {
   CompanyLogo,
   SkillChip,
@@ -28,6 +29,7 @@ import {
 import { publicJobs, recommendedJobs } from "@/lib/mock-data";
 import { demoAccounts } from "@/lib/demo-accounts";
 import type { Job, Role } from "@/lib/types";
+import { X } from "lucide-react";
 import {
   Search,
   MapPin,
@@ -57,33 +59,108 @@ import {
 // ============================================================
 function PublicHeader({ onAuth }: { onAuth: (r: "login" | "register") => void }) {
   const { go } = useApp();
+  const [mobileOpen, setMobileOpen] = useState(false);
+
+  // Lock body scroll + ESC to close
+  useEffect(() => {
+    if (mobileOpen) {
+      document.body.style.overflow = "hidden";
+    } else {
+      document.body.style.overflow = "";
+    }
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setMobileOpen(false);
+    };
+    window.addEventListener("keydown", handler);
+    return () => {
+      document.body.style.overflow = "";
+      window.removeEventListener("keydown", handler);
+    };
+  }, [mobileOpen]);
+
+  const navLinks = [
+    { label: "Browse jobs", view: "public-jobs" as const },
+    { label: "How it works", view: "landing" as const },
+    { label: "For employers", view: "landing" as const },
+  ];
+
   return (
-    <header className="sticky top-0 z-40 border-b border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80">
-      <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
-        <button onClick={() => go("landing")} className="flex items-center">
-          <BrandMark />
-        </button>
-        <nav className="hidden items-center gap-1 md:flex">
-          <Button variant="ghost" size="sm" onClick={() => go("public-jobs")}>
-            Browse jobs
-          </Button>
-          <Button variant="ghost" size="sm" onClick={() => go("landing")}>
-            How it works
-          </Button>
-          <Button variant="ghost" size="sm" onClick={() => go("landing")}>
-            For employers
-          </Button>
-        </nav>
-        <div className="flex items-center gap-2">
-          <Button variant="ghost" size="sm" onClick={() => onAuth("login")}>
-            Sign in
-          </Button>
-          <Button size="sm" onClick={() => onAuth("register")}>
-            Get started
-          </Button>
+    <>
+      <header className="sticky top-0 z-40 border-b border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80">
+        <div className="mx-auto flex h-16 max-w-7xl items-center justify-between gap-3 px-4 sm:px-6 lg:px-8">
+          {/* Hamburger toggle (mobile only) */}
+          <HamburgerToggle
+            open={mobileOpen}
+            onClick={() => setMobileOpen((v) => !v)}
+            className="md:hidden"
+          />
+
+          <button onClick={() => go("landing")} className="flex items-center">
+            <BrandMark />
+          </button>
+
+          <nav className="hidden items-center gap-1 md:flex">
+            {navLinks.map((link) => (
+              <Button key={link.label} variant="ghost" size="sm" onClick={() => go(link.view)}>
+                {link.label}
+              </Button>
+            ))}
+          </nav>
+
+          <div className="flex items-center gap-2">
+            <Button variant="ghost" size="sm" onClick={() => onAuth("login")} className="hidden sm:inline-flex">
+              Sign in
+            </Button>
+            <Button size="sm" onClick={() => onAuth("register")}>
+              Get started
+            </Button>
+          </div>
         </div>
-      </div>
-    </header>
+      </header>
+
+      {/* Mobile slide-down nav panel */}
+      <div
+        className={cn(
+          "fixed inset-0 z-30 bg-black/50 backdrop-blur-sm transition-opacity duration-300 md:hidden",
+          mobileOpen ? "opacity-100" : "pointer-events-none opacity-0"
+        )}
+        onClick={() => setMobileOpen(false)}
+        aria-hidden="true"
+      />
+      <nav
+        aria-label="Mobile public navigation"
+        className={cn(
+          "fixed inset-x-0 top-16 z-30 border-b border-border bg-background shadow-lg transition-transform duration-300 ease-in-out md:hidden",
+          mobileOpen ? "translate-y-0" : "-translate-y-full pointer-events-none"
+        )}
+      >
+        <div className="space-y-1 p-3">
+          {navLinks.map((link) => (
+            <button
+              key={link.label}
+              onClick={() => {
+                go(link.view);
+                setMobileOpen(false);
+              }}
+              className="block w-full rounded-md px-3 py-2.5 text-left text-sm font-medium text-foreground hover:bg-accent"
+            >
+              {link.label}
+            </button>
+          ))}
+          <div className="border-t border-border pt-2">
+            <button
+              onClick={() => {
+                onAuth("login");
+                setMobileOpen(false);
+              }}
+              className="block w-full rounded-md px-3 py-2.5 text-left text-sm font-medium text-foreground hover:bg-accent"
+            >
+              Sign in
+            </button>
+          </div>
+        </div>
+      </nav>
+    </>
   );
 }
 
@@ -432,9 +509,11 @@ function AuthShell({ title, subtitle, children }: { title: string; subtitle: str
 }
 
 export function Login() {
-  const { go, signIn, setRole } = useApp();
+  const { go } = useApp();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [totp, setTotp] = useState("");
+  const [show2FA, setShow2FA] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -447,28 +526,28 @@ export function Login() {
     setError(null);
     setLoading(true);
     try {
-      const res = await fetch("/api/auth/login", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, password }),
+      const res = await nextAuthSignIn("credentials", {
+        email,
+        password,
+        totp: totp || undefined,
+        redirect: false,
       });
-      const data = await res.json();
-      if (!data.ok) {
-        setError(data.error ?? "Login failed.");
+      if (!res || res.error) {
+        const msg = res?.error ?? "Login failed.";
+        if (msg === "2FA_REQUIRED") {
+          setShow2FA(true);
+          setError("This account requires 2FA. Enter your 6-digit authenticator code below.");
+        } else if (msg.includes("2FA") || msg.includes("Invalid 2FA")) {
+          setError(msg);
+          setShow2FA(true);
+        } else {
+          setError(msg);
+        }
         return;
       }
-      // Pass the full account (password is "demo1234" for all demo accounts)
-      signIn({
-        id: data.account.id,
-        role: data.account.role,
-        name: data.account.name,
-        email: data.account.email,
-        password: "demo1234",
-        title: data.account.title,
-        blurb: data.account.blurb,
-        avatarColor: data.account.avatarColor,
-        initials: data.account.initials,
-      });
+      // Successful login — NextAuth session is now in httpOnly cookie.
+      // Reload the page so the server-rendered session hydrates.
+      window.location.href = "/";
     } catch {
       setError("Network error. Please try again.");
     } finally {
@@ -479,6 +558,8 @@ export function Login() {
   const fillDemo = (acc: typeof demoAccounts[number]) => {
     setEmail(acc.email);
     setPassword(acc.password);
+    setTotp("");
+    setShow2FA(false);
     setError(null);
   };
 
@@ -514,6 +595,28 @@ export function Login() {
                 autoComplete="current-password"
               />
             </div>
+            {show2FA && (
+              <div className="space-y-1.5 rounded-md border border-amber-200 bg-amber-50 p-3">
+                <Label htmlFor="totp" className="text-amber-900 flex items-center gap-1.5">
+                  <ShieldCheck className="h-3.5 w-3.5" /> 2FA code (from authenticator app)
+                </Label>
+                <Input
+                  id="totp"
+                  type="text"
+                  inputMode="numeric"
+                  pattern="[0-9]*"
+                  maxLength={6}
+                  placeholder="••••••"
+                  value={totp}
+                  onChange={(e) => setTotp(e.target.value.replace(/\D/g, ""))}
+                  className="text-center text-lg tracking-[0.5em] font-mono"
+                  autoComplete="one-time-code"
+                />
+                <p className="text-[11px] text-amber-700">
+                  Admin demo: ask the administrator for the current TOTP code, or check the server logs from <code className="rounded bg-amber-100 px-1">bun run scripts/seed.ts</code>.
+                </p>
+              </div>
+            )}
             {error && (
               <div className="flex items-center gap-2 rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-700">
                 <AlertCircle className="h-3.5 w-3.5 shrink-0" />
@@ -607,16 +710,19 @@ export function Login() {
 }
 
 export function Register() {
-  const { go, signIn } = useApp();
+  const { go } = useApp();
   const [role, setRoleChoice] = useState<Role>("seeker");
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [agree, setAgree] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [submitting, setSubmitting] = useState(false);
+  const [serverError, setServerError] = useState<string | null>(null);
 
-  const submit = (e: React.FormEvent) => {
+  const submit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setServerError(null);
     const next: Record<string, string> = {};
     if (!name.trim()) next.name = "Please enter your name.";
     if (!email.trim()) next.email = "Please enter your email.";
@@ -625,18 +731,35 @@ export function Register() {
     if (!agree) next.terms = "You must accept the terms to continue.";
     setErrors(next);
     if (Object.keys(next).length > 0) return;
-    // Create a session for the new (mock) account
-    signIn({
-      id: `new-${Date.now()}`,
-      role,
-      name: name.trim(),
-      email: email.trim(),
-      password: password,
-      title: role === "employer" ? "Employer" : "Job Seeker",
-      blurb: role === "employer" ? "Employer · new account" : "Job seeker · new account",
-      avatarColor: role === "employer" ? "oklch(0.6 0.18 240)" : "oklch(0.55 0.22 285)",
-      initials: name.trim().split(" ").map((w) => w[0]).slice(0, 2).join("").toUpperCase(),
-    });
+    setSubmitting(true);
+    try {
+      const res = await fetch("/api/auth/register", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: name.trim(), email: email.trim(), password, role }),
+      });
+      const data = await res.json();
+      if (!data.ok) {
+        setServerError(data.error ?? "Registration failed.");
+        return;
+      }
+      // Auto sign-in via NextAuth
+      const signInRes = await nextAuthSignIn("credentials", {
+        email: email.trim(),
+        password,
+        redirect: false,
+      });
+      if (!signInRes || signInRes.error) {
+        // Account created but sign-in failed — go to login
+        go("login");
+        return;
+      }
+      window.location.href = "/";
+    } catch {
+      setServerError("Network error. Please try again.");
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   return (
@@ -715,8 +838,21 @@ export function Register() {
               </label>
             </div>
             {errors.terms && <p className="text-xs text-rose-600">{errors.terms}</p>}
-            <Button type="submit" className="w-full h-10">
-              Create {role === "employer" ? "employer" : "job seeker"} account
+            {serverError && (
+              <div className="flex items-center gap-2 rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-700">
+                <AlertCircle className="h-3.5 w-3.5 shrink-0" />
+                {serverError}
+              </div>
+            )}
+            <Button type="submit" className="w-full h-10" disabled={submitting}>
+              {submitting ? (
+                <>
+                  <span className="h-4 w-4 animate-spin rounded-full border-2 border-primary-foreground border-t-transparent" />
+                  Creating account…
+                </>
+              ) : (
+                <>Create {role === "employer" ? "employer" : "job seeker"} account</>
+              )}
             </Button>
           </form>
           <p className="mt-5 text-center text-xs text-muted-foreground">
