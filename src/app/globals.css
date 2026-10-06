@@ -128,7 +128,25 @@
   body {
     @apply bg-background text-foreground;
     font-feature-settings: "cv11", "ss01", "ss03";
+    -webkit-tap-highlight-color: transparent;
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+    overflow-x: hidden;
   }
+
+  /* Mobile: prevent horizontal scroll, ensure full width */
+  html {
+    overflow-x: hidden;
+    max-width: 100%;
+  }
+
+  /* Mobile: larger touch targets */
+  @media (max-width: 768px) {
+    button, [role="button"], a, input, select, textarea {
+      min-height: 44px;
+    }
+  }
+
   /* Subtle, professional scrollbar */
   ::-webkit-scrollbar {
     width: 8px;
@@ -487,5 +505,179 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 /* Badge animations */
 .badge-pulse {
   animation: glowPulse 2s ease-in-out infinite;
+}
+
+/* ============================================================
+   GLOBAL CARD HOVER ZOOM — every card zooms in/out on hover
+   ============================================================ */
+
+/* All Card components get a smooth zoom-in on hover */
+[class*="rounded-xl border border-border bg-card"],
+[class*="rounded-lg border border-border bg-card"],
+div[class*="border border-border bg-card"] {
+  transition: transform 0.35s cubic-bezier(0.34, 1.56, 0.64, 1),
+              box-shadow 0.35s ease,
+              border-color 0.3s ease !important;
+}
+
+@media (hover: hover) {
+  [class*="rounded-xl border border-border bg-card"]:hover,
+  [class*="rounded-lg border border-border bg-card"]:hover,
+  div[class*="border border-border bg-card"]:hover {
+    transform: scale(1.02);
+    box-shadow: 0 12px 40px rgba(99, 102, 241, 0.12),
+                0 4px 12px rgba(34, 197, 94, 0.08),
+                0 4px 12px rgba(239, 68, 68, 0.06) !important;
+    border-color: rgba(99, 102, 241, 0.3) !important;
+  }
+}
+
+/* Button-like cards (clickable job/candidate cards) get bigger zoom */
+button[class*="border border-border bg-card"],
+a[class*="border border-border bg-card"] {
+  transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1),
+              box-shadow 0.3s ease,
+              background 0.2s ease !important;
+}
+
+@media (hover: hover) {
+  button[class*="border border-border bg-card"]:hover,
+  a[class*="border border-border bg-card"]:hover {
+    transform: scale(1.03) translateY(-2px);
+    box-shadow: 0 16px 48px rgba(99, 102, 241, 0.18),
+                0 4px 16px rgba(34, 197, 94, 0.1) !important;
+  }
+}
+
+/* ============================================================
+   MOBILE RESPONSIVE — Apple/e-commerce style layouts
+   ============================================================ */
+
+/* Mobile: stack grids to single column, full-width elements */
+@media (max-width: 640px) {
+  /* Force single column on mobile for grid layouts */
+  .grid {
+    gap: 0.75rem !important;
+  }
+
+  /* Cards take full width */
+  [class*="rounded-xl border border-border bg-card"],
+  [class*="rounded-lg border border-border bg-card"] {
+    width: 100% !important;
+    margin-left: 0 !important;
+    margin-right: 0 !important;
+  }
+
+  /* Disable hover zoom on touch devices to prevent layout jumps */
+  [class*="rounded-xl border border-border bg-card"]:hover,
+  [class*="rounded-lg border border-border bg-card"]:hover,
+  div[class*="border border-border bg-card"]:hover,
+  button[class*="border border-border bg-card"]:hover,
+  a[class*="border border-border bg-card"]:hover {
+    transform: none !important;
+  }
+
+  /* Buttons: full width on mobile for primary actions */
+  .btn-rainbow, .btn-green, .btn-blue, .btn-red, .btn-yellow {
+    width: 100% !important;
+  }
+
+  /* Typography: slightly smaller on mobile */
+  h1 { font-size: 1.5rem !important; }
+  h2 { font-size: 1.25rem !important; }
+
+  /* Tables: scroll horizontally with sticky first column */
+  .overflow-x-auto {
+    -webkit-overflow-scrolling: touch;
+  }
+
+  /* Forms: full width inputs */
+  input, select, textarea {
+    width: 100% !important;
+    font-size: 16px !important; /* prevents iOS zoom on focus */
+  }
+
+  /* Dialog: full screen on mobile */
+  [data-radix-dialog-content] {
+    width: calc(100vw - 2rem) !important;
+    max-width: calc(100vw - 2rem) !important;
+    margin: 1rem !important;
+    max-height: calc(100vh - 2rem) !important;
+  }
+
+  /* Hide horizontal tab lists overflow, make scrollable */
+  [role="tablist"] {
+    flex-wrap: nowrap !important;
+    overflow-x: auto !important;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  [role="tab"] {
+    white-space: nowrap !important;
+    flex-shrink: 0 !important;
+  }
+
+  /* Stat cards: 2 columns on mobile instead of 4 */
+  .grid.sm\:grid-cols-2 {
+    grid-template-columns: repeat(2, 1fr) !important;
+  }
+
+  .grid.lg\:grid-cols-4,
+  .grid.sm\:grid-cols-2.lg\:grid-cols-4 {
+    grid-template-columns: repeat(2, 1fr) !important;
+  }
+
+  /* Main content: reduce padding on mobile */
+  .mx-auto.max-w-7xl {
+    padding-left: 1rem !important;
+    padding-right: 1rem !important;
+  }
+
+  /* Flex layouts: stack vertically */
+  .flex.sm\:flex-row {
+    flex-direction: column !important;
+  }
+
+  .flex.sm\:items-center.sm\:justify-between {
+    flex-direction: column !important;
+    align-items: stretch !important;
+    gap: 0.5rem !important;
+  }
+
+  /* Avatar images: ensure circular on mobile */
+  img[class*="rounded-full"] {
+    border-radius: 50% !important;
+    object-fit: cover !important;
+  }
+}
+
+/* Tablet: adjust grid columns */
+@media (min-width: 641px) and (max-width: 1023px) {
+  .grid.lg\:grid-cols-3 {
+    grid-template-columns: 1fr !important;
+  }
+
+  .grid.lg\:grid-cols-4 {
+    grid-template-columns: repeat(2, 1fr) !important;
+  }
+}
+
+/* Prevent text selection on buttons for better UX */
+button {
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+/* Smooth scrolling */
+html {
+  scroll-behavior: smooth;
+}
+
+/* Safe area insets for notched phones */
+@supports (padding: max(0px)) {
+  body {
+    padding-left: env(safe-area-inset-left, 0px);
+    padding-right: env(safe-area-inset-right, 0px);
+  }
 }
 

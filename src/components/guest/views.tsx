@@ -531,8 +531,12 @@ export function Login() {
   const [status, setStatus] = useState<string | null>(null);
   const [forgotOpen, setForgotOpen] = useState(false);
   const [forgotEmail, setForgotEmail] = useState("");
-  const [forgotSent, setForgotSent] = useState(false);
   const [forgotError, setForgotError] = useState<string | null>(null);
+  const [forgotLoading, setForgotLoading] = useState(false);
+  const [resetToken, setResetToken] = useState<string | null>(null);
+  const [newPassword, setNewPassword] = useState("");
+  const [resetSuccess, setResetSuccess] = useState(false);
+  const [resetError, setResetError] = useState<string | null>(null);
 
   // Core sign-in logic: pre-check credentials, then call NextAuth
   const doLogin = async (emailVal: string, passwordVal: string, totpVal?: string) => {
@@ -642,7 +646,7 @@ export function Login() {
             <div className="space-y-1.5">
               <div className="flex items-center justify-between">
                 <Label htmlFor="password">Password</Label>
-                <Dialog open={forgotOpen} onOpenChange={(o) => { setForgotOpen(o); if (!o) { setForgotSent(false); setForgotError(null); } }}>
+                <Dialog open={forgotOpen} onOpenChange={(o) => { setForgotOpen(o); if (!o) { setResetToken(null); setForgotError(null); setResetError(null); setResetSuccess(false); setNewPassword(""); } }}>
                   <button
                     type="button"
                     onClick={() => setForgotOpen(true)}
@@ -652,24 +656,80 @@ export function Login() {
                   </button>
                   <DialogContent>
                     <DialogHeader>
-                      <DialogTitle>Reset your password</DialogTitle>
+                      <DialogTitle>{resetSuccess ? "Password updated!" : resetToken ? "Set a new password" : "Reset your password"}</DialogTitle>
                       <DialogDescription>
-                        Enter your email and we'll send you a reset link.
+                        {resetSuccess
+                          ? "Your password has been changed. You can now sign in with your new password."
+                          : resetToken
+                          ? "Enter your new password below."
+                          : "Enter your email and we'll generate a reset link for you."}
                       </DialogDescription>
                     </DialogHeader>
-                    {forgotSent ? (
+
+                    {/* Step 3: Success */}
+                    {resetSuccess ? (
                       <div className="flex flex-col items-center py-6 text-center">
                         <CheckCircle2 className="h-12 w-12 text-emerald-600" />
-                        <p className="mt-3 text-sm font-semibold">Reset link sent!</p>
-                        <p className="mt-1 text-xs text-muted-foreground">
-                          Check <span className="font-medium">{forgotEmail}</span> for instructions.
-                          For demo accounts, the password is always <code className="rounded bg-muted px-1">demo1234</code>.
-                        </p>
-                        <Button className="mt-4" size="sm" onClick={() => setForgotOpen(false)}>Close</Button>
+                        <p className="mt-3 text-sm font-semibold">Password changed successfully!</p>
+                        <p className="mt-1 text-xs text-muted-foreground">You can now sign in with your new password.</p>
+                        <Button className="mt-4 btn-green" size="sm" onClick={() => { setForgotOpen(false); setEmail(forgotEmail); }}>
+                          Sign in now
+                        </Button>
                       </div>
-                    ) : (
+                    ) : resetToken ? (
+                      /* Step 2: Enter new password */
                       <form
-                        onSubmit={(e) => {
+                        onSubmit={async (e) => {
+                          e.preventDefault();
+                          setResetError(null);
+                          if (!newPassword || newPassword.length < 8) {
+                            setResetError("Password must be at least 8 characters.");
+                            return;
+                          }
+                          setForgotLoading(true);
+                          try {
+                            const res = await fetch("/api/auth/reset-password", {
+                              method: "POST",
+                              headers: { "Content-Type": "application/json" },
+                              body: JSON.stringify({ token: resetToken, newPassword }),
+                            });
+                            const data = await res.json();
+                            if (data.ok) {
+                              setResetSuccess(true);
+                            } else {
+                              setResetError(data.error ?? "Failed to reset password.");
+                            }
+                          } catch {
+                            setResetError("Network error.");
+                          } finally {
+                            setForgotLoading(false);
+                          }
+                        }}
+                        className="space-y-3"
+                      >
+                        <div className="space-y-1.5">
+                          <Label htmlFor="new-password">New password *</Label>
+                          <Input
+                            id="new-password"
+                            type="password"
+                            placeholder="At least 8 characters"
+                            value={newPassword}
+                            onChange={(e) => setNewPassword(e.target.value)}
+                            autoComplete="new-password"
+                          />
+                          {resetError && <p className="text-xs text-rose-600">{resetError}</p>}
+                        </div>
+                        <DialogFooter>
+                          <Button type="button" variant="outline" onClick={() => setForgotOpen(false)}>Cancel</Button>
+                          <Button type="submit" disabled={forgotLoading} className="btn-green">
+                            {forgotLoading ? "Resetting…" : "Reset password"}
+                          </Button>
+                        </DialogFooter>
+                      </form>
+                    ) : (
+                      /* Step 1: Enter email */
+                      <form
+                        onSubmit={async (e) => {
                           e.preventDefault();
                           setForgotError(null);
                           if (!forgotEmail.trim()) {
@@ -680,12 +740,29 @@ export function Login() {
                             setForgotError("Please enter a valid email.");
                             return;
                           }
-                          setForgotSent(true);
+                          setForgotLoading(true);
+                          try {
+                            const res = await fetch("/api/auth/forgot-password", {
+                              method: "POST",
+                              headers: { "Content-Type": "application/json" },
+                              body: JSON.stringify({ email: forgotEmail }),
+                            });
+                            const data = await res.json();
+                            if (data.ok) {
+                              setResetToken(data.token);
+                            } else {
+                              setForgotError(data.error ?? "Failed to generate reset link.");
+                            }
+                          } catch {
+                            setForgotError("Network error.");
+                          } finally {
+                            setForgotLoading(false);
+                          }
                         }}
                         className="space-y-3"
                       >
                         <div className="space-y-1.5">
-                          <Label htmlFor="forgot-email">Email</Label>
+                          <Label htmlFor="forgot-email">Email *</Label>
                           <Input
                             id="forgot-email"
                             type="email"
@@ -696,9 +773,14 @@ export function Login() {
                           />
                           {forgotError && <p className="text-xs text-rose-600">{forgotError}</p>}
                         </div>
+                        <div className="rounded-md border border-blue-200 bg-blue-50 px-3 py-2 text-[11px] text-blue-700">
+                          For demo accounts: seeker@demo.com, employer@demo.com, or admin@demo.com
+                        </div>
                         <DialogFooter>
                           <Button type="button" variant="outline" onClick={() => setForgotOpen(false)}>Cancel</Button>
-                          <Button type="submit">Send reset link</Button>
+                          <Button type="submit" disabled={forgotLoading} className="btn-blue">
+                            {forgotLoading ? "Generating…" : "Send reset link"}
+                          </Button>
                         </DialogFooter>
                       </form>
                     )}

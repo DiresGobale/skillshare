@@ -28,6 +28,8 @@ model User {
   status        String   @default("active") // active | suspended | pending
   about         String?
   profilePhoto  String?  // base64-encoded image data URL
+  resetToken    String?  // password reset token
+  resetTokenExpiry DateTime?  // token expiry time
 
   // Relations
   sessions     Session[]

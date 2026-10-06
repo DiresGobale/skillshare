@@ -94,8 +94,9 @@ export function ProfilePhotoUpload({
       <input
         ref={fileInputRef}
         type="file"
-        accept="image/png,image/jpeg,image/jpg,image/webp,image/gif"
-        className="sr-only"
+        accept="image/*"
+        capture="user"
+        style={{ position: "absolute", width: 1, height: 1, opacity: 0, overflow: "hidden", pointerEvents: "none" }}
         onChange={(e) => {
           const file = e.target.files?.[0];
           if (file) handleFile(file);
@@ -103,13 +104,18 @@ export function ProfilePhotoUpload({
         }}
       />
 
-      {/* Photo / Avatar with overlay */}
+      {/* Photo / Avatar with overlay — large touch target for mobile */}
       <div
         className={cn(
-          "group relative cursor-pointer rounded-full transition-all duration-300",
+          "group relative cursor-pointer rounded-full transition-all duration-300 touch-manipulation",
           dragOver && "ring-4 ring-primary/40 scale-105"
         )}
+        style={{ minHeight: 80, minWidth: 80 }}
         onClick={() => !uploading && fileInputRef.current?.click()}
+        onTouchEnd={(e) => {
+          e.preventDefault();
+          if (!uploading) fileInputRef.current?.click();
+        }}
         onDragOver={(e) => {
           e.preventDefault();
           setDragOver(true);
@@ -121,7 +127,15 @@ export function ProfilePhotoUpload({
           const file = e.dataTransfer.files?.[0];
           if (file) handleFile(file);
         }}
-        title="Click to upload a photo"
+        title="Click or tap to upload a photo"
+        role="button"
+        tabIndex={0}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            if (!uploading) fileInputRef.current?.click();
+          }
+        }}
       >
         {photo ? (
           <img
