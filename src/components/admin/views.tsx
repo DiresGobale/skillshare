@@ -1407,9 +1407,116 @@ export function AdminAIAnalytics() {
               </CardContent>
             </Card>
           </div>
+
+          {/* Predictive Analytics */}
+          <PredictiveAnalyticsSection />
         </>
       )}
     </PageContainer>
+  );
+}
+
+// ============================================================
+// PREDICTIVE ANALYTICS SECTION
+// ============================================================
+function PredictiveAnalyticsSection() {
+  const { data, loading } = useFetch<any>("/api/ai/predictive");
+  const pa = data?.analytics;
+
+  if (loading) return <LoadingState label="Loading predictive analytics…" rows={3} />;
+  if (!pa) return null;
+
+  return (
+    <>
+      <Card className="mt-4">
+        <CardHeader className="pb-3">
+          <CardTitle className="text-sm flex items-center gap-2">
+            <TrendingUp className="h-4 w-4 text-primary" /> Predictive Employment Analytics
+          </CardTitle>
+          <CardDescription>AI-generated forecasts for job growth, skill demand, and salary trends</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {/* Market Insights */}
+          {pa.marketInsights?.length > 0 && (
+            <div className="space-y-1.5">
+              <p className="text-xs font-semibold uppercase text-muted-foreground">AI Market Insights</p>
+              {pa.marketInsights.map((insight: string, i: number) => (
+                <div key={i} className="flex items-start gap-2 rounded-md border border-blue-200 bg-blue-50 px-3 py-2 text-xs text-blue-800">
+                  <Sparkles className="h-3.5 w-3.5 shrink-0 text-blue-600 mt-0.5" />
+                  <span>{insight}</span>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Job Growth + Skill Demand */}
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div>
+              <p className="text-xs font-semibold mb-2">Job Growth Forecast by Category</p>
+              <div className="space-y-1.5">
+                {pa.jobGrowthForecast?.map((g: any, i: number) => (
+                  <div key={i} className="flex items-center justify-between text-xs">
+                    <span className="font-medium">{g.category}</span>
+                    <div className="flex items-center gap-2">
+                      <span className="text-muted-foreground">{g.growthRate}%</span>
+                      <Badge variant="outline" className={cn("text-[9px] capitalize", g.trend === "up" ? "bg-emerald-50 text-emerald-700 border-emerald-200" : "bg-slate-50 text-slate-600 border-slate-200")}>
+                        {g.trend === "up" && <ArrowUpRight className="h-2.5 w-2.5 mr-0.5" />}
+                        {g.trend}
+                      </Badge>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+            <div>
+              <p className="text-xs font-semibold mb-2">Skill Demand Forecast</p>
+              <div className="space-y-1.5">
+                {pa.skillDemandForecast?.map((s: any, i: number) => (
+                  <div key={i}>
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="font-medium">{s.skill}</span>
+                      <span className="text-muted-foreground">{s.demandLevel}% demand</span>
+                    </div>
+                    <div className="mt-0.5 h-1.5 overflow-hidden rounded-full bg-muted">
+                      <div className="h-full rounded-full bg-gradient-to-r from-violet-500 to-emerald-500" style={{ width: `${s.demandLevel}%` }} />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          {/* Salary Trends */}
+          <div>
+            <p className="text-xs font-semibold mb-2">Salary Trends (USD/month)</p>
+            <div className="grid gap-2 sm:grid-cols-3">
+              {pa.salaryTrends?.map((s: any, i: number) => (
+                <div key={i} className="rounded-lg border border-border bg-card p-2.5 text-center">
+                  <p className="text-sm font-bold text-primary">${s.avgSalary.toLocaleString()}</p>
+                  <p className="text-[10px] text-muted-foreground">{s.role}</p>
+                  <Badge variant="outline" className={cn("text-[9px] mt-1 capitalize", s.trend === "up" ? "bg-emerald-50 text-emerald-700 border-emerald-200" : "bg-slate-50 text-slate-600 border-slate-200")}>
+                    {s.trend}
+                  </Badge>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Hiring Seasonality */}
+          <div>
+            <p className="text-xs font-semibold mb-2">Hiring Seasonality (monthly activity)</p>
+            <div className="flex items-end gap-1 h-20">
+              {pa.hiringSeasonality?.map((m: any, i: number) => (
+                <div key={i} className="flex flex-1 flex-col items-center gap-1">
+                  <div className="w-full rounded-t bg-gradient-to-t from-violet-500 to-blue-400" style={{ height: `${m.activity}%`, minHeight: 4 }} title={`${m.activity}% activity`} />
+                  <span className="text-[8px] text-muted-foreground">{m.month}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+    </>
   );
 }
 

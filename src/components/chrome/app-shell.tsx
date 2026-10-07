@@ -64,6 +64,7 @@ const employerNav: NavItem[] = [
   { label: "Candidate Ranking", view: "candidates", icon: <Users className="h-4 w-4" /> },
   { label: "Applications", view: "applications", icon: <Send className="h-4 w-4" /> },
   { label: "Interviews", view: "interviews", icon: <CalendarClock className="h-4 w-4" /> },
+  { label: "AI Report", view: "ai-report", icon: <Cpu className="h-4 w-4" /> },
   { label: "Messages", view: "messages", icon: <MessageSquare className="h-4 w-4" /> },
   { label: "Notifications", view: "notifications", icon: <Bell className="h-4 w-4" />, badge: 2 },
 ];

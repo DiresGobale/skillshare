@@ -44,6 +44,7 @@ import {
   EmployerInterviews,
   EmployerMessages,
   EmployerNotifications,
+  EmployerAIReport,
 } from "@/components/employer/views";
 // Admin views
 import {
@@ -145,6 +146,7 @@ function Router() {
       case "interviews": content = <EmployerInterviews />; break;
       case "messages": content = <EmployerMessages />; break;
       case "notifications": content = <EmployerNotifications />; break;
+      case "ai-report": content = <EmployerAIReport />; break;
       default: content = <EmployerDashboard />;
     }
   } else if (role === "admin") {

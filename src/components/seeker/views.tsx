@@ -137,6 +137,8 @@ export function SeekerDashboard() {
   const { data: appsData, loading: appsLoading } = useFetch<any>("/api/applications");
   const { data: notifData, loading: notifLoading } = useFetch<any>("/api/notifications");
   const { data: jobsData } = useFetch<any>("/api/jobs");
+  const [aiLoading, setAiLoading] = useState(false);
+  const [aiAnalysis, setAiAnalysis] = useState<any>(null);
 
   const profile = profileData?.profile;
   const applications = appsData?.applications ?? [];
@@ -364,6 +366,98 @@ export function SeekerDashboard() {
               {profile.skills.map((s: any) => (
                 <SkillChip key={s.id} name={s.name} proficiency={s.proficiency} verified={s.verified} size="sm" />
               ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* AI Profile Analysis */}
+      <Card className="mt-4 border-primary/20">
+        <CardHeader className="pb-3 flex flex-row items-center justify-between space-y-0">
+          <div>
+            <CardTitle className="text-sm flex items-center gap-2">
+              <Cpu className="h-4 w-4 text-primary" /> AI Profile Analysis
+            </CardTitle>
+            <CardDescription>AI-powered analysis of your skills, qualifications, and market position</CardDescription>
+          </div>
+          <Button variant="outline" size="sm" className="btn-rainbow" onClick={async () => {
+            setAiLoading(true);
+            try {
+              const res = await fetch("/api/ai/analyze", { method: "POST" });
+              const data = await res.json();
+              if (data.ok) setAiAnalysis(data.analysis);
+            } catch { /* ignore */ }
+            setAiLoading(false);
+          }} disabled={aiLoading}>
+            {aiLoading ? "Analyzing…" : "Analyze with AI"}
+          </Button>
+        </CardHeader>
+        <CardContent>
+          {aiLoading ? (
+            <LoadingState label="AI is analyzing your profile…" rows={3} />
+          ) : aiAnalysis ? (
+            <div className="space-y-3">
+              {/* Profile Score */}
+              <div className="flex items-center gap-4 rounded-lg border border-primary/20 bg-primary/5 p-3">
+                <div className="text-center">
+                  <p className="text-3xl font-bold text-primary">{aiAnalysis.profileScore}</p>
+                  <p className="text-[10px] uppercase text-muted-foreground">Profile Score</p>
+                </div>
+                <div className="flex-1">
+                  <p className="text-sm font-semibold">{aiAnalysis.careerLevel} · {aiAnalysis.marketPosition}</p>
+                  <div className="mt-1 flex flex-wrap gap-1">
+                    {aiAnalysis.recommendedRoles.map((r: string, i: number) => (
+                      <Badge key={i} variant="outline" className="text-[10px] bg-violet-50 text-violet-700 border-violet-200">{r}</Badge>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              {/* Strengths & Weaknesses */}
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div>
+                  <p className="text-xs font-semibold text-emerald-700 mb-1.5">Strengths</p>
+                  <ul className="space-y-1">
+                    {aiAnalysis.strengths.map((s: string, i: number) => (
+                      <li key={i} className="flex items-start gap-1.5 text-xs text-muted-foreground">
+                        <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600 shrink-0 mt-0.5" /> {s}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+                <div>
+                  <p className="text-xs font-semibold text-rose-700 mb-1.5">Areas for Improvement</p>
+                  <ul className="space-y-1">
+                    {aiAnalysis.weaknesses.map((w: string, i: number) => (
+                      <li key={i} className="flex items-start gap-1.5 text-xs text-muted-foreground">
+                        <AlertCircle className="h-3.5 w-3.5 text-rose-600 shrink-0 mt-0.5" /> {w}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              </div>
+
+              {/* AI Insights */}
+              {aiAnalysis.insights.length > 0 && (
+                <div className="space-y-1.5">
+                  <p className="text-xs font-semibold uppercase text-muted-foreground">AI Insights</p>
+                  {aiAnalysis.insights.map((ins: any, i: number) => (
+                    <div key={i} className={cn(
+                      "rounded-md border px-3 py-2 text-xs",
+                      ins.type === "positive" ? "border-emerald-200 bg-emerald-50 text-emerald-800" :
+                      ins.type === "negative" ? "border-rose-200 bg-rose-50 text-rose-800" :
+                      "border-blue-200 bg-blue-50 text-blue-800"
+                    )}>
+                      <span className="font-semibold">{ins.title}:</span> {ins.description}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          ) : (
+            <div className="flex flex-col items-center py-6 text-center">
+              <Cpu className="h-10 w-10 text-muted-foreground mb-2" />
+              <p className="text-sm text-muted-foreground">Click "Analyze with AI" to get a comprehensive analysis of your profile, including strengths, weaknesses, market position, and recommended roles.</p>
             </div>
           )}
         </CardContent>

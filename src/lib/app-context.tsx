@@ -29,7 +29,8 @@ export type EmployerView =
   | "applications"
   | "interviews"
   | "messages"
-  | "notifications";
+  | "notifications"
+  | "ai-report";
 export type AdminView =
   | "dashboard"
   | "users"
