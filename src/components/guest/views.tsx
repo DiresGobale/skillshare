@@ -1818,6 +1818,11 @@ export function Login() {
 
       // Success — reload so the server-rendered session hydrates.
       // The page.tsx router will redirect to the correct dashboard based on role.
+      // Set a flag so the AppShell knows to auto-open the mobile sidebar
+      // briefly after the dashboard loads (helps mobile users discover nav).
+      try {
+        sessionStorage.setItem("skillmatch.justLoggedIn", "1");
+      } catch { /* ignore */ }
       setStatus("Success! Redirecting to your dashboard…");
       window.location.assign("/");
     } catch {

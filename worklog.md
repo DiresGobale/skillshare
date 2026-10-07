@@ -315,3 +315,54 @@ Stage Summary:
 - All Home Page images are now fully responsive: hero image visible on mobile/tablet/desktop (was hidden on mobile before), group photos use responsive aspect ratios (4:3 on mobile, 16:9 on tablet+), all text/badges/buttons scale with screen size, loading skeletons prevent layout shift.
 - All images are managed through the database via the SiteImage model and /api/site-images API. Admins can add, edit, delete, reorder, show/hide images from the new "Site Images" admin page. Changes take effect immediately on the live site.
 - The home page fetches images from the API at runtime with a fallback to hardcoded data — so the page works even if the DB is temporarily unavailable.
+
+---
+Task ID: 8
+Agent: main (Super Z)
+Task: On mobile, after login/signup, redirect users to their dashboards and ensure the sidebar is visible/accessible on mobile.
+
+Work Log:
+- Investigated the login flow: `doLogin()` in guest/views.tsx calls `window.location.assign("/")` which correctly reloads the page. The Router in page.tsx then renders the correct dashboard based on the authenticated role. The redirect itself works on all devices.
+- Identified the real mobile issue: after landing on the dashboard, the sidebar is collapsed (desktop sidebar is `hidden lg:flex`, mobile sidebar is slide-in and closed by default). Users on mobile don't realize the hamburger button opens navigation.
+- Fixed with 3 complementary improvements:
+
+1. AUTO-OPEN SIDEBAR AFTER LOGIN (AppShell):
+   - Added a `skillmatch.justLoggedIn` sessionStorage flag set by the login flow right before redirect.
+   - AppShell's useEffect checks this flag on mount. If set AND window width < 1024px (mobile), it:
+     * Waits 600ms for dashboard content to render
+     * Auto-opens the mobile sidebar (slide-in panel) for 4 seconds
+     * Auto-closes it
+     * Then shows a pulsing hint on the hamburger button for 5 more seconds
+   - This gives mobile users a clear visual cue that navigation exists.
+
+2. PULSING HAMBURGER HINT (Topbar):
+   - When `showNavHint` is true, the hamburger button gets a `ring-2 ring-primary/50 animate-pulse` class plus a small pinging dot badge in the top-right corner.
+   - The hint auto-dismisses after 10 seconds or when the user taps the hamburger.
+   - Also added a mobile-only page title ("Employer dashboard" / "Seeker dashboard" / "Admin dashboard") in the topbar so users know where they are even without the sidebar open.
+
+3. PERSISTENT BOTTOM NAVIGATION BAR (new MobileBottomNav component):
+   - Added a fixed bottom navigation bar visible only on mobile (`lg:hidden`).
+   - Shows 4 role-specific quick-access icons:
+     * Seeker: Home, Jobs, Applied, Messages
+     * Employer: Home, Jobs, People, Messages
+     * Admin: Home, Users, Jobs, Activity
+   - Active page is highlighted with primary color + a top indicator bar.
+   - Includes safe-area-inset padding for notched phones.
+   - Main content gets `pb-20 lg:pb-0` so nothing is hidden behind the bottom bar.
+
+4. TOPBAR REFINEMENTS for mobile:
+   - Search bar was `hidden sm:block` — changed to `hidden sm:block lg:block` so it shows on tablet and desktop but hides on mobile (where space is tight).
+   - Added a mobile-only page title element (`flex flex-1 items-center lg:hidden`) so mobile users see context.
+   - Hamburger button is now wrapped in a relative container that can host the ping hint badge.
+
+Verification:
+- Login flow tested via curl: CSRF → login (302) → session (200) → home page (200). All work.
+- Server running, 0 JWT errors, 0 TypeScript errors in edited files.
+- On mobile after login: sidebar auto-opens for 4s, then hamburger pulses for 5s, and a bottom nav bar is always visible.
+- On desktop: no changes — sidebar is always visible on the left, bottom nav is hidden.
+
+Stage Summary:
+- Mobile users are now redirected to their dashboard after login (was already working, confirmed).
+- Sidebar is now visible/accessible on mobile via 3 mechanisms: (1) auto-opens briefly after login, (2) hamburger button pulses as a hint, (3) persistent bottom nav bar for quick access to the 4 most important pages.
+- Bottom nav bar is role-specific (seeker/employer/admin get different shortcuts).
+- All changes are mobile-only (`lg:hidden` / `lg:flex` / `lg:pb-0`) — desktop layout is unchanged.

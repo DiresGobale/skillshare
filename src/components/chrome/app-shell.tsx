@@ -357,7 +357,7 @@ function MobileNavbar({
 }
 
 // Top bar (search + actions + role switcher)
-function Topbar({ onToggleMobile, mobileOpen }: { onToggleMobile: () => void; mobileOpen: boolean }) {
+function Topbar({ onToggleMobile, mobileOpen, showNavHint }: { onToggleMobile: () => void; mobileOpen: boolean; showNavHint?: boolean }) {
   const { role, user, signOut, go } = useApp();
   const [roleMenuOpen, setRoleMenuOpen] = useState(false);
 
@@ -368,15 +368,30 @@ function Topbar({ onToggleMobile, mobileOpen }: { onToggleMobile: () => void; mo
 
   return (
     <header className="sticky top-0 z-30 flex h-16 items-center gap-3 border-b border-border bg-background/95 px-4 backdrop-blur supports-[backdrop-filter]:bg-background/80 lg:px-6">
-      {/* 3-line hamburger toggle (mobile only) */}
-      <HamburgerToggle
-        open={mobileOpen}
-        onClick={onToggleMobile}
-        className="lg:hidden"
-      />
+      {/* 3-line hamburger toggle (mobile only) — with pulse hint after login */}
+      <div className="relative lg:hidden">
+        <HamburgerToggle
+          open={mobileOpen}
+          onClick={onToggleMobile}
+          className={showNavHint ? "ring-2 ring-primary/50 animate-pulse" : undefined}
+        />
+        {showNavHint && (
+          <span className="absolute -right-1 -top-1 flex h-3 w-3">
+            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-primary opacity-75" />
+            <span className="relative inline-flex h-3 w-3 rounded-full bg-primary" />
+          </span>
+        )}
+      </div>
+
+      {/* Mobile: show current page title instead of search (saves space) */}
+      <div className="flex flex-1 items-center lg:hidden">
+        <span className="truncate text-sm font-semibold capitalize text-foreground">
+          {role === "admin" ? "Admin" : role === "employer" ? "Employer" : "Seeker"} dashboard
+        </span>
+      </div>
 
       {/* Search (desktop) */}
-      <div className="relative hidden flex-1 max-w-md sm:block">
+      <div className="relative hidden flex-1 max-w-md sm:block lg:block">
         <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
         <input
           type="text"
@@ -499,11 +514,96 @@ function Topbar({ onToggleMobile, mobileOpen }: { onToggleMobile: () => void; mo
 }
 
 // ============================================================
+// MOBILE BOTTOM NAV — persistent quick-access bar for key pages
+// ============================================================
+function MobileBottomNav({ role, view, onNavigate }: { role: Role; view: View; onNavigate: (v: View) => void }) {
+  // Pick the 4 most important views per role for the bottom bar
+  const items: { view: View; label: string; icon: React.ReactNode }[] =
+    role === "seeker"
+      ? [
+          { view: "dashboard", label: "Home", icon: <LayoutDashboard className="h-5 w-5" /> },
+          { view: "recommended", label: "Jobs", icon: <Target className="h-5 w-5" /> },
+          { view: "applications", label: "Applied", icon: <Send className="h-5 w-5" /> },
+          { view: "messages", label: "Messages", icon: <MessageSquare className="h-5 w-5" /> },
+        ]
+      : role === "employer"
+      ? [
+          { view: "dashboard", label: "Home", icon: <LayoutDashboard className="h-5 w-5" /> },
+          { view: "jobs", label: "Jobs", icon: <Briefcase className="h-5 w-5" /> },
+          { view: "candidates", label: "People", icon: <Users className="h-5 w-5" /> },
+          { view: "messages", label: "Messages", icon: <MessageSquare className="h-5 w-5" /> },
+        ]
+      : [
+          { view: "dashboard", label: "Home", icon: <LayoutDashboard className="h-5 w-5" /> },
+          { view: "users", label: "Users", icon: <Users className="h-5 w-5" /> },
+          { view: "jobs", label: "Jobs", icon: <Briefcase className="h-5 w-5" /> },
+          { view: "activity", label: "Activity", icon: <Activity className="h-5 w-5" /> },
+        ];
+
+  return (
+    <nav
+      aria-label="Mobile bottom navigation"
+      className="fixed inset-x-0 bottom-0 z-30 flex h-16 items-stretch border-t border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80 lg:hidden"
+      style={{ paddingBottom: "env(safe-area-inset-bottom, 0px)" }}
+    >
+      {items.map((item) => {
+        const active = view === item.view;
+        return (
+          <button
+            key={item.view}
+            onClick={() => onNavigate(item.view)}
+            className={cn(
+              "flex flex-1 flex-col items-center justify-center gap-0.5 transition-colors",
+              active ? "text-primary" : "text-muted-foreground hover:text-foreground"
+            )}
+            aria-label={item.label}
+            aria-current={active ? "page" : undefined}
+          >
+            <span className={cn("transition-transform", active && "scale-110")}>
+              {item.icon}
+            </span>
+            <span className={cn("text-[10px] font-medium", active && "font-semibold")}>
+              {item.label}
+            </span>
+            {active && <span className="absolute top-0 h-0.5 w-10 rounded-full bg-primary" />}
+          </button>
+        );
+      })}
+    </nav>
+  );
+}
+
+// ============================================================
 // MAIN LAYOUT — sidebar + topbar + content
 // ============================================================
 export function AppShell({ children }: { children: React.ReactNode }) {
   const { role, view, go } = useApp();
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [showNavHint, setShowNavHint] = useState(false);
+
+  // After login, briefly auto-open the mobile sidebar so users on small
+  // screens can see that navigation exists. We check a sessionStorage flag
+  // set by the login flow, then clear it. Only triggers on mobile (lg down).
+  useEffect(() => {
+    try {
+      if (sessionStorage.getItem("skillmatch.justLoggedIn") === "1") {
+        sessionStorage.removeItem("skillmatch.justLoggedIn");
+        // Only auto-open on mobile (window width < 1024 = lg breakpoint)
+        if (typeof window !== "undefined" && window.innerWidth < 1024) {
+          // Small delay so the dashboard content renders first
+          const t1 = setTimeout(() => setMobileOpen(true), 600);
+          // Auto-close after 4 seconds if the user hasn't interacted
+          const t2 = setTimeout(() => setMobileOpen(false), 4600);
+          // Show a pulsing hint on the hamburger after the sidebar closes
+          const t3 = setTimeout(() => setShowNavHint(true), 4800);
+          const t4 = setTimeout(() => setShowNavHint(false), 10000);
+          return () => {
+            clearTimeout(t1); clearTimeout(t2); clearTimeout(t3); clearTimeout(t4);
+          };
+        }
+      }
+    } catch { /* ignore */ }
+  }, []);
 
   return (
     <div className="flex min-h-screen bg-background">
@@ -523,9 +623,17 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
       {/* Main */}
       <div className="flex min-w-0 flex-1 flex-col">
-        <Topbar onToggleMobile={() => setMobileOpen((v) => !v)} mobileOpen={mobileOpen} />
-        <main className="flex-1">{children}</main>
+        <Topbar
+          onToggleMobile={() => { setMobileOpen((v) => !v); setShowNavHint(false); }}
+          mobileOpen={mobileOpen}
+          showNavHint={showNavHint}
+        />
+        {/* pb-20 on mobile to account for the bottom nav bar; lg:pb-0 to remove it on desktop */}
+        <main className="flex-1 pb-20 lg:pb-0">{children}</main>
       </div>
+
+      {/* Mobile bottom navigation — persistent quick access to key pages */}
+      <MobileBottomNav role={role} view={view} onNavigate={(v) => go(v)} />
     </div>
   );
 }
