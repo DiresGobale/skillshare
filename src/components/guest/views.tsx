@@ -562,37 +562,106 @@ function RevealBlock({
   );
 }
 
-// Group photo data
-const GROUP_PHOTOS = [
+// Group photo data — used as a fallback if the database fetch fails.
+// The live source of truth is the /api/site-images endpoint, which admins
+// can edit at runtime to change which images appear on the home page.
+const GROUP_PHOTOS_FALLBACK = [
   {
+    id: "fallback-1",
+    key: "home-group-1",
     src: "/groups/group1.jpg",
     alt: "Five engineers collaborating in a glass-walled meeting room",
     caption: "Collaborative engineering",
     description: "Cross-functional teams iterate daily on customer-facing products.",
     accent: "from-violet-500 to-blue-500",
+    category: "home",
+    sortOrder: 1,
+    isActive: true,
   },
   {
+    id: "fallback-2",
+    key: "home-group-2",
     src: "/groups/group2.jpg",
     alt: "Five IT engineers pair-programming at a standing desk",
     caption: "Pair programming",
     description: "Knowledge-sharing built into every sprint through paired work.",
     accent: "from-emerald-500 to-cyan-500",
+    category: "home",
+    sortOrder: 2,
+    isActive: true,
   },
   {
+    id: "fallback-3",
+    key: "home-group-3",
     src: "/groups/group3.jpg",
     alt: "Five tech professionals celebrating around a project whiteboard",
     caption: "Milestone celebrations",
     description: "Every shipped feature is recognized, every voice matters.",
     accent: "from-amber-500 to-rose-500",
+    category: "home",
+    sortOrder: 3,
+    isActive: true,
   },
   {
+    id: "fallback-4",
+    key: "home-group-4",
     src: "/groups/group4.jpg",
     alt: "Five developers gathered in a tech lounge for a daily standup",
     caption: "Casual standups",
     description: "Quick syncs in our lounge keep momentum without crushing focus.",
     accent: "from-fuchsia-500 to-purple-500",
+    category: "home",
+    sortOrder: 4,
+    isActive: true,
   },
 ];
+
+// Type for a site image returned by the API
+interface SiteImage {
+  id: string;
+  key: string;
+  src: string;
+  alt: string;
+  caption: string | null;
+  description: string | null;
+  accent: string;
+  category: string;
+  sortOrder: number;
+  isActive: boolean;
+}
+
+// Hook to fetch site images from the database for a given category.
+// Falls back to GROUP_PHOTOS_FALLBACK on error so the page never breaks.
+function useSiteImages(category: string): { images: SiteImage[]; loading: boolean } {
+  const [images, setImages] = useState<SiteImage[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch(`/api/site-images?category=${encodeURIComponent(category)}`)
+      .then((r) => r.json())
+      .then((data) => {
+        if (cancelled) return;
+        if (data.ok && Array.isArray(data.images) && data.images.length > 0) {
+          setImages(data.images);
+        } else {
+          // Fall back to hardcoded data
+          setImages(GROUP_PHOTOS_FALLBACK.filter((p) => p.category === category));
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setImages(GROUP_PHOTOS_FALLBACK.filter((p) => p.category === category));
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => { cancelled = true; };
+  }, [category]);
+
+  return { images, loading };
+}
 
 // Animated counter
 function AnimatedCounter({ target, suffix = "", duration = 1500 }: { target: number; suffix?: string; duration?: number }) {
@@ -626,6 +695,9 @@ function AnimatedCounter({ target, suffix = "", duration = 1500 }: { target: num
 
 function HomeHero() {
   const { go } = useApp();
+  const { images: heroImages } = useSiteImages("home-hero");
+  const heroImage = heroImages[0];
+
   return (
     <section className="relative overflow-hidden bg-hero-glow">
       {/* Animated gradient blobs in the background */}
@@ -636,28 +708,28 @@ function HomeHero() {
       </div>
       <div className="absolute inset-0 bg-grid-subtle opacity-50 [mask-image:radial-gradient(ellipse_at_center,black,transparent_75%)]" />
 
-      <div className="relative mx-auto max-w-7xl px-4 pb-24 pt-20 sm:px-6 sm:pt-28 lg:px-8 lg:pt-32">
-        <div className="grid gap-10 lg:grid-cols-2 lg:items-center">
+      <div className="relative mx-auto max-w-7xl px-4 pb-20 pt-16 sm:px-6 sm:pb-24 sm:pt-20 lg:px-8 lg:pb-28 lg:pt-32">
+        <div className="grid gap-8 lg:grid-cols-2 lg:items-center lg:gap-12">
           {/* Left: copy + CTAs */}
           <div>
             <div className="animate-fade-up inline-flex items-center gap-2 rounded-full border border-primary/20 bg-primary/5 px-3 py-1 text-xs font-medium text-primary">
               <Sparkles className="h-3 w-3" />
               AI-powered skill matching · live in 14 African markets
             </div>
-            <h1 className="animate-fade-up delay-100 mt-6 text-4xl font-extrabold leading-tight tracking-tight sm:text-5xl lg:text-6xl">
+            <h1 className="animate-fade-up delay-100 mt-5 text-3xl font-extrabold leading-tight tracking-tight sm:text-4xl sm:mt-6 lg:text-5xl xl:text-6xl">
               Where <span className="bg-gradient-to-r from-violet-600 via-blue-600 to-emerald-600 bg-clip-text text-transparent animate-gradient-text">verified skills</span> meet real opportunities.
             </h1>
-            <p className="animate-fade-up delay-200 mt-5 max-w-xl text-base text-muted-foreground sm:text-lg">
+            <p className="animate-fade-up delay-200 mt-4 max-w-xl text-sm text-muted-foreground sm:mt-5 sm:text-base lg:text-lg">
               SkillMatch AI builds a structured skill graph for every candidate, verifies it through assessments and prior employer attestation, then uses explainable AI to match the right people to the right roles — no keyword spam, no résumé black holes.
             </p>
-            <div className="animate-fade-up delay-300 mt-8 flex flex-col items-start gap-3 sm:flex-row sm:items-center">
-              <Button size="lg" className="h-12 px-6 btn-rainbow" onClick={() => go("public-jobs")}>
+            <div className="animate-fade-up delay-300 mt-6 flex flex-col items-start gap-3 sm:flex-row sm:items-center sm:mt-8">
+              <Button size="lg" className="h-11 px-5 text-sm sm:h-12 sm:px-6 sm:text-base btn-rainbow w-full sm:w-auto" onClick={() => go("public-jobs")}>
                 Find jobs <ArrowRight className="h-4 w-4" />
               </Button>
               <Button
                 size="lg"
                 variant="outline"
-                className="h-12 px-6"
+                className="h-11 px-5 text-sm sm:h-12 sm:px-6 sm:text-base w-full sm:w-auto"
                 onClick={() => {
                   try { sessionStorage.setItem("registerRole", "employer"); } catch { /* ignore */ }
                   go("register");
@@ -666,7 +738,7 @@ function HomeHero() {
                 Hire talent
               </Button>
             </div>
-            <div className="animate-fade-up delay-400 mt-8 flex flex-wrap items-center gap-x-6 gap-y-2 text-xs text-muted-foreground">
+            <div className="animate-fade-up delay-400 mt-6 flex flex-wrap items-center gap-x-6 gap-y-2 text-xs text-muted-foreground sm:mt-8">
               <span className="flex items-center gap-1.5">
                 <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" /> Free for job seekers
               </span>
@@ -679,44 +751,51 @@ function HomeHero() {
             </div>
           </div>
 
-          {/* Right: floating photo collage with one group photo */}
-          <div className="relative hidden lg:block">
-            <div className="animate-scale-in delay-200 relative">
+          {/* Right: floating photo collage with the hero group photo — responsive on all screens */}
+          <div className="relative">
+            <div className="animate-scale-in delay-200 relative mx-auto max-w-md sm:max-w-lg lg:max-w-none">
               {/* Decorative gradient ring */}
-              <div className="absolute -inset-4 rounded-3xl bg-gradient-to-br from-violet-500/30 via-blue-500/30 to-emerald-500/30 blur-2xl animate-pulse-glow" />
-              <div className="relative overflow-hidden rounded-3xl border border-white/30 shadow-2xl animate-float">
-                <img
-                  src="/groups/group1.jpg"
-                  alt="Five engineers collaborating in a modern tech office"
-                  className="h-[420px] w-full object-cover"
-                />
+              <div className="absolute -inset-3 sm:-inset-4 rounded-2xl sm:rounded-3xl bg-gradient-to-br from-violet-500/30 via-blue-500/30 to-emerald-500/30 blur-2xl animate-pulse-glow" />
+              <div className="relative overflow-hidden rounded-2xl sm:rounded-3xl border border-white/30 shadow-2xl animate-float">
+                {/* Responsive image using Next.js Image-like pattern with aspect ratio */}
+                <div className="relative aspect-[4/3] sm:aspect-[16/10] lg:aspect-[4/3] xl:aspect-[16/11]">
+                  <img
+                    src={heroImage?.src ?? "/groups/group1.jpg"}
+                    alt={heroImage?.alt ?? "Five engineers collaborating in a modern tech office"}
+                    className="absolute inset-0 h-full w-full object-cover"
+                    loading="eager"
+                    // Provide width/height hints for the browser to avoid layout shift
+                    width={1344}
+                    height={768}
+                  />
+                </div>
                 <div className="absolute inset-0 bg-gradient-to-t from-black/40 via-transparent to-transparent" />
-                {/* Floating stat badge */}
-                <div className="absolute bottom-4 left-4 rounded-xl bg-white/95 px-3 py-2 shadow-lg backdrop-blur">
-                  <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Match accuracy</p>
-                  <p className="text-lg font-bold text-gradient-primary">94.2%</p>
+                {/* Floating stat badge — responsive: hidden on very small screens */}
+                <div className="absolute bottom-3 left-3 rounded-lg bg-white/95 px-2.5 py-1.5 shadow-lg backdrop-blur sm:bottom-4 sm:left-4 sm:rounded-xl sm:px-3 sm:py-2">
+                  <p className="text-[9px] font-semibold uppercase tracking-wide text-muted-foreground sm:text-[10px]">Match accuracy</p>
+                  <p className="text-sm font-bold text-gradient-primary sm:text-lg">94.2%</p>
                 </div>
               </div>
-              {/* Floating side card */}
-              <div className="animate-float absolute -right-6 top-12 rounded-2xl border border-border bg-card p-3 shadow-xl" style={{ animationDelay: "1.5s" }}>
+              {/* Floating side cards — hidden on mobile, shown on tablet+ */}
+              <div className="animate-float absolute -right-3 top-8 rounded-xl border border-border bg-card p-2.5 shadow-xl hidden sm:block lg:-right-6 lg:top-12 lg:p-3" style={{ animationDelay: "1.5s" }}>
                 <div className="flex items-center gap-2">
-                  <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-100 text-emerald-700">
-                    <ShieldCheck className="h-4 w-4" />
+                  <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-emerald-100 text-emerald-700 lg:h-8 lg:w-8">
+                    <ShieldCheck className="h-3.5 w-3.5 lg:h-4 lg:w-4" />
                   </div>
                   <div>
-                    <p className="text-[10px] font-semibold uppercase text-muted-foreground">Verified</p>
-                    <p className="text-xs font-bold">6,124 skills</p>
+                    <p className="text-[9px] font-semibold uppercase text-muted-foreground lg:text-[10px]">Verified</p>
+                    <p className="text-[11px] font-bold lg:text-xs">6,124 skills</p>
                   </div>
                 </div>
               </div>
-              <div className="animate-float absolute -left-6 bottom-20 rounded-2xl border border-border bg-card p-3 shadow-xl" style={{ animationDelay: "3s" }}>
+              <div className="animate-float absolute -left-3 bottom-16 rounded-xl border border-border bg-card p-2.5 shadow-xl hidden sm:block lg:-left-6 lg:bottom-20 lg:p-3" style={{ animationDelay: "3s" }}>
                 <div className="flex items-center gap-2">
-                  <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-violet-100 text-violet-700">
-                    <Cpu className="h-4 w-4" />
+                  <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-violet-100 text-violet-700 lg:h-8 lg:w-8">
+                    <Cpu className="h-3.5 w-3.5 lg:h-4 lg:w-4" />
                   </div>
                   <div>
-                    <p className="text-[10px] font-semibold uppercase text-muted-foreground">AI score</p>
-                    <p className="text-xs font-bold">Explainable</p>
+                    <p className="text-[9px] font-semibold uppercase text-muted-foreground lg:text-[10px]">AI score</p>
+                    <p className="text-[11px] font-bold lg:text-xs">Explainable</p>
                   </div>
                 </div>
               </div>
@@ -759,47 +838,62 @@ function HomeStats() {
 }
 
 function HomeGroupPhotos() {
+  const { images: groupPhotos, loading } = useSiteImages("home");
+  const photos = groupPhotos.length > 0 ? groupPhotos : GROUP_PHOTOS_FALLBACK;
+
   return (
-    <section className="relative overflow-hidden border-b border-border bg-muted/30 py-16 sm:py-24">
+    <section className="relative overflow-hidden border-b border-border bg-muted/30 py-12 sm:py-16 lg:py-24">
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
         <RevealBlock className="mx-auto max-w-2xl text-center">
           <p className="text-xs font-semibold uppercase tracking-wider text-primary">Our community</p>
-          <h2 className="mt-2 text-3xl font-bold tracking-tight sm:text-4xl">
+          <h2 className="mt-2 text-2xl font-bold tracking-tight sm:text-3xl lg:text-4xl">
             Real teams. Real collaboration. Real outcomes.
           </h2>
-          <p className="mt-4 text-muted-foreground">
+          <p className="mt-3 text-sm text-muted-foreground sm:mt-4 sm:text-base">
             SkillMatch AI is built by engineers, for engineers. Our community spans 14 African markets and 50+ technology stacks — connected through a shared belief that hiring should be transparent, fair, and skill-based.
           </p>
         </RevealBlock>
 
-        <div className="mt-12 grid gap-5 sm:grid-cols-2">
-          {GROUP_PHOTOS.map((photo, i) => (
-            <RevealBlock key={photo.src} delay={i * 120}>
-              <figure className="zoom-img-container lift-card group relative overflow-hidden rounded-2xl border border-border bg-card shadow-md">
-                <div className="relative aspect-[16/9] overflow-hidden">
-                  <img
-                    src={photo.src}
-                    alt={photo.alt}
-                    className="zoom-img h-full w-full object-cover"
-                    loading="lazy"
-                  />
-                  <div className={cn("absolute inset-0 bg-gradient-to-t opacity-60 mix-blend-multiply", photo.accent)} />
-                  <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/10 to-transparent" />
-                </div>
-                <figcaption className="absolute inset-x-0 bottom-0 p-5 text-white">
-                  <div className="flex items-end justify-between gap-3">
-                    <div>
-                      <p className="text-xs font-semibold uppercase tracking-wider text-white/80">{photo.caption}</p>
-                      <p className="mt-1 text-sm font-medium leading-tight sm:text-base">{photo.description}</p>
-                    </div>
-                    <div className={cn("flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-gradient-to-br text-white shadow-lg", photo.accent)}>
-                      {i + 1}
-                    </div>
+        {/* Responsive grid: 1 column on mobile, 2 on tablet+ */}
+        <div className="mt-8 grid gap-4 sm:mt-12 sm:grid-cols-2 sm:gap-5 lg:gap-6">
+          {loading ? (
+            // Skeleton placeholders while loading
+            [0, 1, 2, 3].map((i) => (
+              <div key={i} className="aspect-[4/3] sm:aspect-[16/9] animate-pulse rounded-2xl border border-border bg-muted/40" />
+            ))
+          ) : (
+            photos.map((photo, i) => (
+              <RevealBlock key={photo.id ?? photo.key} delay={i * 120}>
+                <figure className="zoom-img-container lift-card group relative overflow-hidden rounded-xl sm:rounded-2xl border border-border bg-card shadow-md">
+                  {/* Responsive aspect ratio: taller on mobile, wider on tablet+ */}
+                  <div className="relative aspect-[4/3] sm:aspect-[16/9] overflow-hidden">
+                    <img
+                      src={photo.src}
+                      alt={photo.alt}
+                      className="zoom-img absolute inset-0 h-full w-full object-cover"
+                      loading="lazy"
+                      // Width/height hints to prevent layout shift
+                      width={1344}
+                      height={768}
+                    />
+                    <div className={cn("absolute inset-0 bg-gradient-to-t opacity-60 mix-blend-multiply", photo.accent)} />
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/10 to-transparent" />
                   </div>
-                </figcaption>
-              </figure>
-            </RevealBlock>
-          ))}
+                  <figcaption className="absolute inset-x-0 bottom-0 p-3 text-white sm:p-4 lg:p-5">
+                    <div className="flex items-end justify-between gap-2 sm:gap-3">
+                      <div className="min-w-0 flex-1">
+                        <p className="text-[10px] font-semibold uppercase tracking-wider text-white/80 sm:text-xs">{photo.caption}</p>
+                        <p className="mt-0.5 text-xs font-medium leading-tight sm:mt-1 sm:text-sm lg:text-base">{photo.description}</p>
+                      </div>
+                      <div className={cn("flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-gradient-to-br text-white shadow-lg sm:h-8 sm:w-9 lg:h-9 lg:w-9 text-[10px] sm:text-xs", photo.accent)}>
+                        {i + 1}
+                      </div>
+                    </div>
+                  </figcaption>
+                </figure>
+              </RevealBlock>
+            ))
+          )}
         </div>
       </div>
     </section>

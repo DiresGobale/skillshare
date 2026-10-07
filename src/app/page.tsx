@@ -62,6 +62,7 @@ import {
   AdminMonitoring,
   AdminAIAnalytics,
   AdminSecurity,
+  AdminSiteImages,
 } from "@/components/admin/views";
 
 function Router() {
@@ -142,6 +143,7 @@ function Router() {
       case "monitoring": content = <AdminMonitoring />; break;
       case "ai-analytics": content = <AdminAIAnalytics />; break;
       case "security": content = <AdminSecurity />; break;
+      case "site-images": content = <AdminSiteImages />; break;
       default: content = <AdminDashboard />;
     }
   }

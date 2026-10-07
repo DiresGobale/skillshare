@@ -42,7 +42,8 @@ export type AdminView =
   | "config"
   | "monitoring"
   | "ai-analytics"
-  | "security";
+  | "security"
+  | "site-images";
 
 export type View = GuestView | SeekerView | EmployerView | AdminView;
 

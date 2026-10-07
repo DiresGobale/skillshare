@@ -73,6 +73,11 @@ import {
   Mail,
   X,
   Calendar,
+  Image as ImageIcon,
+  Eye,
+  EyeOff,
+  ArrowUp,
+  ArrowDown,
 } from "lucide-react";
 
 function PageContainer({ children, className }: { children: React.ReactNode; className?: string }) {
@@ -2266,6 +2271,312 @@ export function AdminSecurity() {
           </div>
         </>
       )}
+    </PageContainer>
+  );
+}
+
+// ============================================================
+// SITE IMAGES — manage home page group photos and other content images
+// ============================================================
+export function AdminSiteImages() {
+  const { toast } = useToast();
+  const { data, loading, refetch } = useFetch<any>("/api/site-images?category=all&includeInactive=true");
+  const images: any[] = data?.images ?? [];
+
+  const [addOpen, setAddOpen] = useState(false);
+  const [editing, setEditing] = useState<any | null>(null);
+  const [saving, setSaving] = useState(false);
+
+  // Add form state
+  const [key, setKey] = useState("");
+  const [src, setSrc] = useState("");
+  const [alt, setAlt] = useState("");
+  const [caption, setCaption] = useState("");
+  const [description, setDescription] = useState("");
+  const [accent, setAccent] = useState("from-violet-500 to-blue-500");
+  const [category, setCategory] = useState("home");
+  const [sortOrder, setSortOrder] = useState(1);
+  const [isActive, setIsActive] = useState(true);
+
+  const accentOptions = [
+    { label: "Violet→Blue", value: "from-violet-500 to-blue-500" },
+    { label: "Emerald→Cyan", value: "from-emerald-500 to-cyan-500" },
+    { label: "Amber→Rose", value: "from-amber-500 to-rose-500" },
+    { label: "Fuchsia→Purple", value: "from-fuchsia-500 to-purple-500" },
+    { label: "Blue→Cyan", value: "from-blue-500 to-cyan-500" },
+    { label: "Rose→Orange", value: "from-rose-500 to-orange-500" },
+  ];
+
+  const resetForm = () => {
+    setKey(""); setSrc(""); setAlt(""); setCaption(""); setDescription("");
+    setAccent("from-violet-500 to-blue-500"); setCategory("home"); setSortOrder(1); setIsActive(true);
+    setEditing(null);
+  };
+
+  const openAdd = () => { resetForm(); setAddOpen(true); };
+
+  const openEdit = (img: any) => {
+    setEditing(img);
+    setKey(img.key); setSrc(img.src); setAlt(img.alt);
+    setCaption(img.caption ?? ""); setDescription(img.description ?? "");
+    setAccent(img.accent); setCategory(img.category);
+    setSortOrder(img.sortOrder); setIsActive(img.isActive);
+    setAddOpen(true);
+  };
+
+  const handleFileUpload = (file: File) => {
+    if (!file.type.startsWith("image/")) {
+      toast({ title: "Invalid file", description: "Please select an image file." });
+      return;
+    }
+    if (file.size > 2 * 1024 * 1024) {
+      toast({ title: "File too large", description: "Max 2MB for uploaded images." });
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => setSrc(reader.result as string);
+    reader.readAsDataURL(file);
+  };
+
+  const save = async () => {
+    if (!key.trim() || !src.trim() || !alt.trim()) {
+      toast({ title: "Required fields missing", description: "Key, image source, and alt text are required." });
+      return;
+    }
+    setSaving(true);
+    try {
+      const payload = {
+        key: key.trim(), src, alt,
+        caption: caption || null, description: description || null,
+        accent, category, sortOrder: Number(sortOrder), isActive,
+      };
+      const res = await fetch("/api/site-images", {
+        method: editing ? "PATCH" : "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(editing ? { id: editing.id, ...payload } : payload),
+      });
+      const json = await res.json();
+      if (json.ok) {
+        toast({ title: editing ? "Image updated" : "Image created", description: `"${key}" has been ${editing ? "updated" : "added"} successfully.` });
+        setAddOpen(false); resetForm(); refetch();
+      } else {
+        toast({ title: "Save failed", description: json.error ?? "Unknown error." });
+      }
+    } catch {
+      toast({ title: "Network error", description: "Please try again." });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const toggleActive = async (img: any) => {
+    try {
+      await fetch("/api/site-images", {
+        method: "PATCH", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: img.id, isActive: !img.isActive }),
+      });
+      refetch();
+      toast({ title: img.isActive ? "Image hidden" : "Image shown", description: `"${img.key}" is now ${img.isActive ? "hidden" : "visible"} on the site.` });
+    } catch {
+      toast({ title: "Failed to toggle", description: "Please try again." });
+    }
+  };
+
+  const moveOrder = async (img: any, direction: "up" | "down") => {
+    const sorted = [...images].sort((a, b) => a.sortOrder - b.sortOrder);
+    const idx = sorted.findIndex((i) => i.id === img.id);
+    const swapIdx = direction === "up" ? idx - 1 : idx + 1;
+    if (swapIdx < 0 || swapIdx >= sorted.length) return;
+    const swapImg = sorted[swapIdx];
+    await Promise.all([
+      fetch("/api/site-images", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: img.id, sortOrder: swapImg.sortOrder }) }),
+      fetch("/api/site-images", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: swapImg.id, sortOrder: img.sortOrder }) }),
+    ]);
+    refetch();
+  };
+
+  const deleteImage = async (img: any) => {
+    if (!confirm(`Delete "${img.key}"? This cannot be undone.`)) return;
+    try {
+      await fetch(`/api/site-images?id=${img.id}`, { method: "DELETE" });
+      refetch();
+      toast({ title: "Image deleted", description: `"${img.key}" has been removed.` });
+    } catch {
+      toast({ title: "Delete failed", description: "Please try again." });
+    }
+  };
+
+  return (
+    <PageContainer>
+      <SectionHeader
+        title="Site Images"
+        description="Manage images shown on the Home page and other public pages. Changes here are reflected immediately on the live site."
+        icon={<ImageIcon className="h-4 w-4" />}
+        actions={<Button className="btn-rainbow" onClick={openAdd}><Plus className="h-4 w-4" /> Add image</Button>}
+      />
+
+      <div className="mt-6">
+        <InfoCallout>
+          <span className="font-medium">How this works:</span> Images are stored in the database and served via the <code className="rounded bg-muted px-1 py-0.5 text-[11px]">/api/site-images</code> API. The Home page fetches from this API and renders whatever images are active here. Use the toggle to show/hide images, the arrows to reorder, and the edit button to change captions, alt text, or the image source.
+        </InfoCallout>
+      </div>
+
+      <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        {loading ? (
+          [0, 1, 2].map((i) => (
+            <div key={i} className="aspect-[4/3] animate-pulse rounded-xl border border-border bg-muted/40" />
+          ))
+        ) : images.length === 0 ? (
+          <div className="col-span-full">
+            <EmptyState icon={<ImageIcon className="h-5 w-5" />} title="No site images yet" description="Add your first image to get started." action={<Button size="sm" onClick={openAdd}><Plus className="h-3.5 w-3.5" /> Add image</Button>} />
+          </div>
+        ) : (
+          images.slice().sort((a, b) => a.sortOrder - b.sortOrder).map((img) => (
+            <Card key={img.id} className={cn("overflow-hidden", !img.isActive && "opacity-60")}>
+              <div className="relative aspect-[4/3] overflow-hidden bg-muted">
+                <img src={img.src} alt={img.alt} className="h-full w-full object-cover" loading="lazy" />
+                <div className={cn("absolute inset-0 bg-gradient-to-t opacity-40 mix-blend-multiply", img.accent)} />
+                <div className="absolute top-2 right-2 flex gap-1">
+                  <Badge variant="outline" className={cn("text-[10px] backdrop-blur", img.isActive ? "bg-emerald-50 text-emerald-700 border-emerald-200" : "bg-slate-100 text-slate-600 border-slate-200")}>
+                    {img.isActive ? "Active" : "Hidden"}
+                  </Badge>
+                  <Badge variant="outline" className="text-[10px] backdrop-blur bg-white/90 text-foreground border-border">{img.category}</Badge>
+                </div>
+                <div className="absolute bottom-2 left-2 right-2">
+                  <p className="text-xs font-semibold text-white drop-shadow">{img.caption || img.key}</p>
+                </div>
+              </div>
+              <CardContent className="p-3 space-y-2">
+                <div>
+                  <p className="text-xs font-semibold truncate">{img.key}</p>
+                  <p className="text-[10px] text-muted-foreground truncate">{img.alt}</p>
+                </div>
+                <div className="flex items-center justify-between gap-1">
+                  <div className="flex items-center gap-0.5">
+                    <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => moveOrder(img, "up")} title="Move up"><ArrowUp className="h-3.5 w-3.5" /></Button>
+                    <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => moveOrder(img, "down")} title="Move down"><ArrowDown className="h-3.5 w-3.5" /></Button>
+                    <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => toggleActive(img)} title={img.isActive ? "Hide" : "Show"}>{img.isActive ? <Eye className="h-3.5 w-3.5" /> : <EyeOff className="h-3.5 w-3.5" />}</Button>
+                  </div>
+                  <div className="flex items-center gap-0.5">
+                    <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => openEdit(img)}><Edit className="h-3 w-3" /> Edit</Button>
+                    <Button size="icon" variant="ghost" className="h-7 w-7 text-rose-600" onClick={() => deleteImage(img)} title="Delete"><Trash2 className="h-3.5 w-3.5" /></Button>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          ))
+        )}
+      </div>
+
+      {/* Add / Edit dialog */}
+      <Dialog open={addOpen} onOpenChange={(o) => { setAddOpen(o); if (!o) resetForm(); }}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>{editing ? `Edit image: ${editing.key}` : "Add a new site image"}</DialogTitle>
+            <DialogDescription>
+              {editing ? "Update the image properties. Changes take effect immediately on the live site." : "Add a new image to the site. It will appear on the page specified by its category."}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3 py-2 max-h-[60vh] overflow-y-auto">
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div className="space-y-1.5">
+                <Label htmlFor="img-key">Key (unique identifier) *</Label>
+                <Input id="img-key" placeholder="e.g. home-group-5" value={key} onChange={(e) => setKey(e.target.value)} disabled={!!editing} />
+                <p className="text-[11px] text-muted-foreground">Used internally. Cannot be changed after creation.</p>
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="img-category">Category *</Label>
+                <Select value={category} onValueChange={setCategory}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="home">Home — group photos</SelectItem>
+                    <SelectItem value="home-hero">Home — hero image</SelectItem>
+                    <SelectItem value="about">About page</SelectItem>
+                    <SelectItem value="landing">Landing page</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            <div className="space-y-1.5">
+              <Label htmlFor="img-src">Image source *</Label>
+              <Input
+                id="img-src"
+                placeholder="/groups/group1.jpg  or  https://example.com/image.jpg"
+                value={src.startsWith("data:") ? "(uploaded image — see below)" : src}
+                onChange={(e) => setSrc(e.target.value)}
+                disabled={src.startsWith("data:")}
+              />
+              <p className="text-[11px] text-muted-foreground">Enter a URL/path, or upload a file below.</p>
+              <div className="flex items-center gap-2">
+                <input type="file" accept="image/*" id="img-file" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) handleFileUpload(f); e.target.value = ""; }} />
+                <Button type="button" variant="outline" size="sm" onClick={() => document.getElementById("img-file")?.click()}>
+                  <ImageIcon className="h-3.5 w-3.5" /> Upload file (max 2MB)
+                </Button>
+                {src.startsWith("data:") && (
+                  <Button type="button" variant="ghost" size="sm" onClick={() => setSrc("")}><X className="h-3.5 w-3.5" /> Clear upload</Button>
+                )}
+              </div>
+              {src && (
+                <div className="mt-2 overflow-hidden rounded-lg border border-border">
+                  <img src={src} alt="Preview" className="h-32 w-full object-cover" />
+                </div>
+              )}
+            </div>
+
+            <div className="space-y-1.5">
+              <Label htmlFor="img-alt">Alt text (accessibility) *</Label>
+              <Input id="img-alt" placeholder="Describe the image for screen readers" value={alt} onChange={(e) => setAlt(e.target.value)} />
+            </div>
+
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div className="space-y-1.5">
+                <Label htmlFor="img-caption">Caption (short)</Label>
+                <Input id="img-caption" placeholder="e.g. Collaborative engineering" value={caption} onChange={(e) => setCaption(e.target.value)} />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="img-sort">Sort order</Label>
+                <Input id="img-sort" type="number" min="0" value={sortOrder} onChange={(e) => setSortOrder(Number(e.target.value))} />
+              </div>
+            </div>
+
+            <div className="space-y-1.5">
+              <Label htmlFor="img-desc">Description (longer, shown on image)</Label>
+              <Textarea id="img-desc" rows={2} placeholder="Longer description shown over the image" value={description} onChange={(e) => setDescription(e.target.value)} className="resize-none" />
+            </div>
+
+            <div className="space-y-1.5">
+              <Label>Accent gradient</Label>
+              <div className="flex flex-wrap gap-2">
+                {accentOptions.map((a) => (
+                  <button key={a.value} type="button" onClick={() => setAccent(a.value)} className={cn("flex items-center gap-1.5 rounded-md border px-2.5 py-1.5 text-xs font-medium transition-all", accent === a.value ? "border-primary ring-2 ring-primary/30 bg-primary/5" : "border-border hover:bg-accent")}>
+                    <span className={cn("h-3 w-3 rounded-full bg-gradient-to-br", a.value)} />
+                    {a.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="flex items-center justify-between rounded-lg border border-border p-3">
+              <div>
+                <p className="text-xs font-semibold">Active (visible on site)</p>
+                <p className="text-[11px] text-muted-foreground">Toggle off to hide without deleting</p>
+              </div>
+              <Switch checked={isActive} onCheckedChange={setIsActive} />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setAddOpen(false)}>Cancel</Button>
+            <Button className="btn-blue" onClick={save} disabled={saving || !key.trim() || !src.trim() || !alt.trim()}>
+              {saving ? (
+                <><span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-primary-foreground border-t-transparent" /> Saving…</>
+              ) : (
+                <>{editing ? <Edit className="h-3.5 w-3.5" /> : <Plus className="h-3.5 w-3.5" />} {editing ? "Save changes" : "Add image"}</>
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </PageContainer>
   );
 }

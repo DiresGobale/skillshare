@@ -192,3 +192,24 @@ model AuditLog {
   @@index([type])
   @@index([createdAt])
 }
+
+// ============================================================
+// SITE IMAGES — managed content images (home page group photos, etc.)
+// ============================================================
+model SiteImage {
+  id          String   @id @default(cuid())
+  key         String   @unique          // e.g. "home-group-1", "home-hero"
+  src         String                    // URL path ("/groups/group1.jpg") or data URL
+  alt         String                    // accessibility alt text
+  caption     String?                   // short caption shown on the image
+  description String?                   // longer description shown on the image
+  accent      String   @default("from-violet-500 to-blue-500") // tailwind gradient classes
+  category    String   @default("home") // home | about | landing | etc.
+  sortOrder   Int      @default(0)      // lower = first
+  isActive    Boolean  @default(true)   // soft-delete / hide toggle
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([category])
+  @@index([isActive])
+}

@@ -34,6 +34,7 @@ import {
   CalendarClock,
   Cpu,
   Server,
+  Image as ImageIcon,
 } from "lucide-react";
 import type { Role } from "@/lib/types";
 
@@ -79,6 +80,7 @@ const adminNav: NavItem[] = [
   { label: "Activity Monitoring", view: "activity", icon: <Activity className="h-4 w-4" /> },
   { label: "System Monitoring", view: "monitoring", icon: <Server className="h-4 w-4" /> },
   { label: "Security & Compliance", view: "security", icon: <ShieldCheck className="h-4 w-4" /> },
+  { label: "Site Images", view: "site-images", icon: <ImageIcon className="h-4 w-4" /> },
   { label: "System Settings", view: "config", icon: <Settings className="h-4 w-4" /> },
 ];
 

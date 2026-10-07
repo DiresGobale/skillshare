@@ -247,3 +247,71 @@ Stage Summary:
 - Privacy Policy (11 sections) and Terms of Use (15 sections) pages live, accessible from footer + login/register form links. Standard legal content covering GDPR, data retention, security, acceptable use, IP, liability, governing law (Kenya).
 - 4 admin buttons fully functional: Invite user, Add skill, New skill node, New category — each opens a dialog with validated form fields, persists an audit log entry via the new POST /api/admin/audit endpoint, shows a toast confirmation, and (for New category) updates the UI immediately.
 - New POST /api/admin/audit endpoint added so admin actions are permanently logged (was GET-only before).
+
+---
+Task ID: 7
+Agent: main (Super Z)
+Task: Make all Home Page images fully responsive (mobile/tablet/desktop) and connect all images to the database for management.
+
+Work Log:
+PART 1 — Database-backed image management:
+- Added a new `SiteImage` model to prisma/schema.prisma with fields: id, key (unique), src, alt, caption, description, accent (gradient classes), category, sortOrder, isActive, createdAt, updatedAt. Indexed on category and isActive for fast lookups.
+- Ran `prisma db push` + `prisma generate` to sync the schema and regenerate the client.
+- Created `/api/site-images` API route with full CRUD:
+  * GET — public, returns active images for a category (?category=home). Supports ?includeInactive=true and ?category=all for admin (requires admin auth).
+  * POST — admin only, creates a new site image with validation (unique key check).
+  * PATCH — admin only, updates any field of an existing image by id.
+  * DELETE — admin only, deletes an image by id.
+  All admin operations (POST/PATCH/DELETE) write an audit log entry via db.auditLog.create.
+- Created scripts/seed-site-images.ts and seeded 5 images into the DB: 4 group photos (home-group-1 through 4) + 1 hero image (home-hero). Each with proper alt text, captions, descriptions, accent gradients, and sort order.
+- Created a `useSiteImages(category)` React hook in guest/views.tsx that fetches from the API and falls back to GROUP_PHOTOS_FALLBACK on error so the page never breaks.
+
+PART 2 — Home Page images now DB-driven:
+- HomeHero: replaced the hardcoded `src="/groups/group1.jpg"` with `heroImage?.src` fetched from the `useSiteImages("home-hero")` hook. Alt text is also DB-driven.
+- HomeGroupPhotos: replaced the hardcoded GROUP_PHOTOS array with `useSiteImages("home")` hook. All 4 group photos now render from the DB. Added loading skeletons (animated pulse placeholders) while fetching. Falls back to hardcoded array if the API fails.
+
+PART 3 — Full responsiveness:
+HomeHero image (was `hidden lg:block` with fixed `h-[420px]` — invisible on mobile/tablet):
+- Now visible on ALL screen sizes (removed `hidden lg:block`).
+- Uses responsive aspect ratios: `aspect-[4/3]` on mobile, `aspect-[16/10]` on tablet, `aspect-[4/3]` on desktop, `aspect-[16/11]` on xl — adapts to screen size without fixed pixel heights.
+- Image uses `absolute inset-0 h-full w-full object-cover` inside an aspect-ratio container — prevents layout shift.
+- Added `width={1344} height={768}` hints to prevent CLS (Cumulative Layout Shift).
+- Container has responsive max-width: `max-w-md` on mobile, `sm:max-w-lg` on tablet, `lg:max-w-none` on desktop.
+- Floating side cards: `hidden sm:block` (hidden on mobile, shown on tablet+), with responsive sizes/padding.
+- Floating stat badge: responsive padding/font sizes (`text-[9px]` on mobile → `sm:text-[10px]`, `text-sm` → `sm:text-lg`).
+- Buttons: `w-full sm:w-auto` (full-width on mobile, auto on tablet+), responsive heights/font sizes.
+- Headings: `text-3xl` on mobile → `sm:text-4xl` → `lg:text-5xl` → `xl:text-6xl`.
+
+HomeGroupPhotos grid (was `sm:grid-cols-2` with fixed `aspect-[16/9]`):
+- Grid: `gap-4` on mobile → `sm:gap-5` → `lg:gap-6` (tighter gaps on small screens).
+- Images: `aspect-[4/3]` on mobile (taller, fills more of the narrow screen) → `sm:aspect-[16/9]` on tablet+ (wider, standard landscape).
+- Added `width={1344} height={768}` hints to prevent CLS.
+- Captions: responsive padding (`p-3` on mobile → `sm:p-4` → `lg:p-5`), responsive font sizes.
+- Number badges: `h-7 w-7` on mobile → `sm:h-8` → `lg:h-9` with responsive text sizes.
+- Section padding: `py-12` on mobile → `sm:py-16` → `lg:py-24`.
+- Added loading skeletons: 4 animated pulse placeholders while images fetch from the DB.
+
+PART 4 — Admin management UI:
+- Added "Site Images" to the admin sidebar navigation (with ImageIcon).
+- Added `"site-images"` to AdminView type in app-context.tsx.
+- Created AdminSiteImages component with:
+  * Grid of image cards showing preview, key, alt text, category badge, active/hidden badge.
+  * "Add image" button (btn-rainbow gradient) that opens a dialog with: key, category dropdown, image source (URL or file upload with preview), alt text, caption, sort order, description, accent gradient picker (6 options), active toggle.
+  * Per-card actions: Move up/down (swaps sortOrder), Toggle active/inactive (eye icon), Edit (opens same dialog pre-filled), Delete (with confirmation).
+  * All changes persist to the DB via the API and show toast confirmations.
+  * Audit log entries for create/update/delete.
+- File upload support: admins can upload an image file (max 2MB) which is converted to a base64 data URL and stored in the DB. Also supports entering a URL/path like "/groups/group1.jpg".
+
+Verification:
+- Server running, 0 JWT errors.
+- GET /api/site-images?category=home → 200 OK, returns 4 group photos.
+- GET /api/site-images?category=home-hero → 200 OK, returns 1 hero image.
+- GET /api/site-images?category=all&includeInactive=true (admin) → 200 OK, returns all 5 images.
+- Home page renders 200 OK with DB-driven images.
+- Admin can add/edit/delete/toggle/reorder images — changes reflect immediately on the live home page.
+- 0 new TypeScript errors (2 pre-existing errors in unrelated lines remain).
+
+Stage Summary:
+- All Home Page images are now fully responsive: hero image visible on mobile/tablet/desktop (was hidden on mobile before), group photos use responsive aspect ratios (4:3 on mobile, 16:9 on tablet+), all text/badges/buttons scale with screen size, loading skeletons prevent layout shift.
+- All images are managed through the database via the SiteImage model and /api/site-images API. Admins can add, edit, delete, reorder, show/hide images from the new "Site Images" admin page. Changes take effect immediately on the live site.
+- The home page fetches images from the API at runtime with a fallback to hardcoded data — so the page works even if the DB is temporarily unavailable.
