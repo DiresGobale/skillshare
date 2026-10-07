@@ -1,11 +1,10 @@
 "use client";
 
-import React, { useEffect } from "react";
+import React from "react";
 import { useSession } from "next-auth/react";
 import { AppProvider, useApp } from "@/lib/app-context";
 import { TooltipProvider } from "@/components/shared/ui";
 import { AppShell } from "@/components/chrome/app-shell";
-import { Admin2FAGate } from "@/components/chrome/admin-gate";
 import { PageTransition } from "@/components/chrome/page-transition";
 // Guest views
 import {
@@ -65,26 +64,7 @@ import {
 
 function Router() {
   const { data: session, status } = useSession();
-  const { role, view, user, isAdminUnlocked, lockAdmin, go } = useApp();
-
-  // ---------- ADMIN AUTO-LOCK AFTER 30 MIN INACTIVITY ----------
-  useEffect(() => {
-    if (role !== "admin" || !isAdminUnlocked) return;
-    let timer: ReturnType<typeof setTimeout>;
-    const reset = () => {
-      clearTimeout(timer);
-      timer = setTimeout(() => {
-        lockAdmin();
-      }, 30 * 60 * 1000); // 30 minutes
-    };
-    const events = ["mousedown", "keydown", "touchstart", "scroll"];
-    events.forEach((e) => window.addEventListener(e, reset, { passive: true }));
-    reset();
-    return () => {
-      clearTimeout(timer);
-      events.forEach((e) => window.removeEventListener(e, reset));
-    };
-  }, [role, isAdminUnlocked, lockAdmin]);
+  const { role, view, go } = useApp();
 
   // ---------- LOADING STATE ----------
   if (status === "loading") {
@@ -104,20 +84,12 @@ function Router() {
     if (view === "register") return <Register />;
     if (view === "home") return <HomePage />;
     if (view === "faq") return <FAQPage />;
+    if (view === "landing") return <Landing />;
     if (view === "public-jobs") return <PublicJobs />;
     if (view === "public-job-detail") return <PublicJobDetail />;
     if (view === "about") return <AboutPage />;
     if (view === "contact") return <ContactPage />;
     return <Landing />;
-  }
-
-  // ---------- ADMIN 2FA GATE ----------
-  // Show the 2FA gate if the user is an admin and hasn't unlocked the session yet.
-  // NextAuth has already validated the password+TOTP at login, but we keep a
-  // soft client-side gate that re-locks after 30 min of inactivity without
-  // forcing a full re-login.
-  if (role === "admin" && !isAdminUnlocked) {
-    return <Admin2FAGate />;
   }
 
   // ---------- AUTHENTICATED VIEWS ----------

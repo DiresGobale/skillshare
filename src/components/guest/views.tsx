@@ -107,6 +107,7 @@ function PublicHeader({ onAuth }: { onAuth: (r: "login" | "register") => void })
 
   const navLinks = [
     { label: "Home", view: "home" as const },
+    { label: "How it works", view: "landing" as const },
     { label: "Browse jobs", view: "public-jobs" as const },
     { label: "FAQ", view: "faq" as const },
     { label: "About", view: "about" as const },
@@ -1315,10 +1316,7 @@ export function Login() {
 
       // Success — reload so the server-rendered session hydrates.
       // The page.tsx router will redirect to the correct dashboard based on role.
-      // For admins, it will show the 2FA gate which sends an email OTP.
-      setStatus(checkData.role === "admin"
-        ? "Success! Redirecting to email verification…"
-        : "Success! Redirecting to your dashboard…");
+      setStatus("Success! Redirecting to your dashboard…");
       window.location.assign("/");
     } catch {
       setError("Network error. Please try again.");
@@ -1611,11 +1609,6 @@ export function Login() {
                   >
                     {acc.role}
                   </Badge>
-                  {acc.role === "admin" && (
-                    <Badge variant="outline" className="text-[10px] bg-emerald-50 text-emerald-700 border-emerald-200 gap-1">
-                      <ShieldCheck className="h-2.5 w-2.5" /> 2FA
-                    </Badge>
-                  )}
                 </div>
                 <p className="truncate text-xs text-muted-foreground">{acc.blurb}</p>
                 <p className="truncate text-[10px] text-muted-foreground font-mono mt-0.5">{acc.email}</p>

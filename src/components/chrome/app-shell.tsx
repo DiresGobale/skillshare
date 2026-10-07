@@ -34,7 +34,6 @@ import {
   CalendarClock,
   Cpu,
   Server,
-  Lock,
 } from "lucide-react";
 import type { Role } from "@/lib/types";
 
@@ -501,7 +500,7 @@ function Topbar({ onToggleMobile, mobileOpen }: { onToggleMobile: () => void; mo
 // MAIN LAYOUT — sidebar + topbar + content
 // ============================================================
 export function AppShell({ children }: { children: React.ReactNode }) {
-  const { role, view, go, isAdminUnlocked, lockAdmin } = useApp();
+  const { role, view, go } = useApp();
   const [mobileOpen, setMobileOpen] = useState(false);
 
   return (
@@ -523,22 +522,6 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       {/* Main */}
       <div className="flex min-w-0 flex-1 flex-col">
         <Topbar onToggleMobile={() => setMobileOpen((v) => !v)} mobileOpen={mobileOpen} />
-        {/* Admin security banner */}
-        {role === "admin" && isAdminUnlocked && (
-          <div className="flex items-center justify-between gap-3 border-b border-amber-200 bg-amber-50 px-4 py-1.5 text-xs text-amber-900 lg:px-6">
-            <div className="flex items-center gap-2">
-              <ShieldCheck className="h-3.5 w-3.5" />
-              <span className="font-medium">Admin session unlocked</span>
-              <span className="hidden text-amber-700 sm:inline">· auto-locks after 30 min of inactivity</span>
-            </div>
-            <button
-              onClick={() => lockAdmin()}
-              className="flex items-center gap-1 rounded px-2 py-0.5 font-medium text-amber-900 hover:bg-amber-100"
-            >
-              <Lock className="h-3 w-3" /> Lock now
-            </button>
-          </div>
-        )}
         <main className="flex-1">{children}</main>
       </div>
     </div>

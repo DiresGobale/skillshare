@@ -158,3 +158,34 @@ Stage Summary:
 - All three roles (seeker, employer, admin) can log in and access their dashboards.
 - The .env file has all required vars: DATABASE_URL, NEXTAUTH_SECRET, NEXTAUTH_URL.
 - To restart the server in future if needed: run `setsid /home/z/my-project/scripts/daemon-start.sh`
+
+---
+Task ID: 5
+Agent: main (Super Z)
+Task: (1) Remove admin 2FA verification — admin should login with just email + password like other roles. (2) Add "How it works" nav button that shows the full landing page on click.
+
+Work Log:
+- Removed the Admin2FAGate from the Router in src/app/page.tsx:
+  * Deleted the `import { Admin2FAGate }` line
+  * Deleted the `if (role === "admin" && !isAdminUnlocked) return <Admin2FAGate />` block
+  * Deleted the admin auto-lock useEffect (30-min inactivity timer)
+  * Removed unused `useEffect` import and `isAdminUnlocked`/`lockAdmin`/`user` from destructure
+  * Added `if (view === "landing") return <Landing />` to guest routing so the landing page is accessible via nav
+- Removed the admin security banner from AppShell (src/components/chrome/app-shell.tsx):
+  * Deleted the `isAdminUnlocked`/`lockAdmin` destructure
+  * Deleted the amber "Admin session unlocked · auto-locks after 30 min" banner JSX
+  * Removed unused `Lock` icon import
+- Updated Login component (src/components/guest/views.tsx):
+  * Changed the post-login status message from role-conditional ("Redirecting to email verification…" for admin) to universal ("Success! Redirecting to your dashboard…")
+  * Removed the "2FA" badge from the admin demo account card on the login page
+- Updated demo-accounts.ts: changed admin blurb from "Admin · full platform access · 2FA enabled" to "Admin · full platform access"
+- Added "How it works" to the public nav links (src/components/guest/views.tsx):
+  * navLinks array now includes `{ label: "How it works", view: "landing" as const }` between Home and Browse jobs
+  * This appears in both the desktop nav bar and the mobile slide-down panel
+  * Clicking it sets view="landing", which the Router renders as <Landing /> (the full landing page with hero, features, how-it-works steps, and CTA)
+- The footer already had a "How it works" link pointing to landing — no change needed there.
+
+Stage Summary:
+- Admin 2FA completely removed. Admin now logs in with just email + password and goes straight to the admin dashboard. No OTP gate, no auto-lock, no security banner. Verified via curl: admin@demo.com login returns 302, session is created, /api/admin/stats returns 200 — all without any OTP step.
+- "How it works" nav button added to the public header (desktop + mobile). Clicking it navigates to the full landing page which includes: hero section, features grid, "How it works" step-by-step section (for job seekers and employers), and a CTA banner.
+- All changes compile cleanly (0 TypeScript errors in edited files). Dev server running with 0 errors in log.
