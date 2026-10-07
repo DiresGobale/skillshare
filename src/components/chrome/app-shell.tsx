@@ -32,6 +32,8 @@ import {
   Zap,
   ShieldCheck,
   CalendarClock,
+  Cpu,
+  Server,
   Lock,
 } from "lucide-react";
 import type { Role } from "@/lib/types";
@@ -72,9 +74,12 @@ const adminNav: NavItem[] = [
   { label: "Skills Database", view: "skills", icon: <Sparkles className="h-4 w-4" /> },
   { label: "Skill Ontology", view: "skill-ontology", icon: <GitBranch className="h-4 w-4" /> },
   { label: "Jobs & Categories", view: "jobs", icon: <Briefcase className="h-4 w-4" /> },
+  { label: "AI Analytics", view: "ai-analytics", icon: <Cpu className="h-4 w-4" /> },
   { label: "Reports & Analytics", view: "reports", icon: <BarChart3 className="h-4 w-4" /> },
   { label: "Activity Monitoring", view: "activity", icon: <Activity className="h-4 w-4" /> },
-  { label: "System Config", view: "config", icon: <Settings className="h-4 w-4" /> },
+  { label: "System Monitoring", view: "monitoring", icon: <Server className="h-4 w-4" /> },
+  { label: "Security & Compliance", view: "security", icon: <ShieldCheck className="h-4 w-4" /> },
+  { label: "System Settings", view: "config", icon: <Settings className="h-4 w-4" /> },
 ];
 
 function getNav(role: Role): NavItem[] {

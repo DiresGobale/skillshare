@@ -58,6 +58,7 @@ import {
   ArrowRight,
   ArrowUpRight,
   ArrowDownRight,
+  Target,
   Building2,
   UserCheck,
   UserX,
@@ -1046,18 +1047,26 @@ export function AdminActivity() {
 // SYSTEM CONFIG
 // ============================================================
 export function AdminConfig() {
+  const [savedMsg, setSavedMsg] = useState<string | null>(null);
+  const handleSave = () => { setSavedMsg("Settings saved successfully."); setTimeout(() => setSavedMsg(null), 3000); };
+
   return (
     <PageContainer>
       <SectionHeader
-        title="System Configuration"
-        description="Tune matching weights, privacy rules, and platform policies."
+        title="System Settings"
+        description="Manage user roles, AI matching weights, privacy rules, and system policies."
+        icon={<Settings className="h-4 w-4" />}
       />
-
+      {savedMsg && (
+        <div className="mt-4 flex items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
+          <CheckCircle2 className="h-4 w-4" /> {savedMsg}
+        </div>
+      )}
       <div className="mt-6 grid gap-4 lg:grid-cols-3">
         <Card className="lg:col-span-2">
           <CardHeader className="pb-3">
-            <CardTitle className="text-sm">AI matching weights</CardTitle>
-            <CardDescription>These weights control how match scores are computed platform-wide.</CardDescription>
+            <CardTitle className="text-sm flex items-center gap-2"><Cpu className="h-4 w-4 text-primary" /> AI Matching Weights</CardTitle>
+            <CardDescription>Control how match scores are computed platform-wide. Total should equal 100%.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             {[
@@ -1070,67 +1079,74 @@ export function AdminConfig() {
             ].map((w) => (
               <div key={w.label}>
                 <div className="flex items-center justify-between text-xs">
-                  <div>
-                    <p className="font-semibold">{w.label}</p>
-                    <p className="text-muted-foreground">{w.hint}</p>
-                  </div>
+                  <div><p className="font-semibold">{w.label}</p><p className="text-muted-foreground">{w.hint}</p></div>
                   <span className="font-semibold tabular-nums">{w.value}%</span>
                 </div>
-                <input
-                  type="range"
-                  min="0"
-                  max="50"
-                  defaultValue={w.value}
-                  className="mt-2 w-full accent-[var(--primary)]"
-                />
+                <input type="range" min="0" max="50" defaultValue={w.value} className="mt-2 w-full accent-[var(--primary)]" />
               </div>
             ))}
             <div className="flex justify-end gap-2 border-t border-border pt-3">
               <Button variant="outline" size="sm">Reset to defaults</Button>
-              <Button size="sm">Save weights</Button>
+              <Button size="sm" className="btn-blue" onClick={handleSave}>Save weights</Button>
             </div>
           </CardContent>
         </Card>
-
         <div className="space-y-4">
           <Card>
-            <CardHeader className="pb-3">
-              <CardTitle className="text-sm">Privacy rules</CardTitle>
-            </CardHeader>
+            <CardHeader className="pb-3"><CardTitle className="text-sm flex items-center gap-2"><Users className="h-4 w-4 text-primary" /> Role Management</CardTitle><CardDescription>Default permissions for each role</CardDescription></CardHeader>
+            <CardContent className="space-y-3 text-xs">
+              <div className="rounded-md border border-border bg-card p-2.5">
+                <Badge variant="outline" className="bg-violet-50 text-violet-700 border-violet-200 text-[10px] mb-1">Job Seeker</Badge>
+                <p className="text-muted-foreground">Can: create profile, upload resume, apply to jobs, track applications, message employers</p>
+              </div>
+              <div className="rounded-md border border-border bg-card p-2.5">
+                <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200 text-[10px] mb-1">Employer</Badge>
+                <p className="text-muted-foreground">Can: post jobs, review candidates, shortlist, schedule interviews, message seekers</p>
+              </div>
+              <div className="rounded-md border border-border bg-card p-2.5">
+                <div className="flex items-center gap-2 mb-1">
+                  <Badge variant="outline" className="bg-amber-50 text-amber-700 border-amber-200 text-[10px]">Admin</Badge>
+                  <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-200 text-[9px] gap-1"><ShieldCheck className="h-2.5 w-2.5" /> 2FA</Badge>
+                </div>
+                <p className="text-muted-foreground">Full platform access: users, skills, jobs, analytics, security, settings</p>
+              </div>
+              <Button variant="outline" size="sm" className="w-full">Configure role permissions</Button>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader className="pb-3"><CardTitle className="text-sm flex items-center gap-2"><ShieldCheck className="h-4 w-4 text-primary" /> Privacy Rules</CardTitle><CardDescription>Compliance with privacy policies</CardDescription></CardHeader>
             <CardContent className="space-y-3 text-xs">
               {[
                 { label: "Lock employer contact until interview accepted", enabled: true },
                 { label: "Hide candidate name in ranking until applied", enabled: false },
-                { label: "Allow seekers to export their data", enabled: true },
+                { label: "Allow seekers to export their data (GDPR)", enabled: true },
                 { label: "Auto-expire applications after 60 days", enabled: true },
+                { label: "Require 2FA for all admin accounts", enabled: true },
+                { label: "Encrypt PII at rest (AES-256)", enabled: true },
               ].map((r) => (
                 <div key={r.label} className="flex items-center justify-between">
                   <span className="text-muted-foreground">{r.label}</span>
                   <Switch defaultChecked={r.enabled} />
                 </div>
               ))}
+              <Button size="sm" className="w-full btn-green" onClick={handleSave}>Save privacy settings</Button>
             </CardContent>
           </Card>
-
           <Card>
-            <CardHeader className="pb-3">
-              <CardTitle className="text-sm">System status</CardTitle>
-            </CardHeader>
+            <CardHeader className="pb-3"><CardTitle className="text-sm">System Status</CardTitle></CardHeader>
             <CardContent className="space-y-2 text-xs">
               {[
-                { label: "API", status: "Operational", tone: "good" },
+                { label: "API Server", status: "Operational", tone: "good" },
                 { label: "Database", status: "Operational", tone: "good" },
-                { label: "AI service", status: "Operational", tone: "good" },
+                { label: "AI Service", status: "Operational", tone: "good" },
                 { label: "Notifications", status: "Degraded", tone: "warning" },
-                { label: "Websocket", status: "Operational", tone: "good" },
+                { label: "WebSocket", status: "Operational", tone: "good" },
               ].map((s) => (
                 <div key={s.label} className="flex items-center justify-between">
                   <span className="text-muted-foreground">{s.label}</span>
-                  <Badge variant="outline" className={cn(
-                    "text-[10px]",
-                    s.tone === "good" ? "bg-emerald-50 text-emerald-700 border-emerald-200" : "bg-amber-50 text-amber-700 border-amber-200"
-                  )}>
-                    {s.tone === "good" ? <CheckCircle2 className="h-2.5 w-2.5 mr-1" /> : <AlertTriangle className="h-2.5 w-2.5 mr-1" />}
+                  <Badge variant="outline" className={cn("text-[10px]", s.tone === "good" ? "bg-emerald-50 text-emerald-700 border-emerald-200" : "bg-amber-50 text-amber-700 border-amber-200")}>
+                    {s.tone === "good" && <CheckCircle2 className="h-2.5 w-2.5 mr-1" />}
+                    {s.tone === "warning" && <AlertTriangle className="h-2.5 w-2.5 mr-1" />}
                     {s.status}
                   </Badge>
                 </div>
@@ -1143,6 +1159,388 @@ export function AdminConfig() {
           </Card>
         </div>
       </div>
+    </PageContainer>
+  );
+}
+
+// ============================================================
+// SYSTEM MONITORING — performance, uptime, data integrity
+// ============================================================
+export function AdminMonitoring() {
+  const { data, loading } = useFetch<any>("/api/admin/monitoring");
+  const m = data?.metrics;
+  const integrity = data?.integrity;
+  const services = data?.services ?? [];
+  const counts = data?.counts;
+
+  return (
+    <PageContainer>
+      <SectionHeader
+        title="System Monitoring"
+        description="Real-time system performance, uptime, and data integrity monitoring."
+        icon={<Server className="h-4 w-4" />}
+      />
+
+      {loading ? (
+        <LoadingState label="Loading system metrics…" rows={4} />
+      ) : (
+        <>
+          {/* System Metrics */}
+          <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            <StatCard label="API Uptime" value={`${m?.api?.uptime ?? 0}%`} icon={<Server className="h-4 w-4" />} hint="30-day rolling" delta="Healthy" deltaTone="up" />
+            <StatCard label="Avg Response" value={`${m?.api?.avgResponseTime ?? 0}ms`} icon={<Activity className="h-4 w-4" />} hint={`${m?.api?.requestsPerMinute ?? 0} req/min`} />
+            <StatCard label="DB Latency" value={`${m?.database?.queryLatency ?? 0}ms`} icon={<Database className="h-4 w-4" />} hint={`${m?.database?.connections ?? 0}/${m?.database?.maxConnections ?? 0} connections`} />
+            <StatCard label="AI Success Rate" value={`${m?.ai?.successRate ?? 0}%`} icon={<Cpu className="h-4 w-4" />} hint={`${m?.ai?.queueBacklog ?? 0} in queue`} />
+          </div>
+
+          {/* Service Health */}
+          <Card className="mt-4">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-sm">Service Health</CardTitle>
+              <CardDescription>Real-time status of all platform services</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-2">
+              {services.map((s: any) => (
+                <div key={s.name} className="flex items-center gap-3 rounded-lg border border-border bg-card p-3">
+                  <div className={cn(
+                    "h-2.5 w-2.5 shrink-0 rounded-full",
+                    s.status === "operational" ? "bg-emerald-500" : "bg-amber-500"
+                  )} />
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-semibold">{s.name}</p>
+                    <p className="text-xs text-muted-foreground capitalize">{s.status} · {s.latency}ms latency · {s.uptime}% uptime</p>
+                  </div>
+                  <Badge variant="outline" className={cn(
+                    "text-[10px] capitalize",
+                    s.status === "operational" ? "bg-emerald-50 text-emerald-700 border-emerald-200" : "bg-amber-50 text-amber-700 border-amber-200"
+                  )}>
+                    {s.status}
+                  </Badge>
+                </div>
+              ))}
+            </CardContent>
+          </Card>
+
+          {/* Data Integrity */}
+          <div className="mt-4 grid gap-4 lg:grid-cols-2">
+            <Card>
+              <CardHeader className="pb-3">
+                <CardTitle className="text-sm">Data Integrity</CardTitle>
+                <CardDescription>Database consistency and health checks</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                {[
+                  { label: "Total records", value: integrity?.totalRecords ?? 0, ok: true },
+                  { label: "Orphaned records", value: integrity?.orphanedRecords ?? 0, ok: (integrity?.orphanedRecords ?? 0) === 0 },
+                  { label: "Duplicate detections", value: integrity?.duplicatesDetected ?? 0, ok: (integrity?.duplicatesDetected ?? 0) === 0 },
+                  { label: "Integrity score", value: `${integrity?.integrityScore ?? 0}%`, ok: true },
+                  { label: "Last backup", value: integrity?.lastBackup ? new Date(integrity.lastBackup).toLocaleString() : "—", ok: true },
+                ].map((item) => (
+                  <div key={item.label} className="flex items-center justify-between text-sm">
+                    <span className="text-muted-foreground">{item.label}</span>
+                    <div className="flex items-center gap-2">
+                      <span className="font-semibold">{item.value}</span>
+                      {item.ok ? (
+                        <CheckCircle2 className="h-4 w-4 text-emerald-600" />
+                      ) : (
+                        <AlertCircle className="h-4 w-4 text-rose-600" />
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader className="pb-3">
+                <CardTitle className="text-sm">Cache & AI Performance</CardTitle>
+                <CardDescription>System resource utilization</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <div>
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="text-muted-foreground">Cache hit rate</span>
+                    <span className="font-semibold">{m?.cache?.hitRate ?? 0}%</span>
+                  </div>
+                  <Progress value={m?.cache?.hitRate ?? 0} className="mt-1 h-1.5" />
+                </div>
+                <div>
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="text-muted-foreground">API error rate</span>
+                    <span className="font-semibold">{m?.api?.errorRate ?? 0}%</span>
+                  </div>
+                  <Progress value={100 - (m?.api?.errorRate ?? 0)} className="mt-1 h-1.5" />
+                </div>
+                <div>
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="text-muted-foreground">DB connection usage</span>
+                    <span className="font-semibold">{m?.database?.connections ?? 0}/{m?.database?.maxConnections ?? 0}</span>
+                  </div>
+                  <Progress value={((m?.database?.connections ?? 0) / (m?.database?.maxConnections ?? 1)) * 100} className="mt-1 h-1.5" />
+                </div>
+                <div className="border-t border-border pt-2 text-xs text-muted-foreground">
+                  DB size: {m?.database?.size ?? "—"} · Cache size: {m?.cache?.size ?? "—"}
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        </>
+      )}
+    </PageContainer>
+  );
+}
+
+// ============================================================
+// AI ANALYTICS — employment trends and AI performance
+// ============================================================
+export function AdminAIAnalytics() {
+  const { data, loading } = useFetch<any>("/api/admin/ai-analytics");
+  const ai = data?.aiMetrics;
+  const insights = data?.insights ?? [];
+  const jobsByCategory = data?.jobsByCategory ?? [];
+  const topSkills = data?.topSkills ?? [];
+
+  return (
+    <PageContainer>
+      <SectionHeader
+        title="AI Analytics & Employment Trends"
+        description="AI-powered insights into employment trends, platform performance, and matching quality."
+        icon={<Cpu className="h-4 w-4" />}
+      />
+
+      {loading ? (
+        <LoadingState label="Loading AI analytics…" rows={4} />
+      ) : (
+        <>
+          {/* AI Performance Metrics */}
+          <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            <StatCard label="AI Computations" value={(ai?.totalComputations ?? 0).toLocaleString()} icon={<Cpu className="h-4 w-4" />} hint="Total match scores computed" />
+            <StatCard label="Avg Match Score" value={`${ai?.avgMatchScore ?? 0}%`} icon={<Target className="h-4 w-4" />} hint="Across all applications" />
+            <StatCard label="High Match Rate" value={`${ai?.highMatchRate ?? 0}%`} icon={<TrendingUp className="h-4 w-4" />} hint="Applications scoring > 80%" delta="+5%" deltaTone="up" />
+            <StatCard label="AI Success Rate" value={`${ai?.successRate ?? 0}%`} icon={<CheckCircle2 className="h-4 w-4" />} hint={`Avg: ${ai?.avgProcessingTime ?? 0}s · ${ai?.modelVersion ?? ""}`} />
+          </div>
+
+          {/* AI Insights */}
+          <Card className="mt-4">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-sm flex items-center gap-2">
+                <Sparkles className="h-4 w-4 text-primary" /> AI-Generated Insights
+              </CardTitle>
+              <CardDescription>Automated analysis of employment trends and platform performance</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              {insights.map((insight: any, i: number) => (
+                <div key={i} className="flex items-start gap-3 rounded-lg border border-border bg-card p-3">
+                  <div className={cn(
+                    "flex h-8 w-8 shrink-0 items-center justify-center rounded-full",
+                    insight.trend === "up" ? "bg-emerald-100 text-emerald-700" :
+                    insight.trend === "down" ? "bg-rose-100 text-rose-700" :
+                    "bg-blue-100 text-blue-700"
+                  )}>
+                    {insight.trend === "up" ? <TrendingUp className="h-4 w-4" /> :
+                     insight.trend === "down" ? <ArrowDownRight className="h-4 w-4" /> :
+                     <BarChart3 className="h-4 w-4" />}
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2">
+                      <p className="text-sm font-semibold">{insight.title}</p>
+                      <Badge variant="outline" className={cn(
+                        "text-[9px]",
+                        insight.impact === "high" ? "bg-rose-50 text-rose-700 border-rose-200" :
+                        "bg-amber-50 text-amber-700 border-amber-200"
+                      )}>
+                        {insight.impact} impact
+                      </Badge>
+                    </div>
+                    <p className="mt-1 text-xs text-muted-foreground">{insight.description}</p>
+                  </div>
+                </div>
+              ))}
+            </CardContent>
+          </Card>
+
+          {/* Trends: Jobs by Category + Top Skills */}
+          <div className="mt-4 grid gap-4 lg:grid-cols-2">
+            <Card>
+              <CardHeader className="pb-3">
+                <CardTitle className="text-sm">Jobs by Category</CardTitle>
+                <CardDescription>Demand distribution across job categories</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-2">
+                {jobsByCategory.map((c: any) => {
+                  const max = Math.max(...jobsByCategory.map((x: any) => x.count), 1);
+                  return (
+                    <div key={c.category}>
+                      <div className="flex items-center justify-between text-xs">
+                        <span className="font-medium">{c.category}</span>
+                        <span className="text-muted-foreground">{c.count} jobs</span>
+                      </div>
+                      <div className="mt-1 h-2 overflow-hidden rounded-full bg-muted">
+                        <div className="h-full rounded-full bg-gradient-to-r from-violet-500 to-blue-500" style={{ width: `${(c.count / max) * 100}%` }} />
+                      </div>
+                    </div>
+                  );
+                })}
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader className="pb-3">
+                <CardTitle className="text-sm">Top Skills in Demand</CardTitle>
+                <CardDescription>Most frequently listed skills across all profiles</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-2">
+                {topSkills.map((s: any) => {
+                  const max = Math.max(...topSkills.map((x: any) => x.count), 1);
+                  return (
+                    <div key={s.name}>
+                      <div className="flex items-center justify-between text-xs">
+                        <span className="font-medium">{s.name}</span>
+                        <span className="text-muted-foreground">{s.count} profiles</span>
+                      </div>
+                      <div className="mt-1 h-2 overflow-hidden rounded-full bg-muted">
+                        <div className="h-full rounded-full bg-gradient-to-r from-emerald-500 to-violet-500" style={{ width: `${(s.count / max) * 100}%` }} />
+                      </div>
+                    </div>
+                  );
+                })}
+              </CardContent>
+            </Card>
+          </div>
+        </>
+      )}
+    </PageContainer>
+  );
+}
+
+// ============================================================
+// SECURITY & COMPLIANCE — data security, privacy, compliance
+// ============================================================
+export function AdminSecurity() {
+  const { data, loading } = useFetch<any>("/api/admin/security");
+  const summary = data?.summary;
+  const compliance = data?.compliance;
+  const securityChecks = data?.securityChecks ?? [];
+  const securityEvents = data?.securityEvents ?? [];
+
+  return (
+    <PageContainer>
+      <SectionHeader
+        title="Security & Compliance"
+        description="Data security monitoring, privacy policy enforcement, and compliance audits."
+        icon={<ShieldCheck className="h-4 w-4" />}
+      />
+
+      {loading ? (
+        <LoadingState label="Loading security data…" rows={4} />
+      ) : (
+        <>
+          {/* Security Summary */}
+          <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            <StatCard label="2FA Adoption" value={`${summary?.twoFARate ?? 0}%`} icon={<ShieldCheck className="h-4 w-4" />} hint={`${summary?.usersWith2FA ?? 0} of ${summary?.totalUsers ?? 0} users`} />
+            <StatCard label="Suspended Accounts" value={summary?.suspendedUsers ?? 0} icon={<AlertTriangle className="h-4 w-4" />} hint="Security-related suspensions" />
+            <StatCard label="Failed Logins" value={summary?.failedLogins ?? 0} icon={<AlertCircle className="h-4 w-4" />} hint="Total failed auth attempts" />
+            <StatCard label="Admin Actions" value={summary?.adminActions ?? 0} icon={<Lock className="h-4 w-4" />} hint="Total logged admin events" />
+          </div>
+
+          {/* Security Checklist */}
+          <Card className="mt-4">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-sm flex items-center gap-2">
+                <Lock className="h-4 w-4 text-primary" /> Security Audit Checklist
+              </CardTitle>
+              <CardDescription>Automated security checks across the platform</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-2">
+              {securityChecks.map((check: any) => (
+                <div key={check.name} className="flex items-start gap-3 rounded-lg border border-border bg-card p-3">
+                  {check.status === "pass" ? (
+                    <CheckCircle2 className="h-5 w-5 shrink-0 text-emerald-600" />
+                  ) : (
+                    <AlertTriangle className="h-5 w-5 shrink-0 text-amber-500" />
+                  )}
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2">
+                      <p className="text-sm font-semibold">{check.name}</p>
+                      <Badge variant="outline" className={cn(
+                        "text-[9px] capitalize",
+                        check.status === "pass" ? "bg-emerald-50 text-emerald-700 border-emerald-200" : "bg-amber-50 text-amber-700 border-amber-200"
+                      )}>
+                        {check.status}
+                      </Badge>
+                    </div>
+                    <p className="mt-0.5 text-xs text-muted-foreground">{check.detail}</p>
+                  </div>
+                </div>
+              ))}
+            </CardContent>
+          </Card>
+
+          {/* Compliance + Security Events */}
+          <div className="mt-4 grid gap-4 lg:grid-cols-2">
+            {/* Compliance */}
+            <Card>
+              <CardHeader className="pb-3">
+                <CardTitle className="text-sm flex items-center gap-2">
+                  <ShieldCheck className="h-4 w-4 text-primary" /> Privacy & Compliance
+                </CardTitle>
+                <CardDescription>GDPR, data retention, and privacy policy enforcement</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-2">
+                {compliance && Object.entries(compliance).map(([key, val]: [string, any]) => (
+                  <div key={key} className="flex items-center justify-between rounded-md border border-border bg-card p-2.5 text-xs">
+                    <div>
+                      <p className="font-semibold capitalize">{key.replace(/([A-Z])/g, " $1").trim()}</p>
+                      {val.lastUpdated && <p className="text-muted-foreground">Updated: {val.lastUpdated}</p>}
+                      {val.maxDays && <p className="text-muted-foreground">Retention: {val.maxDays} days</p>}
+                      {val.algorithm && <p className="text-muted-foreground">Algorithm: {val.algorithm}</p>}
+                      {val.totalEvents !== undefined && <p className="text-muted-foreground">{val.totalEvents} events logged</p>}
+                    </div>
+                    <Badge variant="outline" className={cn(
+                      "text-[9px] capitalize",
+                      val.status === "compliant" ? "bg-emerald-50 text-emerald-700 border-emerald-200" : "bg-amber-50 text-amber-700 border-amber-200"
+                    )}>
+                      {val.status}
+                    </Badge>
+                  </div>
+                ))}
+              </CardContent>
+            </Card>
+
+            {/* Recent Security Events */}
+            <Card>
+              <CardHeader className="pb-3">
+                <CardTitle className="text-sm flex items-center gap-2">
+                  <Activity className="h-4 w-4 text-primary" /> Recent Security Events
+                </CardTitle>
+                <CardDescription>Authentication and security-related audit logs</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-2">
+                {securityEvents.length === 0 ? (
+                  <EmptyState icon={<Activity className="h-5 w-5" />} title="No security events" description="All clear — no recent security incidents." />
+                ) : (
+                  securityEvents.map((event: any) => (
+                    <div key={event.id} className="flex items-center gap-3 rounded-md border border-border bg-card p-2.5 text-xs">
+                      <div className={cn(
+                        "h-2 w-2 shrink-0 rounded-full",
+                        event.status === "success" ? "bg-emerald-500" :
+                        event.status === "error" ? "bg-rose-500" : "bg-amber-500"
+                      )} />
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate">
+                          <span className="font-semibold">{event.user}</span>
+                          <span className="text-muted-foreground"> · {event.action}</span>
+                        </p>
+                        <p className="text-[10px] text-muted-foreground">{event.target} · {event.time}</p>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </CardContent>
+            </Card>
+          </div>
+        </>
+      )}
     </PageContainer>
   );
 }

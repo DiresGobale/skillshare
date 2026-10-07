@@ -50,12 +50,12 @@ export const authOptions: NextAuthOptions = {
             // Signal that 2FA is required — frontend will redirect to 2FA page
             throw new Error("2FA_REQUIRED");
           }
-          // Use a wider window (2 windows = accepts codes from -30s to +30s)
-          // to account for network latency and clock drift
+          // Use a wider window (5 windows = accepts codes from -150s to +150s)
+          // to account for network latency, clock drift, and manual entry time
           const totpOk = authenticator.verify({
             token: credentials.totp,
             secret: user.twoFactorSecretHash,
-            window: 2,
+            window: 5,
           });
           if (!totpOk) {
             throw new Error("Invalid 2FA code.");

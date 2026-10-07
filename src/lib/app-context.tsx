@@ -38,7 +38,10 @@ export type AdminView =
   | "jobs"
   | "reports"
   | "activity"
-  | "config";
+  | "config"
+  | "monitoring"
+  | "ai-analytics"
+  | "security";
 
 export type View = GuestView | SeekerView | EmployerView | AdminView;
 

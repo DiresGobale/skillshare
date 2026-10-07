@@ -55,6 +55,9 @@ import {
   AdminReports,
   AdminActivity,
   AdminConfig,
+  AdminMonitoring,
+  AdminAIAnalytics,
+  AdminSecurity,
 } from "@/components/admin/views";
 
 function Router() {
@@ -154,6 +157,9 @@ function Router() {
       case "reports": content = <AdminReports />; break;
       case "activity": content = <AdminActivity />; break;
       case "config": content = <AdminConfig />; break;
+      case "monitoring": content = <AdminMonitoring />; break;
+      case "ai-analytics": content = <AdminAIAnalytics />; break;
+      case "security": content = <AdminSecurity />; break;
       default: content = <AdminDashboard />;
     }
   }

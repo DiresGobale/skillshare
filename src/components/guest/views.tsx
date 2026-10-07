@@ -543,26 +543,30 @@ export function Login() {
     setError(null);
     setLoading(true);
     try {
-      // Step 1: Pre-check credentials via our API (returns clear error messages)
-      const checkRes = await fetch("/api/auth/check", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: emailVal, password: passwordVal }),
-      });
-      const checkData = await checkRes.json();
+      // If TOTP is already provided, skip the pre-check and go straight to NextAuth
+      // (the pre-check is only needed to detect whether 2FA is required)
+      if (!totpVal) {
+        // Step 1: Pre-check credentials via our API (returns clear error messages)
+        const checkRes = await fetch("/api/auth/check", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email: emailVal, password: passwordVal }),
+        });
+        const checkData = await checkRes.json();
 
-      if (!checkData.ok) {
-        setError(checkData.error ?? "Invalid email or password.");
-        setLoading(false);
-        return;
-      }
+        if (!checkData.ok) {
+          setError(checkData.error ?? "Invalid email or password.");
+          setLoading(false);
+          return;
+        }
 
-      // Step 2: If 2FA is needed and no TOTP provided, show the 2FA field
-      if (checkData.needs2FA && !totpVal) {
-        setShow2FA(true);
-        setStatus("Enter your 6-digit authenticator code to continue.");
-        setLoading(false);
-        return;
+        // Step 2: If 2FA is needed and no TOTP provided, show the 2FA field
+        if (checkData.needs2FA && !totpVal) {
+          setShow2FA(true);
+          setStatus("Enter your 6-digit authenticator code to continue.");
+          setLoading(false);
+          return;
+        }
       }
 
       // Step 3: Call NextAuth signIn with email + password + (optional) TOTP

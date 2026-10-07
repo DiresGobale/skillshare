@@ -10,7 +10,6 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { BrandMark } from "@/components/chrome/app-shell";
 import { ShieldCheck, Lock, AlertCircle, Fingerprint, Clock, RefreshCw } from "lucide-react";
-import { authenticator } from "otplib";
 
 // Admin 2FA gate.
 //
@@ -36,22 +35,33 @@ export function Admin2FAGate() {
   const inputRef = useRef<HTMLInputElement>(null);
 
   // Fetch the admin's TOTP secret + current code from the API
+  // Retry up to 3 times with a delay, since the session cookie might not
+  // be fully established immediately after the NextAuth login redirect.
   useEffect(() => {
     let cancelled = false;
-    (async () => {
+    let retries = 0;
+    const fetch2faInfo = async () => {
       try {
         const res = await fetch("/api/admin/2fa-info");
         const data = await res.json();
         if (!cancelled && data.ok) {
           setAdminSecret(data.secret);
+        } else if (!cancelled && retries < 3) {
+          retries++;
+          setTimeout(fetch2faInfo, 1000 * retries);
         }
       } catch {
-        /* ignore */
+        if (!cancelled && retries < 3) {
+          retries++;
+          setTimeout(fetch2faInfo, 1000 * retries);
+        }
       } finally {
         if (!cancelled) setLoading(false);
       }
-    })();
-    return () => { cancelled = true; };
+    };
+    // Small delay to let the session cookie establish
+    const timer = setTimeout(fetch2faInfo, 500);
+    return () => { cancelled = true; clearTimeout(timer); };
   }, []);
 
   // Focus the input on mount
@@ -72,22 +82,28 @@ export function Admin2FAGate() {
     return () => clearInterval(id);
   }, [lockedUntil]);
 
-  // Live TOTP code preview (updates every 30s)
+  // Live TOTP code preview (fetched from server every 30s)
   const [liveCode, setLiveCode] = useState<string>("");
   const [codeExpiresIn, setCodeExpiresIn] = useState<number>(30);
   useEffect(() => {
     if (!adminSecret) return;
-    const update = () => {
-      setLiveCode(authenticator.generate(adminSecret));
-      const epoch = Math.floor(Date.now() / 1000);
-      setCodeExpiresIn(30 - (epoch % 30));
+    const fetchCode = async () => {
+      try {
+        const res = await fetch("/api/admin/2fa-info");
+        const data = await res.json();
+        if (data.ok && data.currentCode) {
+          setLiveCode(data.currentCode);
+          const epoch = Math.floor(Date.now() / 1000);
+          setCodeExpiresIn(30 - (epoch % 30));
+        }
+      } catch { /* ignore */ }
     };
-    update();
-    const id = setInterval(update, 1000);
+    fetchCode();
+    const id = setInterval(fetchCode, 5000);
     return () => clearInterval(id);
   }, [adminSecret]);
 
-  const submit = (e: React.FormEvent) => {
+  const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (lockedUntil !== null) return;
     if (!adminSecret) {
@@ -95,13 +111,18 @@ export function Admin2FAGate() {
       return;
     }
     try {
-      // Use wider window to match the server-side verification
-      const ok = authenticator.verify({ token: code.trim(), secret: adminSecret, window: 2 });
-      if (ok) {
+      // Call the server to verify the TOTP code
+      const res = await fetch("/api/admin/verify-totp", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ token: code.trim() }),
+      });
+      const data = await res.json();
+      if (data.ok) {
         setError(null);
         unlockAdmin();
       } else {
-        throw new Error("Invalid");
+        throw new Error(data.error ?? "Invalid");
       }
     } catch {
       const next = attempts + 1;
