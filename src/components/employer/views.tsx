@@ -1393,11 +1393,20 @@ export function EmployerApplications() {
 // ============================================================
 export function EmployerInterviews() {
   const { go } = useApp();
-  const interviews = [
-    { id: "i1", candidate: candidates[0], title: "Technical interview", date: "2026-10-09", time: "14:00 EAT", type: "Technical", status: "scheduled" as const },
-    { id: "i2", candidate: candidates[5], title: "Recruiter screen", date: "2026-10-11", time: "10:00 EAT", type: "Screen", status: "scheduled" as const },
-    { id: "i3", candidate: candidates[1], title: "Hiring manager call", date: "2026-10-12", time: "15:30 EAT", type: "Behavioral", status: "pending_confirmation" as const },
-  ];
+  const { data, loading } = useFetch<any>("/api/candidates");
+  const allCandidates: any[] = data?.candidates ?? [];
+  // Candidates in "interview" status are the interviews
+  const interviews = allCandidates
+    .filter((c: any) => c.applicationStatus === "interview")
+    .map((c: any, i: number) => ({
+      id: `iv-${i}`,
+      candidate: c,
+      title: c.job?.title ? `Interview for ${c.job.title}` : "Interview",
+      date: "2026-10-09",
+      time: "14:00 EAT",
+      type: "Technical",
+      status: "scheduled" as const,
+    }));
 
   return (
     <PageContainer>
@@ -1412,44 +1421,51 @@ export function EmployerInterviews() {
         <StatCard label="This week" value={2} icon={<Calendar className="h-4 w-4" />} hint="Thu, Fri" />
       </div>
 
-      <div className="mt-6 space-y-3">
-        {interviews.map((iv) => (
-          <Card key={iv.id}>
-            <CardContent className="p-4">
-              <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-                <Avatar initials={iv.candidate.initials} color={iv.candidate.avatarColor} size="md" />
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-start justify-between gap-2">
-                    <div>
-                      <p className="text-sm font-semibold">{iv.title} · {iv.candidate.name}</p>
-                      <p className="text-xs text-muted-foreground">{iv.candidate.title}</p>
+      {loading ? (
+        <LoadingState label="Loading interviews…" rows={2} />
+      ) : interviews.length === 0 ? (
+        <EmptyState className="mt-6" icon={<CalendarClock className="h-5 w-5" />} title="No interviews scheduled" description="Shortlist candidates and schedule interviews from the Candidate Ranking page." action={<Button size="sm" onClick={() => go("candidates")}>View candidates</Button>} />
+      ) : (
+        <div className="mt-6 space-y-3">
+          {interviews.map((iv) => (
+            <Card key={iv.id}>
+              <CardContent className="p-4">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+                  {iv.candidate.profilePhoto ? (
+                    <img src={iv.candidate.profilePhoto} alt={iv.candidate.name} className="h-10 w-10 rounded-full object-cover" />
+                  ) : (
+                    <Avatar initials={iv.candidate.initials} color={iv.candidate.avatarColor} size="md" />
+                  )}
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-start justify-between gap-2">
+                      <div>
+                        <p className="text-sm font-semibold">{iv.candidate.name}</p>
+                        <p className="text-xs text-muted-foreground">{iv.candidate.title}</p>
+                      </div>
+                      <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-200 text-[10px]">
+                        Confirmed
+                      </Badge>
                     </div>
-                    <Badge
-                      variant="outline"
-                      className={iv.status === "scheduled" ? "bg-emerald-50 text-emerald-700 border-emerald-200 text-[10px]" : "bg-amber-50 text-amber-700 border-amber-200 text-[10px]"}
-                    >
-                      {iv.status === "scheduled" ? "Confirmed" : "Pending"}
-                    </Badge>
+                    <div className="mt-2 flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
+                      <span className="flex items-center gap-1"><Calendar className="h-3 w-3" />{iv.date}</span>
+                      <span className="flex items-center gap-1"><Clock className="h-3 w-3" />{iv.time}</span>
+                      <span className="flex items-center gap-1"><Users className="h-3 w-3" />{iv.type}</span>
+                    </div>
                   </div>
-                  <div className="mt-2 flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
-                    <span className="flex items-center gap-1"><Calendar className="h-3 w-3" />{iv.date}</span>
-                    <span className="flex items-center gap-1"><Clock className="h-3 w-3" />{iv.time}</span>
-                    <span className="flex items-center gap-1"><Users className="h-3 w-3" />{iv.type}</span>
+                  <div className="flex gap-2">
+                    <Button size="sm" variant="outline" onClick={() => go("candidate-detail", { candidateId: iv.candidate.id })}>
+                      View profile
+                    </Button>
+                    <Button size="sm" variant="ghost" onClick={() => go("messages")}>
+                      <MessageSquare className="h-3.5 w-3.5" />
+                    </Button>
                   </div>
                 </div>
-                <div className="flex gap-2">
-                  <Button size="sm" variant="outline" onClick={() => go("candidate-detail", { candidateId: iv.candidate.id })}>
-                    View profile
-                  </Button>
-                  <Button size="sm" variant="ghost" onClick={() => go("messages")}>
-                    <MessageSquare className="h-3.5 w-3.5" />
-                  </Button>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      )}
     </PageContainer>
   );
 }
