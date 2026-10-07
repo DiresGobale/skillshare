@@ -1,17 +1,20 @@
 import type { NextAuthOptions } from "next-auth";
 import CredentialsProvider from "next-auth/providers/credentials";
 import bcrypt from "bcryptjs";
-import { authenticator } from "otplib";
 import { db } from "@/lib/db";
 
 // NextAuth config with credentials provider.
-// Sessions are JWT-based (default) and stored in an httpOnly cookie
-// named "next-auth.session-token" (or "__Secure-..." in production).
+// Sessions are JWT-based (default) and stored in an httpOnly cookie.
 //
-// The credentials provider validates email+password against the User table,
-// then checks if 2FA is required. If yes, the caller must include a valid
-// `totp` field. We signal "2FA required" by returning null + a hint in the
-// error field.
+// The credentials provider validates email+password against the User table.
+// For admin accounts, the system requires email-based OTP verification
+// (handled by the admin 2FA gate after NextAuth login succeeds).
+// The login flow is:
+//   1. User enters email + password → NextAuth validates → creates session
+//   2. If admin, the admin 2FA gate sends an OTP to the admin's email
+//   3. Admin enters the OTP → /api/auth/verify-otp validates → gate unlocks
+//
+// Non-admin users (seeker/employer) skip OTP entirely.
 
 export const authOptions: NextAuthOptions = {
   providers: [
@@ -20,7 +23,6 @@ export const authOptions: NextAuthOptions = {
       credentials: {
         email: { label: "Email", type: "email" },
         password: { label: "Password", type: "password" },
-        totp: { label: "2FA code", type: "text" },
       },
       async authorize(credentials) {
         if (!credentials?.email || !credentials?.password) {
@@ -44,23 +46,11 @@ export const authOptions: NextAuthOptions = {
           throw new Error("Invalid email or password.");
         }
 
-        // 2FA check (admin role has 2FA enabled by default)
-        if (user.twoFactorEnabled && user.twoFactorSecretHash) {
-          if (!credentials.totp) {
-            // Signal that 2FA is required — frontend will redirect to 2FA page
-            throw new Error("2FA_REQUIRED");
-          }
-          // Use a wider window (5 windows = accepts codes from -150s to +150s)
-          // to account for network latency, clock drift, and manual entry time
-          const totpOk = authenticator.verify({
-            token: credentials.totp,
-            secret: user.twoFactorSecretHash,
-            window: 5,
-          });
-          if (!totpOk) {
-            throw new Error("Invalid 2FA code.");
-          }
-        }
+        // Admin accounts require email OTP verification after login.
+        // The OTP is handled by the admin 2FA gate (client-side),
+        // not by NextAuth's authorize function.
+        // NextAuth just validates email + password here.
+        // The admin gate calls /api/auth/send-otp and /api/auth/verify-otp.
 
         // Audit the login
         await db.auditLog.create({

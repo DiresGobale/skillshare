@@ -524,8 +524,6 @@ export function Login() {
   const { go } = useApp();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [totp, setTotp] = useState("");
-  const [show2FA, setShow2FA] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [status, setStatus] = useState<string | null>(null);
@@ -539,61 +537,45 @@ export function Login() {
   const [resetError, setResetError] = useState<string | null>(null);
 
   // Core sign-in logic: pre-check credentials, then call NextAuth
-  const doLogin = async (emailVal: string, passwordVal: string, totpVal?: string) => {
+  const doLogin = async (emailVal: string, passwordVal: string) => {
     setError(null);
     setLoading(true);
     try {
-      // If TOTP is already provided, skip the pre-check and go straight to NextAuth
-      // (the pre-check is only needed to detect whether 2FA is required)
-      if (!totpVal) {
-        // Step 1: Pre-check credentials via our API (returns clear error messages)
-        const checkRes = await fetch("/api/auth/check", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ email: emailVal, password: passwordVal }),
-        });
-        const checkData = await checkRes.json();
+      // Step 1: Pre-check credentials via our API (returns clear error messages)
+      const checkRes = await fetch("/api/auth/check", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: emailVal, password: passwordVal }),
+      });
+      const checkData = await checkRes.json();
 
-        if (!checkData.ok) {
-          setError(checkData.error ?? "Invalid email or password.");
-          setLoading(false);
-          return;
-        }
-
-        // Step 2: If 2FA is needed and no TOTP provided, show the 2FA field
-        if (checkData.needs2FA && !totpVal) {
-          setShow2FA(true);
-          setStatus("Enter your 6-digit authenticator code to continue.");
-          setLoading(false);
-          return;
-        }
+      if (!checkData.ok) {
+        setError(checkData.error ?? "Invalid email or password.");
+        setLoading(false);
+        return;
       }
 
-      // Step 3: Call NextAuth signIn with email + password + (optional) TOTP
+      // Step 2: Call NextAuth signIn with email + password
+      // For admin accounts, NextAuth just validates email+password.
+      // The email OTP is handled by the admin 2FA gate after login.
       const res = await nextAuthSignIn("credentials", {
         email: emailVal,
         password: passwordVal,
-        totp: totpVal || undefined,
         redirect: false,
       });
 
       if (!res || res.error) {
-        // NextAuth returns "CredentialsSignin" for any authorize failure.
-        // The specific error (wrong TOTP, etc.) was already caught by our
-        // pre-check, so if we get here with an error it's likely a bad TOTP.
-        if (checkData.needs2FA) {
-          setError("Invalid 2FA code. Please try again.");
-          setShow2FA(true);
-        } else {
-          setError("Login failed. Please try again.");
-        }
+        setError("Login failed. Please try again.");
         setLoading(false);
         return;
       }
 
       // Success — reload so the server-rendered session hydrates.
       // The page.tsx router will redirect to the correct dashboard based on role.
-      setStatus("Success! Redirecting to your dashboard…");
+      // For admins, it will show the 2FA gate which sends an email OTP.
+      setStatus(checkData.role === "admin"
+        ? "Success! Redirecting to email verification…"
+        : "Success! Redirecting to your dashboard…");
       window.location.assign("/");
     } catch {
       setError("Network error. Please try again.");
@@ -607,15 +589,13 @@ export function Login() {
       setError("Please enter both email and password.");
       return;
     }
-    doLogin(email, password, totp || undefined);
+    doLogin(email, password);
   };
 
   // One-click demo login: fills the form AND submits immediately
   const quickLogin = (acc: typeof demoAccounts[number]) => {
     setEmail(acc.email);
     setPassword(acc.password);
-    setTotp("");
-    setShow2FA(false);
     setError(null);
     setStatus(null);
     doLogin(acc.email, acc.password);
@@ -800,28 +780,6 @@ export function Login() {
                 autoComplete="current-password"
               />
             </div>
-            {show2FA && (
-              <div className="space-y-1.5 rounded-md border border-amber-200 bg-amber-50 p-3">
-                <Label htmlFor="totp" className="text-amber-900 flex items-center gap-1.5">
-                  <ShieldCheck className="h-3.5 w-3.5" /> 2FA code (from authenticator app)
-                </Label>
-                <Input
-                  id="totp"
-                  type="text"
-                  inputMode="numeric"
-                  pattern="[0-9]*"
-                  maxLength={6}
-                  placeholder="••••••"
-                  value={totp}
-                  onChange={(e) => setTotp(e.target.value.replace(/\D/g, ""))}
-                  className="text-center text-lg tracking-[0.5em] font-mono"
-                  autoComplete="one-time-code"
-                />
-                <p className="text-[11px] text-amber-700">
-                  The live TOTP code is shown on the next screen after you verify. For the demo admin, the code updates every 30 seconds.
-                </p>
-              </div>
-            )}
             {error && (
               <div className="flex items-center gap-2 rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-700">
                 <AlertCircle className="h-3.5 w-3.5 shrink-0" />
@@ -834,14 +792,12 @@ export function Login() {
                 {status}
               </div>
             )}
-            <Button type="submit" className="w-full h-10" disabled={loading}>
+            <Button type="submit" className="w-full h-10 btn-rainbow" disabled={loading}>
               {loading ? (
                 <>
                   <span className="h-4 w-4 animate-spin rounded-full border-2 border-primary-foreground border-t-transparent" />
                   Signing in…
                 </>
-              ) : show2FA ? (
-                "Verify & sign in"
               ) : (
                 "Sign in"
               )}

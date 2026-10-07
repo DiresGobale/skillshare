@@ -3,12 +3,11 @@ import bcrypt from "bcryptjs";
 import { db } from "@/lib/db";
 
 // POST /api/auth/check
-// Pre-validates credentials and returns whether 2FA is needed.
-// This lets the login page show the 2FA field BEFORE calling NextAuth signIn
-// (NextAuth v4 doesn't forward custom error messages from authorize()).
+// Pre-validates credentials and returns the user's role.
+// This lets the login page show clear error messages BEFORE calling NextAuth.
 //
 // Body: { email, password }
-// Returns: { ok: true, needs2FA: boolean, role: string } | { ok: false, error: string }
+// Returns: { ok: true, role: string } | { ok: false, error: string }
 export async function POST(req: NextRequest) {
   try {
     const { email, password } = await req.json();
@@ -35,7 +34,6 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({
       ok: true,
-      needs2FA: user.twoFactorEnabled && !!user.twoFactorSecretHash,
       role: user.role,
     });
   } catch {

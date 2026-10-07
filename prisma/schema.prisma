@@ -45,6 +45,8 @@ model User {
   twoFactorSecretHash String?
   twoFactorEnabled    Boolean @default(false)
   twoFactorBackupHash String? // JSON array of hashed backup codes
+  emailOtpCode        String?  // email-based OTP code
+  emailOtpExpiry      DateTime? // OTP expiry time
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
