@@ -357,7 +357,7 @@ function MobileNavbar({
 
 // Top bar (search + actions + role switcher)
 function Topbar({ onToggleMobile, mobileOpen }: { onToggleMobile: () => void; mobileOpen: boolean }) {
-  const { role, user, signOut } = useApp();
+  const { role, user, signOut, go } = useApp();
   const [roleMenuOpen, setRoleMenuOpen] = useState(false);
 
   // Determine display user — prefer session user
@@ -453,12 +453,24 @@ function Topbar({ onToggleMobile, mobileOpen }: { onToggleMobile: () => void; mo
           )}
         </div>
 
-        <Button variant="ghost" size="icon" className="relative h-9 w-9">
+        <Button
+          variant="ghost"
+          size="icon"
+          className="relative h-9 w-9"
+          onClick={() => go("notifications")}
+          aria-label="Notifications"
+        >
           <Bell className="h-4 w-4" />
           <span className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full bg-rose-500 ring-2 ring-background" />
         </Button>
 
-        <Button variant="ghost" size="icon" className="relative h-9 w-9">
+        <Button
+          variant="ghost"
+          size="icon"
+          className="relative h-9 w-9"
+          onClick={() => go("messages")}
+          aria-label="Messages"
+        >
           <MessageSquare className="h-4 w-4" />
         </Button>
 

@@ -1,0 +1,1586 @@
+     1→"use client";
+     2→
+     3→import React, { useState, useEffect } from "react";
+     4→import { signIn as nextAuthSignIn } from "next-auth/react";
+     5→import { cn } from "@/lib/utils";
+     6→import { useApp } from "@/lib/app-context";
+     7→import { Button } from "@/components/ui/button";
+     8→import { Input } from "@/components/ui/input";
+     9→import { Label } from "@/components/ui/label";
+    10→import { Checkbox } from "@/components/ui/checkbox";
+    11→import { Card, CardContent, CardHeader, CardFooter, CardTitle, CardDescription } from "@/components/ui/card";
+    12→import { Badge } from "@/components/ui/badge";
+    13→import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+    14→import {
+    15→  Select,
+    16→  SelectContent,
+    17→  SelectItem,
+    18→  SelectTrigger,
+    19→  SelectValue,
+    20→} from "@/components/ui/select";
+    21→import { BrandMark, HamburgerToggle } from "@/components/chrome/app-shell";
+    22→import {
+    23→  Dialog,
+    24→  DialogContent,
+    25→  DialogDescription,
+    26→  DialogFooter,
+    27→  DialogHeader,
+    28→  DialogTitle,
+    29→  DialogTrigger,
+    30→} from "@/components/ui/dialog";
+    31→import {
+    32→  CompanyLogo,
+    33→  SkillChip,
+    34→  MatchScore,
+    35→  EmptyState,
+    36→  InfoCallout,
+    37→} from "@/components/shared/ui";
+    38→import { publicJobs, recommendedJobs } from "@/lib/mock-data";
+    39→import { demoAccounts } from "@/lib/demo-accounts";
+    40→import type { Job, Role } from "@/lib/types";
+    41→import { X } from "lucide-react";
+    42→import {
+    43→  Search,
+    44→  MapPin,
+    45→  Briefcase,
+    46→  ArrowRight,
+    47→  Check,
+    48→  CheckCircle2,
+    49→  Sparkles,
+    50→  Target,
+    51→  ShieldCheck,
+    52→  BarChart3,
+    53→  Zap,
+    54→  FileText,
+    55→  TrendingUp,
+    56→  Users,
+    57→  Building2,
+    58→  Star,
+    59→  Clock,
+    60→  Lock,
+    61→  Mail,
+    62→  ArrowLeft,
+    63→  Filter,
+    64→  AlertCircle,
+    65→} from "lucide-react";
+    66→import { Textarea } from "@/components/ui/textarea";
+    67→
+    68→// ============================================================
+    69→// Public top nav (guest header)
+    70→// ============================================================
+    71→function PublicHeader({ onAuth }: { onAuth: (r: "login" | "register") => void }) {
+    72→  const { go } = useApp();
+    73→  const [mobileOpen, setMobileOpen] = useState(false);
+    74→
+    75→  // Lock body scroll + ESC to close
+    76→  useEffect(() => {
+    77→    if (mobileOpen) {
+    78→      document.body.style.overflow = "hidden";
+    79→    } else {
+    80→      document.body.style.overflow = "";
+    81→    }
+    82→    const handler = (e: KeyboardEvent) => {
+    83→      if (e.key === "Escape") setMobileOpen(false);
+    84→    };
+    85→    window.addEventListener("keydown", handler);
+    86→    return () => {
+    87→      document.body.style.overflow = "";
+    88→      window.removeEventListener("keydown", handler);
+    89→    };
+    90→  }, [mobileOpen]);
+    91→
+    92→  const navLinks = [
+    93→    { label: "Browse jobs", view: "public-jobs" as const },
+    94→    { label: "How it works", view: "landing" as const },
+    95→    { label: "About", view: "about" as const },
+    96→    { label: "Contact", view: "contact" as const },
+    97→  ];
+    98→
+    99→  return (
+   100→    <>
+   101→      <header className="sticky top-0 z-40 border-b border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80">
+   102→        <div className="mx-auto flex h-16 max-w-7xl items-center justify-between gap-3 px-4 sm:px-6 lg:px-8">
+   103→          {/* Hamburger toggle (mobile only) */}
+   104→          <HamburgerToggle
+   105→            open={mobileOpen}
+   106→            onClick={() => setMobileOpen((v) => !v)}
+   107→            className="lg:hidden"
+   108→          />
+   109→
+   110→          <button onClick={() => go("landing")} className="flex items-center">
+   111→            <BrandMark />
+   112→          </button>
+   113→
+   114→          <nav className="hidden items-center gap-1 md:flex">
+   115→            {navLinks.map((link) => (
+   116→              <Button key={link.label} variant="ghost" size="sm" onClick={() => go(link.view)}>
+   117→                {link.label}
+   118→              </Button>
+   119→            ))}
+   120→          </nav>
+   121→
+   122→          <div className="flex items-center gap-2">
+   123→            <Button variant="ghost" size="sm" onClick={() => onAuth("login")} className="hidden sm:inline-flex">
+   124→              Sign in
+   125→            </Button>
+   126→            <Button size="sm" onClick={() => onAuth("register")}>
+   127→              Get started
+   128→            </Button>
+   129→          </div>
+   130→        </div>
+   131→      </header>
+   132→
+   133→      {/* Mobile slide-down nav panel */}
+   134→      <div
+   135→        className={cn(
+   136→          "fixed inset-0 z-30 bg-black/50 backdrop-blur-sm transition-opacity duration-300 lg:hidden",
+   137→          mobileOpen ? "opacity-100" : "pointer-events-none opacity-0"
+   138→        )}
+   139→        onClick={() => setMobileOpen(false)}
+   140→        aria-hidden="true"
+   141→      />
+   142→      <nav
+   143→        aria-label="Mobile public navigation"
+   144→        className={cn(
+   145→          "fixed inset-x-0 top-16 z-30 border-b border-border bg-background shadow-lg transition-transform duration-300 ease-in-out lg:hidden",
+   146→          mobileOpen ? "translate-y-0" : "-translate-y-full pointer-events-none"
+   147→        )}
+   148→      >
+   149→        <div className="space-y-1 p-3">
+   150→          {navLinks.map((link) => (
+   151→            <button
+   152→              key={link.label}
+   153→              onClick={() => {
+   154→                go(link.view);
+   155→                setMobileOpen(false);
+   156→              }}
+   157→              className="block w-full rounded-md px-3 py-2.5 text-left text-sm font-medium text-foreground hover:bg-accent"
+   158→            >
+   159→              {link.label}
+   160→            </button>
+   161→          ))}
+   162→          <div className="border-t border-border pt-2">
+   163→            <button
+   164→              onClick={() => {
+   165→                onAuth("login");
+   166→                setMobileOpen(false);
+   167→              }}
+   168→              className="block w-full rounded-md px-3 py-2.5 text-left text-sm font-medium text-foreground hover:bg-accent"
+   169→            >
+   170→              Sign in
+   171→            </button>
+   172→          </div>
+   173→        </div>
+   174→      </nav>
+   175→    </>
+   176→  );
+   177→}
+   178→
+   179→function PublicFooter() {
+   180→  const { go } = useApp();
+   181→  return (
+   182→    <footer className="border-t border-border bg-muted/30">
+   183→      <div className="mx-auto max-w-7xl px-4 py-10 sm:px-6 lg:px-8">
+   184→        <div className="grid grid-cols-2 gap-8 sm:grid-cols-4">
+   185→          <div className="col-span-2 sm:col-span-1">
+   186→            <BrandMark />
+   187→            <p className="mt-3 max-w-xs text-xs text-muted-foreground">
+   188→              AI-powered, skill-based matching for the African talent market. Connecting verified skills to real opportunities.
+   189→            </p>
+   190→          </div>
+   191→          <div>
+   192→            <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Product</p>
+   193→            <ul className="mt-3 space-y-2 text-sm">
+   194→              <li><button className="text-muted-foreground hover:text-foreground" onClick={() => go("public-jobs")}>Browse jobs</button></li>
+   195→              <li><button className="text-muted-foreground hover:text-foreground" onClick={() => go("landing")}>How it works</button></li>
+   196→              <li><button className="text-muted-foreground hover:text-foreground" onClick={() => go("landing")}>AI matching</button></li>
+   197→            </ul>
+   198→          </div>
+   199→          <div>
+   200→            <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">For employers</p>
+   201→            <ul className="mt-3 space-y-2 text-sm">
+   202→              <li><button className="text-muted-foreground hover:text-foreground" onClick={() => go("landing")}>Post a job</button></li>
+   203→              <li><button className="text-muted-foreground hover:text-foreground" onClick={() => go("landing")}>Pricing</button></li>
+   204→              <li><button className="text-muted-foreground hover:text-foreground" onClick={() => go("landing")}>Talent search</button></li>
+   205→            </ul>
+   206→          </div>
+   207→          <div>
+   208→            <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Company</p>
+   209→            <ul className="mt-3 space-y-2 text-sm">
+   210→              <li><button className="text-muted-foreground hover:text-foreground" onClick={() => go("about")}>About</button></li>
+   211→              <li><button className="text-muted-foreground hover:text-foreground" onClick={() => go("contact")}>Contact</button></li>
+   212→              <li><button className="text-muted-foreground hover:text-foreground" onClick={() => go("landing")}>Privacy</button></li>
+   213→            </ul>
+   214→          </div>
+   215→        </div>
+   216→        <div className="mt-8 border-t border-border pt-6 text-xs text-muted-foreground">
+   217→          © 2026 SkillMatch AI. All rights reserved.
+   218→        </div>
+   219→      </div>
+   220→    </footer>
+   221→  );
+   222→}
+   223→
+   224→// ============================================================
+   225→// LANDING
+   226→// ============================================================
+   227→function LandingHero() {
+   228→  const { go, setRole } = useApp();
+   229→  return (
+   230→    <section className="relative overflow-hidden bg-hero-glow">
+   231→      <div className="absolute inset-0 bg-grid-subtle opacity-50 [mask-image:radial-gradient(ellipse_at_center,black,transparent_75%)]" />
+   232→      <div className="relative mx-auto max-w-7xl px-4 pb-20 pt-16 sm:px-6 sm:pb-28 sm:pt-24 lg:px-8">
+   233→        <div className="mx-auto max-w-3xl text-center">
+   234→          <div className="inline-flex items-center gap-2 rounded-full border border-primary/20 bg-primary/5 px-3 py-1 text-xs font-medium text-primary">
+   235→            <Sparkles className="h-3 w-3" />
+   236→            AI-powered skill matching · live in 14 African markets
+   237→          </div>
+   238→          <h1 className="mt-6 text-4xl font-extrabold tracking-tight sm:text-5xl lg:text-6xl">
+   239→            <span className="text-gradient-primary">Find work</span> that fits your skills — not the other way around.
+   240→          </h1>
+   241→          <p className="mt-5 text-base text-muted-foreground sm:text-lg">
+   242→            SkillMatch AI analyzes your verified skills, proficiency, and experience to recommend jobs
+   243→            you'll actually get. Every recommendation comes with a transparent 0–100% match score.
+   244→          </p>
+   245→          <div className="mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row">
+   246→            <Button size="lg" className="h-12 px-6" onClick={() => setRole("seeker")}>
+   247→              Find jobs <ArrowRight className="h-4 w-4" />
+   248→            </Button>
+   249→            <Button size="lg" variant="outline" className="h-12 px-6" onClick={() => setRole("employer")}>
+   250→              Hire talent
+   251→            </Button>
+   252→          </div>
+   253→          <p className="mt-3 text-xs text-muted-foreground">
+   254→            Free for job seekers · No credit card required
+   255→          </p>
+   256→        </div>
+   257→
+   258→        {/* Mock dashboard preview */}
+   259→        <div className="mx-auto mt-14 max-w-5xl">
+   260→          <div className="overflow-hidden rounded-2xl border border-border bg-card shadow-card-soft">
+   261→            <div className="flex items-center gap-1.5 border-b border-border bg-muted/40 px-4 py-2.5">
+   262→              <span className="h-2.5 w-2.5 rounded-full bg-rose-400" />
+   263→              <span className="h-2.5 w-2.5 rounded-full bg-amber-400" />
+   264→              <span className="h-2.5 w-2.5 rounded-full bg-emerald-400" />
+   265→              <span className="ml-3 text-xs text-muted-foreground">skillmatch.ai/dashboard</span>
+   266→            </div>
+   267→            <div className="grid gap-4 p-5 sm:grid-cols-3">
+   268→              <div className="sm:col-span-2">
+   269→                <div className="rounded-lg border border-border bg-background p-4">
+   270→                  <div className="flex items-center gap-3">
+   271→                    <CompanyLogo initials="NW" size="md" />
+   272→                    <div className="min-w-0 flex-1">
+   273→                      <p className="text-sm font-semibold">Senior Frontend Engineer</p>
+   274→                      <p className="text-xs text-muted-foreground">Northwind Technologies · Lagos, NG</p>
+   275→                    </div>
+   276→                    <MatchScore score={92} size="md" />
+   277→                  </div>
+   278→                  <div className="mt-3 flex flex-wrap gap-1.5">
+   279→                    <SkillChip name="React" proficiency="expert" verified size="sm" />
+   280→                    <SkillChip name="TypeScript" proficiency="advanced" verified size="sm" />
+   281→                    <SkillChip name="Next.js" proficiency="advanced" size="sm" />
+   282→                    <SkillChip name="Tailwind CSS" proficiency="advanced" verified size="sm" />
+   283→                  </div>
+   284→                </div>
+   285→                <div className="mt-3 rounded-lg border border-border bg-background p-4">
+   286→                  <div className="flex items-center gap-3">
+   287→                    <CompanyLogo initials="CG" size="md" />
+   288→                    <div className="min-w-0 flex-1">
+   289→                      <p className="text-sm font-semibold">Frontend Engineer, Design Systems</p>
+   290→                      <p className="text-xs text-muted-foreground">Cellulant Group · Remote — Africa</p>
+   291→                    </div>
+   292→                    <MatchScore score={84} size="md" />
+   293→                  </div>
+   294→                </div>
+   295→              </div>
+   296→              <div className="space-y-3">
+   297→                <div className="rounded-lg border border-border bg-background p-4">
+   298→                  <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Profile completion</p>
+   299→                  <div className="mt-2 flex items-center gap-3">
+   300→                    <MatchScore score={78} size="sm" showLabel={false} />
+   301→                    <div className="text-sm">
+   302→                      <p className="font-semibold">78%</p>
+   303→                      <p className="text-xs text-muted-foreground">3 steps left</p>
+   304→                    </div>
+   305→                  </div>
+   306→                </div>
+   307→                <div className="rounded-lg border border-border bg-background p-4">
+   308→                  <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Active applications</p>
+   309→                  <p className="mt-2 text-2xl font-bold">3</p>
+   310→                  <p className="text-xs text-muted-foreground">1 interview scheduled</p>
+   311→                </div>
+   312→              </div>
+   313→            </div>
+   314→          </div>
+   315→        </div>
+   316→      </div>
+   317→    </section>
+   318→  );
+   319→}
+   320→
+   321→function LandingFeatures() {
+   322→  const features = [
+   323→    {
+   324→      icon: <Target className="h-5 w-5" />,
+   325→      title: "Explainable match scores",
+   326→      description: "Every job comes with a 0–100% score broken down by skill match, proficiency, experience, education, and verified skills. No black boxes.",
+   327→    },
+   328→    {
+   329→      icon: <FileText className="h-5 w-5" />,
+   330→      title: "AI resume analysis",
+   331→      description: "Upload your resume once. We extract skills, normalize them against our ontology, infer proficiency, and flag what's verifiable.",
+   332→    },
+   333→    {
+   334→      icon: <ShieldCheck className="h-5 w-5" />,
+   335→      title: "Verified skills, not vibes",
+   336→      description: "Skills are verified through assessments, certificates, and prior employer attestations. Verified skills carry real weight in matching.",
+   337→    },
+   338→    {
+   339→      icon: <TrendingUp className="h-5 w-5" />,
+   340→      title: "Skill-gap analysis",
+   341→      description: "See exactly which skills separate you from your target roles, with curated learning resources and the number of jobs each unlocks.",
+   342→    },
+   343→    {
+   344→      icon: <Lock className="h-5 w-5" />,
+   345→      title: "Privacy by default",
+   346→      description: "Employers cannot see your contact information until you apply or accept an interview request. You're always in control.",
+   347→    },
+   348→    {
+   349→      icon: <Zap className="h-5 w-5" />,
+   350→      title: "Real-time conversations",
+   351→      description: "Once shortlisted, message recruiters directly inside the platform. Track every application from submission to offer.",
+   352→    },
+   353→  ];
+   354→  return (
+   355→    <section className="border-t border-border bg-background py-16 sm:py-24">
+   356→      <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+   357→        <div className="mx-auto max-w-2xl text-center">
+   358→          <p className="text-xs font-semibold uppercase tracking-wider text-primary">Why SkillMatch AI</p>
+   359→          <h2 className="mt-2 text-3xl font-bold tracking-tight sm:text-4xl">
+   360→            Built on skills. Powered by AI. Owned by you.
+   361→          </h2>
+   362→          <p className="mt-4 text-muted-foreground">
+   363→            We're not another keyword job board. Every match is computed from your verified skill graph — and every score is explainable.
+   364→          </p>
+   365→        </div>
+   366→        <div className="mt-12 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+   367→          {features.map((f) => (
+   368→            <div
+   369→              key={f.title}
+   370→              className="rounded-xl border border-border bg-card p-5 transition-shadow hover:shadow-card-hover"
+   371→            >
+   372→              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10 text-primary">
+   373→                {f.icon}
+   374→              </div>
+   375→              <h3 className="mt-4 text-base font-semibold">{f.title}</h3>
+   376→              <p className="mt-1.5 text-sm text-muted-foreground">{f.description}</p>
+   377→            </div>
+   378→          ))}
+   379→        </div>
+   380→      </div>
+   381→    </section>
+   382→  );
+   383→}
+   384→
+   385→function LandingHowItWorks() {
+   386→  return (
+   387→    <section className="border-t border-border bg-muted/30 py-16 sm:py-24">
+   388→      <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+   389→        <div className="grid gap-10 lg:grid-cols-2">
+   390→          <div>
+   391→            <p className="text-xs font-semibold uppercase tracking-wider text-primary">For job seekers</p>
+   392→            <h2 className="mt-2 text-3xl font-bold tracking-tight">Your skills, your story.</h2>
+   393→            <p className="mt-3 text-muted-foreground">
+   394→              Build a profile once. Let our AI translate your experience into a structured skill graph
+   395→              that employers can trust — and that powers your match scores.
+   396→            </p>
+   397→            <ol className="mt-6 space-y-4">
+   398→              {[
+   399→                { t: "Build your skill profile", d: "Add education, experience, and skills with proficiency levels." },
+   400→                { t: "Upload your resume", d: "AI extracts, normalizes, and infers proficiency automatically." },
+   401→                { t: "Get matched", d: "Receive jobs with explainable 0–100% scores and skill-gap insights." },
+   402→                { t: "Apply & track", d: "Submit applications and watch them progress from screening to offer." },
+   403→              ].map((s, i) => (
+   404→                <li key={s.t} className="flex gap-3">
+   405→                  <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary text-xs font-bold text-primary-foreground">
+   406→                    {i + 1}
+   407→                  </div>
+   408→                  <div>
+   409→                    <p className="text-sm font-semibold">{s.t}</p>
+   410→                    <p className="text-sm text-muted-foreground">{s.d}</p>
+   411→                  </div>
+   412→                </li>
+   413→              ))}
+   414→            </ol>
+   415→          </div>
+   416→          <div>
+   417→            <p className="text-xs font-semibold uppercase tracking-wider text-primary">For employers</p>
+   418→            <h2 className="mt-2 text-3xl font-bold tracking-tight">Hire on evidence, not keywords.</h2>
+   419→            <p className="mt-3 text-muted-foreground">
+   420→              Define the skills and proficiency your role actually needs. Our AI ranks every applicant
+   421→              by match score, surfaces gaps, and respects candidate privacy throughout.
+   422→            </p>
+   423→            <ol className="mt-6 space-y-4">
+   424→              {[
+   425→                { t: "Create a job with skill requirements", d: "Mark skills as mandatory or preferred, and set proficiency thresholds." },
+   426→                { t: "Receive AI-ranked candidates", d: "Every applicant is scored 0–100% with skill-by-skill breakdown." },
+   427→                { t: "Shortlist with confidence", d: "See matching, missing, and verified skills side-by-side." },
+   428→                { t: "Connect & interview", d: "Contact details unlock only after a candidate accepts your interview request." },
+   429→              ].map((s, i) => (
+   430→                <li key={s.t} className="flex gap-3">
+   431→                  <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary text-xs font-bold text-primary-foreground">
+   432→                    {i + 1}
+   433→                  </div>
+   434→                  <div>
+   435→                    <p className="text-sm font-semibold">{s.t}</p>
+   436→                    <p className="text-sm text-muted-foreground">{s.d}</p>
+   437→                  </div>
+   438→                </li>
+   439→              ))}
+   440→            </ol>
+   441→          </div>
+   442→        </div>
+   443→      </div>
+   444→    </section>
+   445→  );
+   446→}
+   447→
+   448→function LandingCTA() {
+   449→  const { setRole } = useApp();
+   450→  return (
+   451→    <section className="border-t border-border bg-background py-16 sm:py-24">
+   452→      <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+   453→        <div className="overflow-hidden rounded-2xl bg-gradient-to-br from-violet-600 to-blue-600 px-6 py-12 text-center text-white shadow-card-soft sm:px-12 sm:py-16">
+   454→          <h2 className="text-3xl font-bold tracking-tight sm:text-4xl">Ready to be matched?</h2>
+   455→          <p className="mx-auto mt-3 max-w-xl text-sm text-white/90 sm:text-base">
+   456→            Join 4,800+ job seekers and 950+ employers using SkillMatch AI across Africa.
+   457→          </p>
+   458→          <div className="mt-7 flex flex-col items-center justify-center gap-3 sm:flex-row">
+   459→            <Button
+   460→              size="lg"
+   461→              variant="secondary"
+   462→              className="h-12 px-6 bg-white text-violet-700 hover:bg-white/90"
+   463→              onClick={() => setRole("seeker")}
+   464→            >
+   465→              Sign up as job seeker
+   466→            </Button>
+   467→            <Button
+   468→              size="lg"
+   469→              variant="outline"
+   470→              className="h-12 border-white/40 bg-white/10 px-6 text-white hover:bg-white/20 hover:text-white"
+   471→              onClick={() => setRole("employer")}
+   472→            >
+   473→              Sign up as employer
+   474→            </Button>
+   475→          </div>
+   476→        </div>
+   477→      </div>
+   478→    </section>
+   479→  );
+   480→}
+   481→
+   482→export function Landing() {
+   483→  const { go } = useApp();
+   484→  return (
+   485→    <div className="flex min-h-screen flex-col">
+   486→      <PublicHeader onAuth={(r) => go(r)} />
+   487→      <main className="flex-1">
+   488→        <LandingHero />
+   489→        <LandingFeatures />
+   490→        <LandingHowItWorks />
+   491→        <LandingCTA />
+   492→      </main>
+   493→      <PublicFooter />
+   494→    </div>
+   495→  );
+   496→}
+   497→
+   498→// ============================================================
+   499→// AUTH (login + register)
+   500→// ============================================================
+   501→function AuthShell({ title, subtitle, children }: { title: string; subtitle: string; children: React.ReactNode }) {
+   502→  const { go } = useApp();
+   503→  return (
+   504→    <div className="flex min-h-screen flex-col">
+   505→      <PublicHeader onAuth={(r) => go(r)} />
+   506→      <main className="flex flex-1 items-center justify-center bg-muted/20 px-4 py-10">
+   507→        <div className="w-full max-w-md">
+   508→          <div className="text-center">
+   509→            <h1 className="text-2xl font-bold tracking-tight">{title}</h1>
+   510→            <p className="mt-1 text-sm text-muted-foreground">{subtitle}</p>
+   511→          </div>
+   512→          <div className="mt-6">{children}</div>
+   513→          <p className="mt-6 text-center text-xs text-muted-foreground">
+   514→            By continuing you agree to our Terms of Service and Privacy Policy.
+   515→          </p>
+   516→        </div>
+   517→      </main>
+   518→      <PublicFooter />
+   519→    </div>
+   520→  );
+   521→}
+   522→
+   523→export function Login() {
+   524→  const { go } = useApp();
+   525→  const [email, setEmail] = useState("");
+   526→  const [password, setPassword] = useState("");
+   527→  const [error, setError] = useState<string | null>(null);
+   528→  const [loading, setLoading] = useState(false);
+   529→  const [status, setStatus] = useState<string | null>(null);
+   530→  const [forgotOpen, setForgotOpen] = useState(false);
+   531→  const [forgotEmail, setForgotEmail] = useState("");
+   532→  const [forgotError, setForgotError] = useState<string | null>(null);
+   533→  const [forgotLoading, setForgotLoading] = useState(false);
+   534→  const [resetToken, setResetToken] = useState<string | null>(null);
+   535→  const [newPassword, setNewPassword] = useState("");
+   536→  const [resetSuccess, setResetSuccess] = useState(false);
+   537→  const [resetError, setResetError] = useState<string | null>(null);
+   538→
+   539→  // Core sign-in logic: pre-check credentials, then call NextAuth
+   540→  const doLogin = async (emailVal: string, passwordVal: string) => {
+   541→    setError(null);
+   542→    setLoading(true);
+   543→    try {
+   544→      // Step 1: Pre-check credentials via our API (returns clear error messages)
+   545→      const checkRes = await fetch("/api/auth/check", {
+   546→        method: "POST",
+   547→        headers: { "Content-Type": "application/json" },
+   548→        body: JSON.stringify({ email: emailVal, password: passwordVal }),
+   549→      });
+   550→      const checkData = await checkRes.json();
+   551→
+   552→      if (!checkData.ok) {
+   553→        setError(checkData.error ?? "Invalid email or password.");
+   554→        setLoading(false);
+   555→        return;
+   556→      }
+   557→
+   558→      // Step 2: Call NextAuth signIn with email + password
+   559→      // For admin accounts, NextAuth just validates email+password.
+   560→      // The email OTP is handled by the admin 2FA gate after login.
+   561→      const res = await nextAuthSignIn("credentials", {
+   562→        email: emailVal,
+   563→        password: passwordVal,
+   564→        redirect: false,
+   565→      });
+   566→
+   567→      if (!res || res.error) {
+   568→        setError("Login failed. Please try again.");
+   569→        setLoading(false);
+   570→        return;
+   571→      }
+   572→
+   573→      // Success — reload so the server-rendered session hydrates.
+   574→      // The page.tsx router will redirect to the correct dashboard based on role.
+   575→      // For admins, it will show the 2FA gate which sends an email OTP.
+   576→      setStatus(checkData.role === "admin"
+   577→        ? "Success! Redirecting to email verification…"
+   578→        : "Success! Redirecting to your dashboard…");
+   579→      window.location.assign("/");
+   580→    } catch {
+   581→      setError("Network error. Please try again.");
+   582→      setLoading(false);
+   583→    }
+   584→  };
+   585→
+   586→  const submit = (e: React.FormEvent) => {
+   587→    e.preventDefault();
+   588→    if (!email || !password) {
+   589→      setError("Please enter both email and password.");
+   590→      return;
+   591→    }
+   592→    doLogin(email, password);
+   593→  };
+   594→
+   595→  // One-click demo login: fills the form AND submits immediately
+   596→  const quickLogin = (acc: typeof demoAccounts[number]) => {
+   597→    setEmail(acc.email);
+   598→    setPassword(acc.password);
+   599→    setError(null);
+   600→    setStatus(null);
+   601→    doLogin(acc.email, acc.password);
+   602→  };
+   603→
+   604→  // Just autofill (for manual review)
+   605→  const fillDemo = (acc: typeof demoAccounts[number]) => {
+   606→    setEmail(acc.email);
+   607→    setPassword(acc.password);
+   608→    setTotp("");
+   609→    setShow2FA(false);
+   610→    setError(null);
+   611→    setStatus(null);
+   612→  };
+   613→
+   614→  return (
+   615→    <AuthShell title="Welcome back" subtitle="Sign in to continue to your dashboard.">
+   616→      <Card>
+   617→        <CardContent className="p-6">
+   618→          <form onSubmit={submit} className="space-y-4">
+   619→            <div className="space-y-1.5">
+   620→              <Label htmlFor="email">Email</Label>
+   621→              <Input
+   622→                id="email"
+   623→                type="email"
+   624→                placeholder="you@example.com"
+   625→                value={email}
+   626→                onChange={(e) => setEmail(e.target.value)}
+   627→                autoComplete="email"
+   628→              />
+   629→            </div>
+   630→            <div className="space-y-1.5">
+   631→              <div className="flex items-center justify-between">
+   632→                <Label htmlFor="password">Password</Label>
+   633→                <Dialog open={forgotOpen} onOpenChange={(o) => { setForgotOpen(o); if (!o) { setResetToken(null); setForgotError(null); setResetError(null); setResetSuccess(false); setNewPassword(""); } }}>
+   634→                  <button
+   635→                    type="button"
+   636→                    onClick={() => setForgotOpen(true)}
+   637→                    className="text-xs text-primary hover:underline"
+   638→                  >
+   639→                    Forgot password?
+   640→                  </button>
+   641→                  <DialogContent>
+   642→                    <DialogHeader>
+   643→                      <DialogTitle>{resetSuccess ? "Password updated!" : resetToken ? "Set a new password" : "Reset your password"}</DialogTitle>
+   644→                      <DialogDescription>
+   645→                        {resetSuccess
+   646→                          ? "Your password has been changed. You can now sign in with your new password."
+   647→                          : resetToken
+   648→                          ? "Enter your new password below."
+   649→                          : "Enter your email and we'll generate a reset link for you."}
+   650→                      </DialogDescription>
+   651→                    </DialogHeader>
+   652→
+   653→                    {/* Step 3: Success */}
+   654→                    {resetSuccess ? (
+   655→                      <div className="flex flex-col items-center py-6 text-center">
+   656→                        <CheckCircle2 className="h-12 w-12 text-emerald-600" />
+   657→                        <p className="mt-3 text-sm font-semibold">Password changed successfully!</p>
+   658→                        <p className="mt-1 text-xs text-muted-foreground">You can now sign in with your new password.</p>
+   659→                        <Button className="mt-4 btn-green" size="sm" onClick={() => { setForgotOpen(false); setEmail(forgotEmail); }}>
+   660→                          Sign in now
+   661→                        </Button>
+   662→                      </div>
+   663→                    ) : resetToken ? (
+   664→                      /* Step 2: Enter new password */
+   665→                      <form
+   666→                        onSubmit={async (e) => {
+   667→                          e.preventDefault();
+   668→                          setResetError(null);
+   669→                          if (!newPassword || newPassword.length < 8) {
+   670→                            setResetError("Password must be at least 8 characters.");
+   671→                            return;
+   672→                          }
+   673→                          setForgotLoading(true);
+   674→                          try {
+   675→                            const res = await fetch("/api/auth/reset-password", {
+   676→                              method: "POST",
+   677→                              headers: { "Content-Type": "application/json" },
+   678→                              body: JSON.stringify({ token: resetToken, newPassword }),
+   679→                            });
+   680→                            const data = await res.json();
+   681→                            if (data.ok) {
+   682→                              setResetSuccess(true);
+   683→                            } else {
+   684→                              setResetError(data.error ?? "Failed to reset password.");
+   685→                            }
+   686→                          } catch {
+   687→                            setResetError("Network error.");
+   688→                          } finally {
+   689→                            setForgotLoading(false);
+   690→                          }
+   691→                        }}
+   692→                        className="space-y-3"
+   693→                      >
+   694→                        <div className="space-y-1.5">
+   695→                          <Label htmlFor="new-password">New password *</Label>
+   696→                          <Input
+   697→                            id="new-password"
+   698→                            type="password"
+   699→                            placeholder="At least 8 characters"
+   700→                            value={newPassword}
+   701→                            onChange={(e) => setNewPassword(e.target.value)}
+   702→                            autoComplete="new-password"
+   703→                          />
+   704→                          {resetError && <p className="text-xs text-rose-600">{resetError}</p>}
+   705→                        </div>
+   706→                        <DialogFooter>
+   707→                          <Button type="button" variant="outline" onClick={() => setForgotOpen(false)}>Cancel</Button>
+   708→                          <Button type="submit" disabled={forgotLoading} className="btn-green">
+   709→                            {forgotLoading ? "Resetting…" : "Reset password"}
+   710→                          </Button>
+   711→                        </DialogFooter>
+   712→                      </form>
+   713→                    ) : (
+   714→                      /* Step 1: Enter email */
+   715→                      <form
+   716→                        onSubmit={async (e) => {
+   717→                          e.preventDefault();
+   718→                          setForgotError(null);
+   719→                          if (!forgotEmail.trim()) {
+   720→                            setForgotError("Please enter your email.");
+   721→                            return;
+   722→                          }
+   723→                          if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(forgotEmail)) {
+   724→                            setForgotError("Please enter a valid email.");
+   725→                            return;
+   726→                          }
+   727→                          setForgotLoading(true);
+   728→                          try {
+   729→                            const res = await fetch("/api/auth/forgot-password", {
+   730→                              method: "POST",
+   731→                              headers: { "Content-Type": "application/json" },
+   732→                              body: JSON.stringify({ email: forgotEmail }),
+   733→                            });
+   734→                            const data = await res.json();
+   735→                            if (data.ok) {
+   736→                              setResetToken(data.token);
+   737→                            } else {
+   738→                              setForgotError(data.error ?? "Failed to generate reset link.");
+   739→                            }
+   740→                          } catch {
+   741→                            setForgotError("Network error.");
+   742→                          } finally {
+   743→                            setForgotLoading(false);
+   744→                          }
+   745→                        }}
+   746→                        className="space-y-3"
+   747→                      >
+   748→                        <div className="space-y-1.5">
+   749→                          <Label htmlFor="forgot-email">Email *</Label>
+   750→                          <Input
+   751→                            id="forgot-email"
+   752→                            type="email"
+   753→                            placeholder="you@example.com"
+   754→                            value={forgotEmail}
+   755→                            onChange={(e) => setForgotEmail(e.target.value)}
+   756→                            autoComplete="email"
+   757→                          />
+   758→                          {forgotError && <p className="text-xs text-rose-600">{forgotError}</p>}
+   759→                        </div>
+   760→                        <div className="rounded-md border border-blue-200 bg-blue-50 px-3 py-2 text-[11px] text-blue-700">
+   761→                          For demo accounts: seeker@demo.com, employer@demo.com, or admin@demo.com
+   762→                        </div>
+   763→                        <DialogFooter>
+   764→                          <Button type="button" variant="outline" onClick={() => setForgotOpen(false)}>Cancel</Button>
+   765→                          <Button type="submit" disabled={forgotLoading} className="btn-blue">
+   766→                            {forgotLoading ? "Generating…" : "Send reset link"}
+   767→                          </Button>
+   768→                        </DialogFooter>
+   769→                      </form>
+   770→                    )}
+   771→                  </DialogContent>
+   772→                </Dialog>
+   773→              </div>
+   774→              <Input
+   775→                id="password"
+   776→                type="password"
+   777→                placeholder="••••••••"
+   778→                value={password}
+   779→                onChange={(e) => setPassword(e.target.value)}
+   780→                autoComplete="current-password"
+   781→              />
+   782→            </div>
+   783→            {error && (
+   784→              <div className="flex items-center gap-2 rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-700">
+   785→                <AlertCircle className="h-3.5 w-3.5 shrink-0" />
+   786→                {error}
+   787→              </div>
+   788→            )}
+   789→            {status && !error && (
+   790→              <div className="flex items-center gap-2 rounded-md border border-blue-200 bg-blue-50 px-3 py-2 text-xs text-blue-700">
+   791→                <span className="h-3 w-3 animate-spin rounded-full border-2 border-blue-600 border-t-transparent" />
+   792→                {status}
+   793→              </div>
+   794→            )}
+   795→            <Button type="submit" className="w-full h-10 btn-rainbow" disabled={loading}>
+   796→              {loading ? (
+   797→                <>
+   798→                  <span className="h-4 w-4 animate-spin rounded-full border-2 border-primary-foreground border-t-transparent" />
+   799→                  Signing in…
+   800→                </>
+   801→              ) : (
+   802→                "Sign in"
+   803→              )}
+   804→            </Button>
+   805→          </form>
+   806→          <div className="my-4 flex items-center gap-2 text-xs text-muted-foreground">
+   807→            <div className="h-px flex-1 bg-border" />
+   808→            <span>or</span>
+   809→            <div className="h-px flex-1 bg-border" />
+   810→          </div>
+   811→          <div className="grid grid-cols-2 gap-2">
+   812→            <Button variant="outline" className="h-9 text-xs">
+   813→              Continue with Google
+   814→            </Button>
+   815→            <Button variant="outline" className="h-9 text-xs">
+   816→              Continue with LinkedIn
+   817→            </Button>
+   818→          </div>
+   819→          <p className="mt-5 text-center text-xs text-muted-foreground">
+   820→            New to SkillMatch AI?{" "}
+   821→            <button onClick={() => go("register")} className="font-medium text-primary hover:underline">
+   822→              Create an account
+   823→            </button>
+   824→          </p>
+   825→        </CardContent>
+   826→      </Card>
+   827→
+   828→      {/* Demo credentials picker — one-click login */}
+   829→      <Card className="mt-4 border-primary/20">
+   830→        <CardHeader className="pb-3">
+   831→          <CardTitle className="text-sm flex items-center gap-2">
+   832→            <Sparkles className="h-4 w-4 text-primary" /> One-click demo login
+   833→          </CardTitle>
+   834→          <CardDescription>
+   835→            Click any card to instantly sign in as that role. Password is{" "}
+   836→            <code className="rounded bg-muted px-1 py-0.5 text-[10px]">demo1234</code> for all accounts.
+   837→          </CardDescription>
+   838→        </CardHeader>
+   839→        <CardContent className="space-y-2">
+   840→          {demoAccounts.map((acc) => (
+   841→            <div
+   842→              key={acc.id}
+   843→              className="group flex items-center gap-3 rounded-lg border border-border bg-card p-3 transition-all hover:border-primary/40 hover:bg-accent"
+   844→            >
+   845→              <span
+   846→                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-xs font-semibold text-white"
+   847→                style={{ background: acc.avatarColor }}
+   848→              >
+   849→                {acc.initials}
+   850→              </span>
+   851→              <div className="min-w-0 flex-1">
+   852→                <div className="flex items-center gap-2">
+   853→                  <p className="text-sm font-semibold">{acc.name}</p>
+   854→                  <Badge
+   855→                    variant="outline"
+   856→                    className={cn(
+   857→                      "text-[10px] capitalize",
+   858→                      acc.role === "seeker" ? "bg-violet-50 text-violet-700 border-violet-200" :
+   859→                      acc.role === "employer" ? "bg-blue-50 text-blue-700 border-blue-200" :
+   860→                      "bg-amber-50 text-amber-700 border-amber-200"
+   861→                    )}
+   862→                  >
+   863→                    {acc.role}
+   864→                  </Badge>
+   865→                  {acc.role === "admin" && (
+   866→                    <Badge variant="outline" className="text-[10px] bg-emerald-50 text-emerald-700 border-emerald-200 gap-1">
+   867→                      <ShieldCheck className="h-2.5 w-2.5" /> 2FA
+   868→                    </Badge>
+   869→                  )}
+   870→                </div>
+   871→                <p className="truncate text-xs text-muted-foreground">{acc.blurb}</p>
+   872→                <p className="truncate text-[10px] text-muted-foreground font-mono mt-0.5">{acc.email}</p>
+   873→              </div>
+   874→              <div className="flex flex-col gap-1">
+   875→                <Button
+   876→                  size="sm"
+   877→                  className="h-7 text-xs"
+   878→                  onClick={() => quickLogin(acc)}
+   879→                  disabled={loading}
+   880→                >
+   881→                  {loading ? "…" : "Sign in"}
+   882→                </Button>
+   883→                <Button
+   884→                  size="sm"
+   885→                  variant="ghost"
+   886→                  className="h-6 text-[10px]"
+   887→                  onClick={() => fillDemo(acc)}
+   888→                >
+   889→                  Autofill
+   890→                </Button>
+   891→              </div>
+   892→            </div>
+   893→          ))}
+   894→        </CardContent>
+   895→      </Card>
+   896→    </AuthShell>
+   897→  );
+   898→}
+   899→
+   900→export function Register() {
+   901→  const { go } = useApp();
+   902→  const [role, setRoleChoice] = useState<Role>("seeker");
+   903→  const [name, setName] = useState("");
+   904→  const [email, setEmail] = useState("");
+   905→  const [password, setPassword] = useState("");
+   906→  const [agree, setAgree] = useState(false);
+   907→  const [errors, setErrors] = useState<Record<string, string>>({});
+   908→  const [submitting, setSubmitting] = useState(false);
+   909→  const [serverError, setServerError] = useState<string | null>(null);
+   910→  const [successMsg, setSuccessMsg] = useState<string | null>(null);
+   911→
+   912→  const submit = async (e: React.FormEvent) => {
+   913→    e.preventDefault();
+   914→    setServerError(null);
+   915→    const next: Record<string, string> = {};
+   916→    if (!name.trim()) next.name = "Please enter your name.";
+   917→    if (!email.trim()) next.email = "Please enter your email.";
+   918→    else if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) next.email = "Please enter a valid email.";
+   919→    if (password.length < 8) next.password = "Password must be at least 8 characters.";
+   920→    if (!agree) next.terms = "You must accept the terms to continue.";
+   921→    setErrors(next);
+   922→    if (Object.keys(next).length > 0) return;
+   923→    setSubmitting(true);
+   924→    try {
+   925→      const res = await fetch("/api/auth/register", {
+   926→        method: "POST",
+   927→        headers: { "Content-Type": "application/json" },
+   928→        body: JSON.stringify({ name: name.trim(), email: email.trim(), password, role }),
+   929→      });
+   930→      const data = await res.json();
+   931→      if (!data.ok) {
+   932→        setServerError(data.error ?? "Registration failed.");
+   933→        return;
+   934→      }
+   935→      // Account created successfully — redirect to login so the user
+   936→      // signs in with their new credentials (per requirement #2).
+   937→      setSuccessMsg("Account created! Redirecting to login…");
+   938→      setTimeout(() => go("login"), 1500);
+   939→    } catch {
+   940→      setServerError("Network error. Please try again.");
+   941→    } finally {
+   942→      setSubmitting(false);
+   943→    }
+   944→  };
+   945→
+   946→  return (
+   947→    <AuthShell title="Create your account" subtitle="Start matching in minutes. Free for job seekers.">
+   948→      <Card>
+   949→        <CardContent className="p-6">
+   950→          {/* Role switch */}
+   951→          <div className="grid grid-cols-2 gap-2">
+   952→            <button
+   953→              type="button"
+   954→              onClick={() => setRoleChoice("seeker")}
+   955→              className={cn(
+   956→                "flex flex-col items-start rounded-lg border p-3 text-left transition-colors",
+   957→                role === "seeker"
+   958→                  ? "border-primary bg-primary/5 ring-1 ring-primary/30"
+   959→                  : "border-border hover:bg-accent"
+   960→              )}
+   961→            >
+   962→              <Users className="h-4 w-4 text-primary" />
+   963→              <p className="mt-1.5 text-sm font-semibold">I'm looking for work</p>
+   964→              <p className="text-xs text-muted-foreground">Job seeker account</p>
+   965→            </button>
+   966→            <button
+   967→              type="button"
+   968→              onClick={() => setRoleChoice("employer")}
+   969→              className={cn(
+   970→                "flex flex-col items-start rounded-lg border p-3 text-left transition-colors",
+   971→                role === "employer"
+   972→                  ? "border-primary bg-primary/5 ring-1 ring-primary/30"
+   973→                  : "border-border hover:bg-accent"
+   974→              )}
+   975→            >
+   976→              <Building2 className="h-4 w-4 text-primary" />
+   977→              <p className="mt-1.5 text-sm font-semibold">I'm hiring</p>
+   978→              <p className="text-xs text-muted-foreground">Employer account</p>
+   979→            </button>
+   980→          </div>
+   981→
+   982→          <form onSubmit={submit} className="mt-5 space-y-4">
+   983→            <div className="space-y-1.5">
+   984→              <Label htmlFor="name">{role === "employer" ? "Company name" : "Full name"}</Label>
+   985→              <Input
+   986→                id="name"
+   987→                placeholder={role === "employer" ? "Acme Inc." : "Amara Okafor"}
+   988→                value={name}
+   989→                onChange={(e) => setName(e.target.value)}
+   990→              />
+   991→              {errors.name && <p className="text-xs text-rose-600">{errors.name}</p>}
+   992→            </div>
+   993→            <div className="space-y-1.5">
+   994→              <Label htmlFor="email">Work email</Label>
+   995→              <Input
+   996→                id="email"
+   997→                type="email"
+   998→                placeholder="you@company.com"
+   999→                value={email}
+  1000→                onChange={(e) => setEmail(e.target.value)}
+  1001→              />
+  1002→              {errors.email && <p className="text-xs text-rose-600">{errors.email}</p>}
+  1003→            </div>
+  1004→            <div className="space-y-1.5">
+  1005→              <Label htmlFor="password">Password</Label>
+  1006→              <Input
+  1007→                id="password"
+  1008→                type="password"
+  1009→                placeholder="At least 8 characters"
+  1010→                value={password}
+  1011→                onChange={(e) => setPassword(e.target.value)}
+  1012→              />
+  1013→              {errors.password && <p className="text-xs text-rose-600">{errors.password}</p>}
+  1014→            </div>
+  1015→            <div className="flex items-start gap-2">
+  1016→              <Checkbox id="terms" checked={agree} onCheckedChange={(v) => setAgree(Boolean(v))} />
+  1017→              <label htmlFor="terms" className="text-xs text-muted-foreground">
+  1018→                I agree to the Terms of Service, Privacy Policy, and the candidate-privacy commitment that protects contact information until I apply or accept an interview.
+  1019→              </label>
+  1020→            </div>
+  1021→            {errors.terms && <p className="text-xs text-rose-600">{errors.terms}</p>}
+  1022→            {serverError && (
+  1023→              <div className="flex items-center gap-2 rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-700">
+  1024→                <AlertCircle className="h-3.5 w-3.5 shrink-0" />
+  1025→                {serverError}
+  1026→              </div>
+  1027→            )}
+  1028→            {successMsg && (
+  1029→              <div className="flex items-center gap-2 rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-700">
+  1030→                <CheckCircle2 className="h-3.5 w-3.5 shrink-0" />
+  1031→                {successMsg}
+  1032→              </div>
+  1033→            )}
+  1034→            <Button type="submit" className="w-full h-10" disabled={submitting}>
+  1035→              {submitting ? (
+  1036→                <>
+  1037→                  <span className="h-4 w-4 animate-spin rounded-full border-2 border-primary-foreground border-t-transparent" />
+  1038→                  Creating account…
+  1039→                </>
+  1040→              ) : (
+  1041→                <>Create {role === "employer" ? "employer" : "job seeker"} account</>
+  1042→              )}
+  1043→            </Button>
+  1044→          </form>
+  1045→          <p className="mt-5 text-center text-xs text-muted-foreground">
+  1046→            Already have an account?{" "}
+  1047→            <button onClick={() => go("login")} className="font-medium text-primary hover:underline">
+  1048→              Sign in
+  1049→            </button>
+  1050→          </p>
+  1051→        </CardContent>
+  1052→      </Card>
+  1053→    </AuthShell>
+  1054→  );
+  1055→}
+  1056→
+  1057→// ============================================================
+  1058→// PUBLIC JOB LISTINGS
+  1059→// ============================================================
+  1060→function JobCard({ job, onOpen }: { job: Job; onOpen: () => void }) {
+  1061→  return (
+  1062→    <button
+  1063→      onClick={onOpen}
+  1064→      className="group block w-full rounded-xl border border-border bg-card p-4 text-left shadow-card-soft transition-all hover:-translate-y-0.5 hover:shadow-card-hover"
+  1065→    >
+  1066→      <div className="flex items-start gap-3">
+  1067→        <CompanyLogo initials={job.companyLogo || job.company.slice(0, 2).toUpperCase()} size="md" />
+  1068→        <div className="min-w-0 flex-1">
+  1069→          <p className="text-sm font-semibold tracking-tight group-hover:text-primary">{job.title}</p>
+  1070→          <p className="text-xs text-muted-foreground">{job.company}</p>
+  1071→          <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-muted-foreground">
+  1072→            <span className="flex items-center gap-1"><MapPin className="h-3 w-3" />{job.location}</span>
+  1073→            <span className="flex items-center gap-1"><Briefcase className="h-3 w-3" />{job.type}</span>
+  1074→            <span className="flex items-center gap-1"><Clock className="h-3 w-3" />{timeAgo(job.postedAt)}</span>
+  1075→          </div>
+  1076→        </div>
+  1077→        {job.matchScore && <MatchScore score={job.matchScore} size="sm" showLabel={false} />}
+  1078→      </div>
+  1079→      <div className="mt-3 flex flex-wrap gap-1.5">
+  1080→        {job.skills.slice(0, 4).map((s) => (
+  1081→          <SkillChip key={s.id} name={s.name} proficiency={s.proficiency} mandatory={s.mandatory} size="sm" />
+  1082→        ))}
+  1083→        {job.skills.length > 4 && (
+  1084→          <span className="inline-flex items-center rounded-md border border-border bg-muted/40 px-2 py-0.5 text-[11px] text-muted-foreground">
+  1085→            +{job.skills.length - 4} more
+  1086→          </span>
+  1087→        )}
+  1088→      </div>
+  1089→    </button>
+  1090→  );
+  1091→}
+  1092→
+  1093→function timeAgo(date: string) {
+  1094→  const d = new Date(date);
+  1095→  const days = Math.floor((Date.now() - d.getTime()) / (1000 * 60 * 60 * 24));
+  1096→  if (days === 0) return "today";
+  1097→  if (days === 1) return "1d ago";
+  1098→  if (days < 7) return `${days}d ago`;
+  1099→  if (days < 30) return `${Math.floor(days / 7)}w ago`;
+  1100→  return `${Math.floor(days / 30)}mo ago`;
+  1101→}
+  1102→
+  1103→export function PublicJobs() {
+  1104→  const { go } = useApp();
+  1105→  const [query, setQuery] = useState("");
+  1106→  const [category, setCategory] = useState("all");
+  1107→  const [remote, setRemote] = useState("all");
+  1108→
+  1109→  const categories = Array.from(new Set(publicJobs.map((j) => j.category)));
+  1110→  const filtered = publicJobs.filter((j) => {
+  1111→    if (category !== "all" && j.category !== category) return false;
+  1112→    if (remote !== "all" && j.remote !== remote) return false;
+  1113→    if (query) {
+  1114→      const q = query.toLowerCase();
+  1115→      return (
+  1116→        j.title.toLowerCase().includes(q) ||
+  1117→        j.company.toLowerCase().includes(q) ||
+  1118→        j.skills.some((s) => s.name.toLowerCase().includes(q))
+  1119→      );
+  1120→    }
+  1121→    return true;
+  1122→  });
+  1123→
+  1124→  return (
+  1125→    <div className="flex min-h-screen flex-col">
+  1126→      <PublicHeader onAuth={(r) => go(r)} />
+  1127→      <main className="flex-1 bg-muted/20">
+  1128→        <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
+  1129→          <div className="mb-6">
+  1130→            <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">Browse open jobs</h1>
+  1131→            <p className="mt-1 text-sm text-muted-foreground">
+  1132→              {publicJobs.length} live roles across {categories.length} categories. Sign in to see your personalized match score.
+  1133→            </p>
+  1134→          </div>
+  1135→
+  1136→          {/* Filters */}
+  1137→          <div className="mb-6 grid gap-3 sm:grid-cols-[1fr_180px_180px]">
+  1138→            <div className="relative">
+  1139→              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+  1140→              <Input
+  1141→                placeholder="Search title, company, or skill"
+  1142→                className="pl-9"
+  1143→                value={query}
+  1144→                onChange={(e) => setQuery(e.target.value)}
+  1145→              />
+  1146→            </div>
+  1147→            <Select value={category} onValueChange={setCategory}>
+  1148→              <SelectTrigger>
+  1149→                <SelectValue placeholder="Category" />
+  1150→              </SelectTrigger>
+  1151→              <SelectContent>
+  1152→                <SelectItem value="all">All categories</SelectItem>
+  1153→                {categories.map((c) => (
+  1154→                  <SelectItem key={c} value={c}>{c}</SelectItem>
+  1155→                ))}
+  1156→              </SelectContent>
+  1157→            </Select>
+  1158→            <Select value={remote} onValueChange={setRemote}>
+  1159→              <SelectTrigger>
+  1160→                <SelectValue placeholder="Workplace" />
+  1161→              </SelectTrigger>
+  1162→              <SelectContent>
+  1163→                <SelectItem value="all">All workplaces</SelectItem>
+  1164→                <SelectItem value="remote">Remote</SelectItem>
+  1165→                <SelectItem value="hybrid">Hybrid</SelectItem>
+  1166→                <SelectItem value="onsite">On-site</SelectItem>
+  1167→              </SelectContent>
+  1168→            </Select>
+  1169→          </div>
+  1170→
+  1171→          <div className="flex items-center justify-between text-xs text-muted-foreground">
+  1172→            <span>{filtered.length} result{filtered.length !== 1 && "s"}</span>
+  1173→            <span className="flex items-center gap-1"><Filter className="h-3 w-3" /> Sorted by recency</span>
+  1174→          </div>
+  1175→
+  1176→          <div className="mt-3 grid gap-3 lg:grid-cols-2">
+  1177→            {filtered.map((j) => (
+  1178→              <JobCard key={j.id} job={j} onOpen={() => go("public-job-detail", { jobId: j.id })} />
+  1179→            ))}
+  1180→          </div>
+  1181→
+  1182→          {filtered.length === 0 && (
+  1183→            <EmptyState
+  1184→              icon={<Search className="h-5 w-5" />}
+  1185→              title="No jobs match your filters"
+  1186→              description="Try clearing some filters or searching with a broader term."
+  1187→            />
+  1188→          )}
+  1189→
+  1190→          <div className="mt-10 rounded-xl border border-dashed border-primary/30 bg-primary/5 p-6 text-center">
+  1191→            <p className="text-sm font-semibold">Want to see your match score?</p>
+  1192→            <p className="mt-1 text-xs text-muted-foreground">Sign in and complete your skill profile to get personalized 0–100% match scores.</p>
+  1193→            <Button className="mt-3" size="sm" onClick={() => go("login")}>
+  1194→              Sign in <ArrowRight className="h-3.5 w-3.5" />
+  1195→            </Button>
+  1196→          </div>
+  1197→        </div>
+  1198→      </main>
+  1199→      <PublicFooter />
+  1200→    </div>
+  1201→  );
+  1202→}
+  1203→
+  1204→// ============================================================
+  1205→// PUBLIC JOB DETAIL
+  1206→// ============================================================
+  1207→export function PublicJobDetail() {
+  1208→  const { go, selectedJobId, setRole } = useApp();
+  1209→  const job = publicJobs.find((j) => j.id === selectedJobId) || recommendedJobs.find((j) => j.id === selectedJobId) || recommendedJobs[0];
+  1210→
+  1211→  return (
+  1212→    <div className="flex min-h-screen flex-col">
+  1213→      <PublicHeader onAuth={(r) => go(r)} />
+  1214→      <main className="flex-1 bg-muted/20">
+  1215→        <div className="mx-auto max-w-4xl px-4 py-8 sm:px-6 lg:px-8">
+  1216→          <button
+  1217→            onClick={() => go("public-jobs")}
+  1218→            className="mb-4 inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
+  1219→          >
+  1220→            <ArrowLeft className="h-3.5 w-3.5" /> Back to jobs
+  1221→          </button>
+  1222→
+  1223→          <Card>
+  1224→            <CardContent className="p-6">
+  1225→              <div className="flex flex-col gap-4 sm:flex-row sm:items-start">
+  1226→                <CompanyLogo initials={job.companyLogo || "CO"} size="lg" />
+  1227→                <div className="min-w-0 flex-1">
+  1228→                  <h1 className="text-xl font-bold tracking-tight sm:text-2xl">{job.title}</h1>
+  1229→                  <p className="text-sm text-muted-foreground">{job.company}</p>
+  1230→                  <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground">
+  1231→                    <span className="flex items-center gap-1"><MapPin className="h-3 w-3" />{job.location}</span>
+  1232→                    <span className="flex items-center gap-1"><Briefcase className="h-3 w-3" />{job.type}</span>
+  1233→                    <span className="flex items-center gap-1"><Clock className="h-3 w-3" />Posted {timeAgo(job.postedAt)}</span>
+  1234→                  </div>
+  1235→                </div>
+  1236→                <Button onClick={() => setRole("seeker")}>
+  1237→                  Apply now <ArrowRight className="h-3.5 w-3.5" />
+  1238→                </Button>
+  1239→              </div>
+  1240→
+  1241→              <div className="mt-5 flex flex-wrap gap-2 text-xs">
+  1242→                <Badge variant="outline" className="bg-violet-50 text-violet-700 border-violet-200">
+  1243→                  {job.category}
+  1244→                </Badge>
+  1245→                <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200 capitalize">
+  1246→                  {job.remote}
+  1247→                </Badge>
+  1248→                <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-200">
+  1249→                  ${job.salary.min.toLocaleString()}–${job.salary.max.toLocaleString()} / {job.salary.period}
+  1250→                </Badge>
+  1251→              </div>
+  1252→
+  1253→              <div className="mt-6 grid gap-6 lg:grid-cols-3">
+  1254→                <div className="lg:col-span-2 space-y-6">
+  1255→                  <div>
+  1256→                    <h2 className="text-sm font-semibold">About the role</h2>
+  1257→                    <p className="mt-2 text-sm text-muted-foreground">{job.description}</p>
+  1258→                  </div>
+  1259→                  <div>
+  1260→                    <h2 className="text-sm font-semibold">What you'll do</h2>
+  1261→                    <ul className="mt-2 space-y-1.5">
+  1262→                      {job.responsibilities.map((r, i) => (
+  1263→                        <li key={i} className="flex gap-2 text-sm text-muted-foreground">
+  1264→                          <Check className="h-4 w-4 shrink-0 text-emerald-600 mt-0.5" />
+  1265→                          {r}
+  1266→                        </li>
+  1267→                      ))}
+  1268→                    </ul>
+  1269→                  </div>
+  1270→                  <div>
+  1271→                    <h2 className="text-sm font-semibold">What we're looking for</h2>
+  1272→                    <ul className="mt-2 space-y-1.5">
+  1273→                      {job.requirements.map((r, i) => (
+  1274→                        <li key={i} className="flex gap-2 text-sm text-muted-foreground">
+  1275→                          <Check className="h-4 w-4 shrink-0 text-emerald-600 mt-0.5" />
+  1276→                          {r}
+  1277→                        </li>
+  1278→                      ))}
+  1279→                    </ul>
+  1280→                  </div>
+  1281→                  <div>
+  1282→                    <h2 className="text-sm font-semibold">Required skills</h2>
+  1283→                    <div className="mt-2 flex flex-wrap gap-1.5">
+  1284→                      {job.skills.map((s) => (
+  1285→                        <SkillChip
+  1286→                          key={s.id}
+  1287→                          name={s.name}
+  1288→                          proficiency={s.proficiency}
+  1289→                          mandatory={s.mandatory}
+  1290→                          size="sm"
+  1291→                        />
+  1292→                      ))}
+  1293→                    </div>
+  1294→                  </div>
+  1295→                </div>
+  1296→                <aside className="space-y-4">
+  1297→                  <div className="rounded-lg border border-border bg-muted/30 p-4">
+  1298→                    <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Job activity</p>
+  1299→                    <div className="mt-2 space-y-2 text-xs">
+  1300→                      <div className="flex justify-between">
+  1301→                        <span className="text-muted-foreground">Applicants</span>
+  1302→                        <span className="font-semibold">{job.applicants}</span>
+  1303→                      </div>
+  1304→                      <div className="flex justify-between">
+  1305→                        <span className="text-muted-foreground">Views</span>
+  1306→                        <span className="font-semibold">{job.views}</span>
+  1307→                      </div>
+  1308→                      <div className="flex justify-between">
+  1309→                        <span className="text-muted-foreground">Posted</span>
+  1310→                        <span className="font-semibold">{timeAgo(job.postedAt)}</span>
+  1311→                      </div>
+  1312→                    </div>
+  1313→                  </div>
+  1314→                  <InfoCallout>
+  1315→                    <span className="font-medium">See your match score.</span> Sign in to view how your skills align with this role and get a personalized recommendation.
+  1316→                  </InfoCallout>
+  1317→                  <Button className="w-full" onClick={() => setRole("seeker")}>
+  1318→                    Sign in to apply
+  1319→                  </Button>
+  1320→                </aside>
+  1321→              </div>
+  1322→            </CardContent>
+  1323→          </Card>
+  1324→        </div>
+  1325→      </main>
+  1326→      <PublicFooter />
+  1327→    </div>
+  1328→  );
+  1329→}
+  1330→
+  1331→// ============================================================
+  1332→// ABOUT PAGE
+  1333→// ============================================================
+  1334→export function AboutPage() {
+  1335→  const { go } = useApp();
+  1336→  return (
+  1337→    <div className="flex min-h-screen flex-col">
+  1338→      <PublicHeader onAuth={(r) => go(r)} />
+  1339→      <main className="flex-1">
+  1340→        {/* Hero */}
+  1341→        <section className="bg-hero-glow border-b border-border">
+  1342→          <div className="mx-auto max-w-4xl px-4 py-16 sm:px-6 sm:py-20 lg:px-8 text-center">
+  1343→            <Badge variant="outline" className="bg-primary/5 text-primary border-primary/20 mb-4">
+  1344→              About SkillMatch AI
+  1345→            </Badge>
+  1346→            <h1 className="text-4xl font-extrabold tracking-tight sm:text-5xl">
+  1347→              <span className="text-gradient-primary">Skill-based hiring</span> for the African talent market.
+  1348→            </h1>
+  1349→            <p className="mx-auto mt-5 max-w-2xl text-base text-muted-foreground sm:text-lg">
+  1350→              We're building the most transparent, skill-first employment platform on the continent.
+  1351→              No keyword spam. No résumé black holes. Just verifiable skills matched to real opportunities.
+  1352→            </p>
+  1353→          </div>
+  1354→        </section>
+  1355→
+  1356→        {/* Mission */}
+  1357→        <section className="border-b border-border py-16">
+  1358→          <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+  1359→            <div className="grid gap-10 lg:grid-cols-2">
+  1360→              <div>
+  1361→                <p className="text-xs font-semibold uppercase tracking-wider text-primary">Our mission</p>
+  1362→                <h2 className="mt-2 text-3xl font-bold tracking-tight">Make hiring about evidence, not keywords.</h2>
+  1363→                <p className="mt-4 text-muted-foreground">
+  1364→                  Traditional job boards treat candidates as a list of keywords and employers as a filter funnel.
+  1365→                  That's broken. It wastes everyone's time and locks talented people out of roles they'd thrive in.
+  1366→                </p>
+  1367→                <p className="mt-3 text-muted-foreground">
+  1368→                  SkillMatch AI flips the model. We build a structured skill graph for every candidate,
+  1369→                  verify it through assessments and prior employer attestation, then use an explainable
+  1370→                  AI to match candidates to jobs based on what they can actually do — not who they know
+  1371→                  or how well they game applicant tracking systems.
+  1372→                </p>
+  1373→              </div>
+  1374→              <div className="grid gap-4 sm:grid-cols-2">
+  1375→                {[
+  1376→                  { stat: "4,872", label: "Active job seekers" },
+  1377→                  { stat: "958", label: "Hiring employers" },
+  1378→                  { stat: "1,247", label: "Open roles" },
+  1379→                  { stat: "6,124", label: "Verified skills" },
+  1380→                ].map((s) => (
+  1381→                  <div key={s.label} className="rounded-xl border border-border bg-card p-5 text-center">
+  1382→                    <p className="text-3xl font-bold tracking-tight text-primary">{s.stat}</p>
+  1383→                    <p className="mt-1 text-xs text-muted-foreground">{s.label}</p>
+  1384→                  </div>
+  1385→                ))}
+  1386→              </div>
+  1387→            </div>
+  1388→          </div>
+  1389→        </section>
+  1390→
+  1391→        {/* Values */}
+  1392→        <section className="border-b border-border bg-muted/30 py-16">
+  1393→          <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+  1394→            <h2 className="text-center text-3xl font-bold tracking-tight">What we stand for</h2>
+  1395→            <div className="mt-10 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+  1396→              {[
+  1397→                { icon: <ShieldCheck className="h-5 w-5" />, title: "Verified skills", desc: "Every skill is backed by an assessment, certificate, or employer attestation — never self-reported alone." },
+  1398→                { icon: <Sparkles className="h-5 w-5" />, title: "Explainable AI", desc: "Every match score is broken into understandable factors. No black boxes, no opaque rejections." },
+  1399→                { icon: <Lock className="h-5 w-5" />, title: "Privacy by default", desc: "Employers can't see your contact info until you apply or accept an interview. You're always in control." },
+  1400→                { icon: <TrendingUp className="h-5 w-5" />, title: "Skill growth", desc: "We show you exactly which skills separate you from your target roles — and where to learn them." },
+  1401→              ].map((v) => (
+  1402→                <div key={v.title} className="rounded-xl border border-border bg-card p-5">
+  1403→                  <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10 text-primary">
+  1404→                    {v.icon}
+  1405→                  </div>
+  1406→                  <h3 className="mt-4 text-base font-semibold">{v.title}</h3>
+  1407→                  <p className="mt-1.5 text-sm text-muted-foreground">{v.desc}</p>
+  1408→                </div>
+  1409→              ))}
+  1410→            </div>
+  1411→          </div>
+  1412→        </section>
+  1413→
+  1414→        {/* How it works */}
+  1415→        <section className="border-b border-border py-16">
+  1416→          <div className="mx-auto max-w-4xl px-4 sm:px-6 lg:px-8">
+  1417→            <h2 className="text-center text-3xl font-bold tracking-tight">How the matching works</h2>
+  1418→            <p className="mx-auto mt-3 max-w-2xl text-center text-muted-foreground">
+  1419→              Our AI computes a 0–100% match score for every job application, broken down into six weighted factors.
+  1420→            </p>
+  1421→            <div className="mt-10 space-y-4">
+  1422→              {[
+  1423→                { label: "Skill match", weight: "25%", desc: "Overall overlap between your skills and the job's required + preferred skill set." },
+  1424→                { label: "Required skill match", weight: "30%", desc: "Coverage of mandatory skills the employer explicitly requires." },
+  1425→                { label: "Proficiency match", weight: "15%", desc: "How closely your proficiency level meets the requested level on each matched skill." },
+  1426→                { label: "Experience match", weight: "15%", desc: "Years and seniority of relevant experience against the role's expectations." },
+  1427→                { label: "Education match", weight: "10%", desc: "Whether your highest verified education meets the role's stated threshold." },
+  1428→                { label: "Verified skills", weight: "5%", desc: "Share of matched skills that have been independently verified." },
+  1429→              ].map((f) => (
+  1430→                <div key={f.label} className="flex items-center gap-4 rounded-lg border border-border bg-card p-4">
+  1431→                  <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary font-bold">
+  1432→                    {f.weight}
+  1433→                  </div>
+  1434→                  <div>
+  1435→                    <p className="text-sm font-semibold">{f.label}</p>
+  1436→                    <p className="text-xs text-muted-foreground">{f.desc}</p>
+  1437→                  </div>
+  1438→                </div>
+  1439→              ))}
+  1440→            </div>
+  1441→          </div>
+  1442→        </section>
+  1443→
+  1444→        {/* CTA */}
+  1445→        <section className="py-16">
+  1446→          <div className="mx-auto max-w-4xl px-4 sm:px-6 lg:px-8 text-center">
+  1447→            <h2 className="text-3xl font-bold tracking-tight">Ready to be matched?</h2>
+  1448→            <p className="mx-auto mt-3 max-w-xl text-muted-foreground">
+  1449→              Join thousands of job seekers and employers using SkillMatch AI across Africa.
+  1450→            </p>
+  1451→            <div className="mt-7 flex flex-col items-center justify-center gap-3 sm:flex-row">
+  1452→              <Button size="lg" onClick={() => go("register")}>Sign up as job seeker</Button>
+  1453→              <Button size="lg" variant="outline" onClick={() => go("register")}>Sign up as employer</Button>
+  1454→            </div>
+  1455→          </div>
+  1456→        </section>
+  1457→      </main>
+  1458→      <PublicFooter />
+  1459→    </div>
+  1460→  );
+  1461→}
+  1462→
+  1463→// ============================================================
+  1464→// CONTACT PAGE
+  1465→// ============================================================
+  1466→export function ContactPage() {
+  1467→  const { go } = useApp();
+  1468→  const [form, setForm] = useState({ name: "", email: "", subject: "", message: "" });
+  1469→  const [errors, setErrors] = useState<Record<string, string>>({});
+  1470→  const [submitted, setSubmitted] = useState(false);
+  1471→
+  1472→  const submit = (e: React.FormEvent) => {
+  1473→    e.preventDefault();
+  1474→    const next: Record<string, string> = {};
+  1475→    if (!form.name.trim()) next.name = "Please enter your name.";
+  1476→    if (!form.email.trim()) next.email = "Please enter your email.";
+  1477→    else if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(form.email)) next.email = "Please enter a valid email.";
+  1478→    if (!form.subject.trim()) next.subject = "Please enter a subject.";
+  1479→    if (!form.message.trim()) next.message = "Please enter a message.";
+  1480→    else if (form.message.trim().length < 10) next.message = "Message must be at least 10 characters.";
+  1481→    setErrors(next);
+  1482→    if (Object.keys(next).length === 0) {
+  1483→      setSubmitted(true);
+  1484→      setForm({ name: "", email: "", subject: "", message: "" });
+  1485→    }
+  1486→  };
+  1487→
+  1488→  return (
+  1489→    <div className="flex min-h-screen flex-col">
+  1490→      <PublicHeader onAuth={(r) => go(r)} />
+  1491→      <main className="flex-1 bg-muted/20">
+  1492→        <div className="mx-auto max-w-5xl px-4 py-12 sm:px-6 lg:px-8">
+  1493→          <div className="text-center">
+  1494→            <Badge variant="outline" className="bg-primary/5 text-primary border-primary/20 mb-4">
+  1495→              Contact us
+  1496→            </Badge>
+  1497→            <h1 className="text-3xl font-bold tracking-tight sm:text-4xl">Get in touch</h1>
+  1498→            <p className="mx-auto mt-3 max-w-xl text-muted-foreground">
+  1499→              Questions, feedback, or partnership ideas? We'd love to hear from you.
+  1500→            </p>
+  1501→          </div>
+  1502→
+  1503→          <div className="mt-10 grid gap-6 lg:grid-cols-3">
+  1504→            {/* Contact info */}
+  1505→            <div className="space-y-4">
+  1506→              <div className="rounded-xl border border-border bg-card p-5">
+  1507→                <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10 text-primary">
+  1508→                  <Mail className="h-5 w-5" />
+  1509→                </div>
+  1510→                <h3 className="mt-3 text-sm font-semibold">Email</h3>
+  1511→                <p className="mt-1 text-xs text-muted-foreground">For general inquiries</p>
+  1512→                <a href="mailto:hello@skillmatch.ai" className="mt-2 block text-sm font-medium text-primary hover:underline">
+  1513→                  hello@skillmatch.ai
+  1514→                </a>
+  1515→              </div>
+  1516→              <div className="rounded-xl border border-border bg-card p-5">
+  1517→                <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10 text-primary">
+  1518→                  <Briefcase className="h-5 w-5" />
+  1519→                </div>
+  1520→                <h3 className="mt-3 text-sm font-semibold">Employers</h3>
+  1521→                <p className="mt-1 text-xs text-muted-foreground">For hiring & partnerships</p>
+  1522→                <a href="mailto:employers@skillmatch.ai" className="mt-2 block text-sm font-medium text-primary hover:underline">
+  1523→                  employers@skillmatch.ai
+  1524→                </a>
+  1525→              </div>
+  1526→              <div className="rounded-xl border border-border bg-card p-5">
+  1527→                <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10 text-primary">
+  1528→                  <Building2 className="h-5 w-5" />
+  1529→                </div>
+  1530→                <h3 className="mt-3 text-sm font-semibold">Office</h3>
+  1531→                <p className="mt-1 text-xs text-muted-foreground">Nairobi, Kenya</p>
+  1532→                <p className="mt-2 text-sm text-muted-foreground">Remote-first, operating across 14 African markets</p>
+  1533→              </div>
+  1534→            </div>
+  1535→
+  1536→            {/* Form */}
+  1537→            <div className="lg:col-span-2">
+  1538→              <Card>
+  1539→                <CardContent className="p-6">
+  1540→                  {submitted ? (
+  1541→                    <div className="flex flex-col items-center py-10 text-center">
+  1542→                      <div className="flex h-12 w-12 items-center justify-center rounded-full bg-emerald-100 text-emerald-600">
+  1543→                        <CheckCircle2 className="h-6 w-6" />
+  1544→                      </div>
+  1545→                      <h3 className="mt-3 text-lg font-semibold">Message sent!</h3>
+  1546→                      <p className="mt-1 text-sm text-muted-foreground">We'll get back to you within 1–2 business days.</p>
+  1547→                      <Button className="mt-5" size="sm" onClick={() => setSubmitted(false)}>Send another message</Button>
+  1548→                    </div>
+  1549→                  ) : (
+  1550→                    <form onSubmit={submit} className="space-y-4">
+  1551→                      <div className="grid gap-4 sm:grid-cols-2">
+  1552→                        <div className="space-y-1.5">
+  1553→                          <Label htmlFor="c-name">Name *</Label>
+  1554→                          <Input id="c-name" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="Your name" />
+  1555→                          {errors.name && <p className="text-xs text-rose-600">{errors.name}</p>}
+  1556→                        </div>
+  1557→                        <div className="space-y-1.5">
+  1558→                          <Label htmlFor="c-email">Email *</Label>
+  1559→                          <Input id="c-email" type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} placeholder="you@example.com" />
+  1560→                          {errors.email && <p className="text-xs text-rose-600">{errors.email}</p>}
+  1561→                        </div>
+  1562→                      </div>
+  1563→                      <div className="space-y-1.5">
+  1564→                        <Label htmlFor="c-subject">Subject *</Label>
+  1565→                        <Input id="c-subject" value={form.subject} onChange={(e) => setForm({ ...form, subject: e.target.value })} placeholder="How can we help?" />
+  1566→                        {errors.subject && <p className="text-xs text-rose-600">{errors.subject}</p>}
+  1567→                      </div>
+  1568→                      <div className="space-y-1.5">
+  1569→                        <Label htmlFor="c-message">Message *</Label>
+  1570→                        <Textarea id="c-message" rows={5} value={form.message} onChange={(e) => setForm({ ...form, message: e.target.value })} placeholder="Tell us more…" className="resize-none" />
+  1571→                        {errors.message && <p className="text-xs text-rose-600">{errors.message}</p>}
+  1572→                      </div>
+  1573→                      <Button type="submit" className="w-full h-10">Send message</Button>
+  1574→                    </form>
+  1575→                  )}
+  1576→                </CardContent>
+  1577→              </Card>
+  1578→            </div>
+  1579→          </div>
+  1580→        </div>
+  1581→      </main>
+  1582→      <PublicFooter />
+  1583→    </div>
+  1584→  );
+  1585→}
+  1586→

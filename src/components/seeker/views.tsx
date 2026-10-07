@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from "react";
 import { cn } from "@/lib/utils";
 import { useApp } from "@/lib/app-context";
+import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -1393,6 +1394,7 @@ export function SeekerResume() {
 
 export function SeekerResumeAnalysis() {
   const { go } = useApp();
+  const { toast } = useToast();
   const [editingSkill, setEditingSkill] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [saveResult, setSaveResult] = useState<{ ok: boolean; msg: string } | null>(null);
@@ -1686,7 +1688,12 @@ export function SeekerResumeAnalysis() {
               {["React", "TypeScript", "Tailwind CSS", "Jest"].map((s) => (
                 <div key={s} className="flex items-center justify-between text-xs">
                   <span className="font-medium">{s}</span>
-                  <Button size="sm" variant="outline" className="h-7 text-xs">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="h-7 text-xs"
+                    onClick={() => toast({ title: "Verification requested", description: `${s} verification request submitted. You'll be notified when it's reviewed.` })}
+                  >
                     <ShieldCheck className="h-3 w-3" /> Verify
                   </Button>
                 </div>
@@ -1872,6 +1879,7 @@ export function SeekerRecommended() {
 // ============================================================
 export function SeekerJobDetail() {
   const { go, selectedJobId } = useApp();
+  const { toast } = useToast();
   const job = recommendedJobs.find((j) => j.id === selectedJobId) || recommendedJobs[0];
   const [applied, setApplied] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
@@ -2014,7 +2022,25 @@ export function SeekerJobDetail() {
                   </DialogContent>
                 </Dialog>
               )}
-              <Button variant="outline" className="w-full" size="sm">
+              <Button
+                variant="outline"
+                className="w-full"
+                size="sm"
+                onClick={() => {
+                  try {
+                    const saved = JSON.parse(localStorage.getItem("skillmatch.savedJobs") || "[]");
+                    if (!saved.includes(job.id)) {
+                      saved.push(job.id);
+                      localStorage.setItem("skillmatch.savedJobs", JSON.stringify(saved));
+                      toast({ title: "Saved", description: `${job.title} added to your saved jobs.` });
+                    } else {
+                      toast({ title: "Already saved", description: `${job.title} is already in your saved jobs.` });
+                    }
+                  } catch {
+                    toast({ title: "Could not save", description: "Please try again." });
+                  }
+                }}
+              >
                 <Star className="h-3.5 w-3.5" /> Save for later
               </Button>
             </CardContent>
@@ -2454,6 +2480,7 @@ export function SeekerNotifications() {
 // ============================================================
 export function SeekerMessages() {
   const { selectedConversationId, go } = useApp();
+  const { toast } = useToast();
   const [conversations, setConversations] = useState<Conversation[]>(seekerConversations);
   const [activeId, setActiveId] = useState<string>(selectedConversationId || conversations[0].id);
   const [draft, setDraft] = useState("");
@@ -2533,7 +2560,12 @@ export function SeekerMessages() {
                 <p className="text-sm font-semibold">{active.participantName}</p>
                 <p className="text-[11px] text-muted-foreground">{active.participantRole}</p>
               </div>
-              <Button variant="ghost" size="sm">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => toast({ title: "Call feature", description: "Voice calls are not enabled in this demo. Send a message instead." })}
+                aria-label="Call"
+              >
                 <Phone className="h-3.5 w-3.5" />
               </Button>
             </div>

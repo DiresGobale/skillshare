@@ -4,6 +4,7 @@ import React, { useState, useEffect } from "react";
 import { signIn as nextAuthSignIn } from "next-auth/react";
 import { cn } from "@/lib/utils";
 import { useApp } from "@/lib/app-context";
+import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -225,7 +226,7 @@ function PublicFooter() {
 // LANDING
 // ============================================================
 function LandingHero() {
-  const { go, setRole } = useApp();
+  const { go } = useApp();
   return (
     <section className="relative overflow-hidden bg-hero-glow">
       <div className="absolute inset-0 bg-grid-subtle opacity-50 [mask-image:radial-gradient(ellipse_at_center,black,transparent_75%)]" />
@@ -243,10 +244,18 @@ function LandingHero() {
             you'll actually get. Every recommendation comes with a transparent 0–100% match score.
           </p>
           <div className="mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row">
-            <Button size="lg" className="h-12 px-6" onClick={() => setRole("seeker")}>
+            <Button size="lg" className="h-12 px-6 btn-rainbow" onClick={() => go("public-jobs")}>
               Find jobs <ArrowRight className="h-4 w-4" />
             </Button>
-            <Button size="lg" variant="outline" className="h-12 px-6" onClick={() => setRole("employer")}>
+            <Button
+              size="lg"
+              variant="outline"
+              className="h-12 px-6"
+              onClick={() => {
+                try { sessionStorage.setItem("registerRole", "employer"); } catch { /* ignore */ }
+                go("register");
+              }}
+            >
               Hire talent
             </Button>
           </div>
@@ -446,7 +455,11 @@ function LandingHowItWorks() {
 }
 
 function LandingCTA() {
-  const { setRole } = useApp();
+  const { go } = useApp();
+  const pickRole = (r: "seeker" | "employer") => {
+    try { sessionStorage.setItem("registerRole", r); } catch { /* ignore */ }
+    go("register");
+  };
   return (
     <section className="border-t border-border bg-background py-16 sm:py-24">
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
@@ -460,7 +473,7 @@ function LandingCTA() {
               size="lg"
               variant="secondary"
               className="h-12 px-6 bg-white text-violet-700 hover:bg-white/90"
-              onClick={() => setRole("seeker")}
+              onClick={() => pickRole("seeker")}
             >
               Sign up as job seeker
             </Button>
@@ -468,7 +481,7 @@ function LandingCTA() {
               size="lg"
               variant="outline"
               className="h-12 border-white/40 bg-white/10 px-6 text-white hover:bg-white/20 hover:text-white"
-              onClick={() => setRole("employer")}
+              onClick={() => pickRole("employer")}
             >
               Sign up as employer
             </Button>
@@ -522,6 +535,7 @@ function AuthShell({ title, subtitle, children }: { title: string; subtitle: str
 
 export function Login() {
   const { go } = useApp();
+  const { toast } = useToast();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -605,8 +619,6 @@ export function Login() {
   const fillDemo = (acc: typeof demoAccounts[number]) => {
     setEmail(acc.email);
     setPassword(acc.password);
-    setTotp("");
-    setShow2FA(false);
     setError(null);
     setStatus(null);
   };
@@ -809,10 +821,18 @@ export function Login() {
             <div className="h-px flex-1 bg-border" />
           </div>
           <div className="grid grid-cols-2 gap-2">
-            <Button variant="outline" className="h-9 text-xs">
+            <Button
+              variant="outline"
+              className="h-9 text-xs"
+              onClick={() => toast({ title: "Google sign-in", description: "OAuth provider not configured in this demo. Use a demo account below." })}
+            >
               Continue with Google
             </Button>
-            <Button variant="outline" className="h-9 text-xs">
+            <Button
+              variant="outline"
+              className="h-9 text-xs"
+              onClick={() => toast({ title: "LinkedIn sign-in", description: "OAuth provider not configured in this demo. Use a demo account below." })}
+            >
               Continue with LinkedIn
             </Button>
           </div>
@@ -899,7 +919,19 @@ export function Login() {
 
 export function Register() {
   const { go } = useApp();
-  const [role, setRoleChoice] = useState<Role>("seeker");
+  // Pre-select role from sessionStorage if the user clicked a role-specific CTA
+  // (e.g. "Sign up as employer" from the landing page).
+  const [role, setRoleChoice] = useState<Role>(() => {
+    if (typeof window !== "undefined") {
+      const stored = sessionStorage.getItem("registerRole");
+      if (stored === "employer" || stored === "seeker") {
+        // Clear after consuming so a manual navigation to /register starts clean
+        sessionStorage.removeItem("registerRole");
+        return stored;
+      }
+    }
+    return "seeker";
+  });
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -1205,7 +1237,7 @@ export function PublicJobs() {
 // PUBLIC JOB DETAIL
 // ============================================================
 export function PublicJobDetail() {
-  const { go, selectedJobId, setRole } = useApp();
+  const { go, selectedJobId } = useApp();
   const job = publicJobs.find((j) => j.id === selectedJobId) || recommendedJobs.find((j) => j.id === selectedJobId) || recommendedJobs[0];
 
   return (
@@ -1233,7 +1265,7 @@ export function PublicJobDetail() {
                     <span className="flex items-center gap-1"><Clock className="h-3 w-3" />Posted {timeAgo(job.postedAt)}</span>
                   </div>
                 </div>
-                <Button onClick={() => setRole("seeker")}>
+                <Button className="btn-rainbow" onClick={() => go("login")}>
                   Apply now <ArrowRight className="h-3.5 w-3.5" />
                 </Button>
               </div>
@@ -1314,7 +1346,7 @@ export function PublicJobDetail() {
                   <InfoCallout>
                     <span className="font-medium">See your match score.</span> Sign in to view how your skills align with this role and get a personalized recommendation.
                   </InfoCallout>
-                  <Button className="w-full" onClick={() => setRole("seeker")}>
+                  <Button className="w-full btn-blue" onClick={() => go("login")}>
                     Sign in to apply
                   </Button>
                 </aside>

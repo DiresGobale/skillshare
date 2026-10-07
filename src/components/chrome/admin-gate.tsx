@@ -42,8 +42,20 @@ export function Admin2FAGate() {
   const [unlocked, setUnlocked] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  // Auto-send OTP when the gate loads
+  // Auto-send OTP when the gate loads.
+  // Also recover from any stale state: if the user already unlocked the
+  // admin session on a previous render but the React context lost it
+  // (e.g. after a manual page reload while sessionStorage still has
+  // ADMIN_KEY=1), force a hard refresh so the Router re-evaluates.
   useEffect(() => {
+    try {
+      if (sessionStorage.getItem("skillmatch.admin-unlocked") === "1") {
+        unlockAdmin();
+        return;
+      }
+    } catch {
+      /* ignore */
+    }
     sendOtp();
   }, []);
 
@@ -128,10 +140,21 @@ export function Admin2FAGate() {
       if (data.ok) {
         setUnlocked(true);
         setError(null);
-        // Small delay for visual feedback before unlocking
+        // Small delay for visual feedback before unlocking.
+        // We call unlockAdmin() to flip the context flag (which causes the
+        // parent Router to swap from <Admin2FAGate/> to <AppShell>+admin view),
+        // AND we hard-navigate to "/" as a belt-and-suspenders fallback in
+        // case the React state update doesn't propagate (e.g. due to a
+        // stale closure or hydration mismatch).
         setTimeout(() => {
           unlockAdmin();
-        }, 600);
+          // Hard refresh as a fallback — guarantees the Router re-runs with
+          // the unlocked sessionStorage flag set, so the admin dashboard
+          // always renders even if React state failed to update.
+          if (typeof window !== "undefined") {
+            window.location.assign("/");
+          }
+        }, 800);
       } else {
         const next = attempts + 1;
         setAttempts(next);

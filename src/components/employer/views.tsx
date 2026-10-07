@@ -1539,10 +1539,25 @@ export function EmployerNotifications() {
 }
 
 export function EmployerMessages() {
-  const [conversations] = useState<Conversation[]>(employerConversations);
+  const [conversations, setConversations] = useState<Conversation[]>(employerConversations);
   const [activeId, setActiveId] = useState<string>(conversations[0].id);
   const [draft, setDraft] = useState("");
   const active = conversations.find((c) => c.id === activeId)!;
+
+  const send = () => {
+    if (!draft.trim()) return;
+    setConversations(conversations.map((c) =>
+      c.id === activeId
+        ? {
+            ...c,
+            lastMessage: draft.trim(),
+            lastTime: "now",
+            messages: [...c.messages, { id: String(Date.now()), sender: "me" as const, text: draft.trim(), time: "now" }],
+          }
+        : c
+    ));
+    setDraft("");
+  };
 
   return (
     <PageContainer>
@@ -1620,9 +1635,9 @@ export function EmployerMessages() {
                 placeholder="Type your message…"
                 value={draft}
                 onChange={(e) => setDraft(e.target.value)}
-                onKeyDown={(e) => { if (e.key === "Enter" && draft.trim()) { setDraft(""); } }}
+                onKeyDown={(e) => { if (e.key === "Enter") send(); }}
               />
-              <Button size="icon">
+              <Button size="icon" onClick={send} aria-label="Send message">
                 <SendIcon className="h-4 w-4" />
               </Button>
             </div>

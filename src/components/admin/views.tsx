@@ -13,6 +13,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Switch } from "@/components/ui/switch";
+import { Textarea } from "@/components/ui/textarea";
 import {
   Avatar,
   SectionHeader,
@@ -24,6 +25,7 @@ import {
   TableToolbar,
   SkillChip,
 } from "@/components/shared/ui";
+import { ProfilePhotoUpload } from "@/components/shared/profile-photo-upload";
 import {
   adminUsers,
   skillOntology,
@@ -1047,16 +1049,173 @@ export function AdminActivity() {
 // SYSTEM CONFIG
 // ============================================================
 export function AdminConfig() {
+  const { user: sessionUser } = useApp();
+  const { data: profileData, refetch } = useFetch<any>("/api/profile");
+  const profile = profileData?.profile;
+  const [adminName, setAdminName] = useState("");
+  const [adminTitle, setAdminTitle] = useState("");
+  const [adminLocation, setAdminLocation] = useState("");
+  const [adminAbout, setAdminAbout] = useState("");
+  const [savingProfile, setSavingProfile] = useState(false);
+  const [profileMsg, setProfileMsg] = useState<{ ok: boolean; msg: string } | null>(null);
   const [savedMsg, setSavedMsg] = useState<string | null>(null);
+
+  // Sync local form state whenever the profile loads
+  useEffect(() => {
+    if (profile) {
+      setAdminName(profile.name ?? "");
+      setAdminTitle(profile.title ?? "");
+      setAdminLocation(profile.location ?? "");
+      setAdminAbout(profile.about ?? "");
+    }
+  }, [profile]);
+
+  const saveAdminProfile = async () => {
+    setSavingProfile(true);
+    setProfileMsg(null);
+    try {
+      const res = await fetch("/api/profile", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: adminName,
+          title: adminTitle,
+          location: adminLocation,
+          about: adminAbout,
+        }),
+      });
+      const json = await res.json();
+      if (json.ok) {
+        setProfileMsg({ ok: true, msg: "Admin profile updated successfully." });
+        refetch();
+      } else {
+        setProfileMsg({ ok: false, msg: json.error ?? "Save failed." });
+      }
+    } catch {
+      setProfileMsg({ ok: false, msg: "Network error." });
+    } finally {
+      setSavingProfile(false);
+    }
+  };
+
   const handleSave = () => { setSavedMsg("Settings saved successfully."); setTimeout(() => setSavedMsg(null), 3000); };
 
   return (
     <PageContainer>
       <SectionHeader
         title="System Settings"
-        description="Manage user roles, AI matching weights, privacy rules, and system policies."
+        description="Manage your admin profile, user roles, AI matching weights, privacy rules, and system policies."
         icon={<Settings className="h-4 w-4" />}
       />
+
+      {/* ============ ADMIN PROFILE PHOTO + INFO ============ */}
+      <Card className="mt-6">
+        <CardHeader className="pb-3">
+          <CardTitle className="text-sm flex items-center gap-2">
+            <UserCheck className="h-4 w-4 text-primary" /> Admin Profile
+          </CardTitle>
+          <CardDescription>
+            Upload your own profile photo and update your admin display info. This photo appears in the sidebar, top bar, and admin audit logs.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="flex flex-col gap-6 sm:flex-row sm:items-start">
+            {/* Photo uploader */}
+            <div className="flex flex-col items-center gap-3 sm:w-48">
+              <ProfilePhotoUpload
+                photo={profile?.profilePhoto}
+                initials={profile?.initials ?? sessionUser?.initials ?? "AD"}
+                color={profile?.avatarColor ?? sessionUser?.avatarColor ?? "oklch(0.65 0.2 330)"}
+                onUploaded={() => refetch()}
+              />
+              <p className="text-center text-[11px] text-muted-foreground">
+                This is your personal admin avatar.
+              </p>
+            </div>
+
+            {/* Editable fields */}
+            <div className="flex-1 space-y-3">
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div className="space-y-1.5">
+                  <Label htmlFor="admin-name">Display name</Label>
+                  <Input
+                    id="admin-name"
+                    value={adminName}
+                    onChange={(e) => setAdminName(e.target.value)}
+                    placeholder="e.g. Priya Sharma"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="admin-title">Title</Label>
+                  <Input
+                    id="admin-title"
+                    value={adminTitle}
+                    onChange={(e) => setAdminTitle(e.target.value)}
+                    placeholder="e.g. Platform Administrator"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="admin-location">Location</Label>
+                  <Input
+                    id="admin-location"
+                    value={adminLocation}
+                    onChange={(e) => setAdminLocation(e.target.value)}
+                    placeholder="e.g. Nairobi, Kenya"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="admin-email">Email (read-only)</Label>
+                  <Input
+                    id="admin-email"
+                    value={sessionUser?.email ?? ""}
+                    readOnly
+                    disabled
+                    className="bg-muted/40 font-mono text-xs"
+                  />
+                </div>
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="admin-about">About</Label>
+                <Textarea
+                  id="admin-about"
+                  value={adminAbout}
+                  onChange={(e) => setAdminAbout(e.target.value)}
+                  rows={3}
+                  className="resize-none"
+                  placeholder="Brief bio for the admin profile."
+                />
+              </div>
+
+              {profileMsg && (
+                <div className={cn(
+                  "flex items-center gap-2 rounded-md border px-3 py-2 text-xs",
+                  profileMsg.ok
+                    ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+                    : "border-rose-200 bg-rose-50 text-rose-700"
+                )}>
+                  {profileMsg.ok ? <CheckCircle2 className="h-3.5 w-3.5" /> : <AlertCircle className="h-3.5 w-3.5" />}
+                  {profileMsg.msg}
+                </div>
+              )}
+
+              <div className="flex justify-end gap-2">
+                <Button variant="ghost" size="sm" onClick={() => refetch()} disabled={savingProfile}>
+                  Reset
+                </Button>
+                <Button size="sm" className="btn-blue" onClick={saveAdminProfile} disabled={savingProfile}>
+                  {savingProfile ? (
+                    <>
+                      <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-primary-foreground border-t-transparent" />
+                      Saving…
+                    </>
+                  ) : "Save admin profile"}
+                </Button>
+              </div>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
       {savedMsg && (
         <div className="mt-4 flex items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
           <CheckCircle2 className="h-4 w-4" /> {savedMsg}
