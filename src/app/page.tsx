@@ -10,6 +10,8 @@ import { PageTransition } from "@/components/chrome/page-transition";
 // Guest views
 import {
   Landing,
+  HomePage,
+  FAQPage,
   Login,
   Register,
   PublicJobs,
@@ -100,6 +102,8 @@ function Router() {
   if (status === "unauthenticated" || !session?.user) {
     if (view === "login") return <Login />;
     if (view === "register") return <Register />;
+    if (view === "home") return <HomePage />;
+    if (view === "faq") return <FAQPage />;
     if (view === "public-jobs") return <PublicJobs />;
     if (view === "public-job-detail") return <PublicJobDetail />;
     if (view === "about") return <AboutPage />;

@@ -63,8 +63,23 @@ import {
   ArrowLeft,
   Filter,
   AlertCircle,
+  ChevronDown,
+  Plus,
+  Minus,
+  Quote,
+  Globe2,
+  Cpu,
+  Rocket,
+  Heart,
+  Award,
+  Lightbulb,
+  Layers,
+  Github,
+  Twitter,
+  Linkedin,
 } from "lucide-react";
 import { Textarea } from "@/components/ui/textarea";
+import { useScrollReveal } from "@/hooks/use-scroll-reveal";
 
 // ============================================================
 // Public top nav (guest header)
@@ -91,8 +106,9 @@ function PublicHeader({ onAuth }: { onAuth: (r: "login" | "register") => void })
   }, [mobileOpen]);
 
   const navLinks = [
+    { label: "Home", view: "home" as const },
     { label: "Browse jobs", view: "public-jobs" as const },
-    { label: "How it works", view: "landing" as const },
+    { label: "FAQ", view: "faq" as const },
     { label: "About", view: "about" as const },
     { label: "Contact", view: "contact" as const },
   ];
@@ -124,7 +140,7 @@ function PublicHeader({ onAuth }: { onAuth: (r: "login" | "register") => void })
             <Button variant="ghost" size="sm" onClick={() => onAuth("login")} className="hidden sm:inline-flex">
               Sign in
             </Button>
-            <Button size="sm" onClick={() => onAuth("register")}>
+            <Button size="sm" className="btn-rainbow" onClick={() => onAuth("register")}>
               Get started
             </Button>
           </div>
@@ -192,15 +208,16 @@ function PublicFooter() {
           <div>
             <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Product</p>
             <ul className="mt-3 space-y-2 text-sm">
+              <li><button className="text-muted-foreground hover:text-foreground" onClick={() => go("home")}>Home</button></li>
               <li><button className="text-muted-foreground hover:text-foreground" onClick={() => go("public-jobs")}>Browse jobs</button></li>
               <li><button className="text-muted-foreground hover:text-foreground" onClick={() => go("landing")}>How it works</button></li>
-              <li><button className="text-muted-foreground hover:text-foreground" onClick={() => go("landing")}>AI matching</button></li>
+              <li><button className="text-muted-foreground hover:text-foreground" onClick={() => go("faq")}>FAQ</button></li>
             </ul>
           </div>
           <div>
             <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">For employers</p>
             <ul className="mt-3 space-y-2 text-sm">
-              <li><button className="text-muted-foreground hover:text-foreground" onClick={() => go("landing")}>Post a job</button></li>
+              <li><button className="text-muted-foreground hover:text-foreground" onClick={() => { try { sessionStorage.setItem("registerRole", "employer"); } catch { /* ignore */ } go("register"); }}>Post a job</button></li>
               <li><button className="text-muted-foreground hover:text-foreground" onClick={() => go("landing")}>Pricing</button></li>
               <li><button className="text-muted-foreground hover:text-foreground" onClick={() => go("landing")}>Talent search</button></li>
             </ul>
@@ -210,7 +227,7 @@ function PublicFooter() {
             <ul className="mt-3 space-y-2 text-sm">
               <li><button className="text-muted-foreground hover:text-foreground" onClick={() => go("about")}>About</button></li>
               <li><button className="text-muted-foreground hover:text-foreground" onClick={() => go("contact")}>Contact</button></li>
-              <li><button className="text-muted-foreground hover:text-foreground" onClick={() => go("landing")}>Privacy</button></li>
+              <li><button className="text-muted-foreground hover:text-foreground" onClick={() => go("faq")}>FAQ</button></li>
             </ul>
           </div>
         </div>
@@ -502,6 +519,718 @@ export function Landing() {
         <LandingFeatures />
         <LandingHowItWorks />
         <LandingCTA />
+      </main>
+      <PublicFooter />
+    </div>
+  );
+}
+
+// ============================================================
+// HOME PAGE — modern, animated, with four group photos
+// ============================================================
+
+// Reusable scroll-reveal wrapper
+function RevealBlock({
+  children,
+  className,
+  delay = 0,
+  as: Tag = "div",
+}: {
+  children: React.ReactNode;
+  className?: string;
+  delay?: number;
+  as?: React.ElementType;
+}) {
+  const ref = React.useRef<HTMLDivElement>(null);
+  const visible = useScrollReveal(ref);
+  return (
+    <Tag
+      ref={ref as any}
+      className={cn("reveal-on-scroll", visible && "is-visible", className)}
+      style={{ transitionDelay: `${delay}ms` }}
+    >
+      {children}
+    </Tag>
+  );
+}
+
+// Group photo data
+const GROUP_PHOTOS = [
+  {
+    src: "/groups/group1.jpg",
+    alt: "Five engineers collaborating in a glass-walled meeting room",
+    caption: "Collaborative engineering",
+    description: "Cross-functional teams iterate daily on customer-facing products.",
+    accent: "from-violet-500 to-blue-500",
+  },
+  {
+    src: "/groups/group2.jpg",
+    alt: "Five IT engineers pair-programming at a standing desk",
+    caption: "Pair programming",
+    description: "Knowledge-sharing built into every sprint through paired work.",
+    accent: "from-emerald-500 to-cyan-500",
+  },
+  {
+    src: "/groups/group3.jpg",
+    alt: "Five tech professionals celebrating around a project whiteboard",
+    caption: "Milestone celebrations",
+    description: "Every shipped feature is recognized, every voice matters.",
+    accent: "from-amber-500 to-rose-500",
+  },
+  {
+    src: "/groups/group4.jpg",
+    alt: "Five developers gathered in a tech lounge for a daily standup",
+    caption: "Casual standups",
+    description: "Quick syncs in our lounge keep momentum without crushing focus.",
+    accent: "from-fuchsia-500 to-purple-500",
+  },
+];
+
+// Animated counter
+function AnimatedCounter({ target, suffix = "", duration = 1500 }: { target: number; suffix?: string; duration?: number }) {
+  const ref = React.useRef<HTMLSpanElement>(null);
+  const visible = useScrollReveal(ref);
+  const [val, setVal] = useState(0);
+
+  useEffect(() => {
+    if (!visible) return;
+    let startTime: number | null = null;
+    let frame: number;
+    const animate = (ts: number) => {
+      if (startTime === null) startTime = ts;
+      const progress = Math.min((ts - startTime) / duration, 1);
+      // ease-out cubic
+      const eased = 1 - Math.pow(1 - progress, 3);
+      setVal(Math.floor(eased * target));
+      if (progress < 1) frame = requestAnimationFrame(animate);
+    };
+    frame = requestAnimationFrame(animate);
+    return () => cancelAnimationFrame(frame);
+  }, [visible, target, duration]);
+
+  return (
+    <span ref={ref}>
+      {val.toLocaleString()}
+      {suffix}
+    </span>
+  );
+}
+
+function HomeHero() {
+  const { go } = useApp();
+  return (
+    <section className="relative overflow-hidden bg-hero-glow">
+      {/* Animated gradient blobs in the background */}
+      <div className="pointer-events-none absolute inset-0 overflow-hidden">
+        <div className="absolute -left-24 top-12 h-72 w-72 rounded-full bg-violet-400/30 blur-3xl animate-blob" />
+        <div className="absolute right-0 top-40 h-80 w-80 rounded-full bg-blue-400/30 blur-3xl animate-blob" style={{ animationDelay: "3s" }} />
+        <div className="absolute bottom-0 left-1/3 h-72 w-72 rounded-full bg-emerald-400/20 blur-3xl animate-blob" style={{ animationDelay: "6s" }} />
+      </div>
+      <div className="absolute inset-0 bg-grid-subtle opacity-50 [mask-image:radial-gradient(ellipse_at_center,black,transparent_75%)]" />
+
+      <div className="relative mx-auto max-w-7xl px-4 pb-24 pt-20 sm:px-6 sm:pt-28 lg:px-8 lg:pt-32">
+        <div className="grid gap-10 lg:grid-cols-2 lg:items-center">
+          {/* Left: copy + CTAs */}
+          <div>
+            <div className="animate-fade-up inline-flex items-center gap-2 rounded-full border border-primary/20 bg-primary/5 px-3 py-1 text-xs font-medium text-primary">
+              <Sparkles className="h-3 w-3" />
+              AI-powered skill matching · live in 14 African markets
+            </div>
+            <h1 className="animate-fade-up delay-100 mt-6 text-4xl font-extrabold leading-tight tracking-tight sm:text-5xl lg:text-6xl">
+              Where <span className="bg-gradient-to-r from-violet-600 via-blue-600 to-emerald-600 bg-clip-text text-transparent animate-gradient-text">verified skills</span> meet real opportunities.
+            </h1>
+            <p className="animate-fade-up delay-200 mt-5 max-w-xl text-base text-muted-foreground sm:text-lg">
+              SkillMatch AI builds a structured skill graph for every candidate, verifies it through assessments and prior employer attestation, then uses explainable AI to match the right people to the right roles — no keyword spam, no résumé black holes.
+            </p>
+            <div className="animate-fade-up delay-300 mt-8 flex flex-col items-start gap-3 sm:flex-row sm:items-center">
+              <Button size="lg" className="h-12 px-6 btn-rainbow" onClick={() => go("public-jobs")}>
+                Find jobs <ArrowRight className="h-4 w-4" />
+              </Button>
+              <Button
+                size="lg"
+                variant="outline"
+                className="h-12 px-6"
+                onClick={() => {
+                  try { sessionStorage.setItem("registerRole", "employer"); } catch { /* ignore */ }
+                  go("register");
+                }}
+              >
+                Hire talent
+              </Button>
+            </div>
+            <div className="animate-fade-up delay-400 mt-8 flex flex-wrap items-center gap-x-6 gap-y-2 text-xs text-muted-foreground">
+              <span className="flex items-center gap-1.5">
+                <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" /> Free for job seekers
+              </span>
+              <span className="flex items-center gap-1.5">
+                <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" /> No credit card required
+              </span>
+              <span className="flex items-center gap-1.5">
+                <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" /> GDPR-compliant
+              </span>
+            </div>
+          </div>
+
+          {/* Right: floating photo collage with one group photo */}
+          <div className="relative hidden lg:block">
+            <div className="animate-scale-in delay-200 relative">
+              {/* Decorative gradient ring */}
+              <div className="absolute -inset-4 rounded-3xl bg-gradient-to-br from-violet-500/30 via-blue-500/30 to-emerald-500/30 blur-2xl animate-pulse-glow" />
+              <div className="relative overflow-hidden rounded-3xl border border-white/30 shadow-2xl animate-float">
+                <img
+                  src="/groups/group1.jpg"
+                  alt="Five engineers collaborating in a modern tech office"
+                  className="h-[420px] w-full object-cover"
+                />
+                <div className="absolute inset-0 bg-gradient-to-t from-black/40 via-transparent to-transparent" />
+                {/* Floating stat badge */}
+                <div className="absolute bottom-4 left-4 rounded-xl bg-white/95 px-3 py-2 shadow-lg backdrop-blur">
+                  <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Match accuracy</p>
+                  <p className="text-lg font-bold text-gradient-primary">94.2%</p>
+                </div>
+              </div>
+              {/* Floating side card */}
+              <div className="animate-float absolute -right-6 top-12 rounded-2xl border border-border bg-card p-3 shadow-xl" style={{ animationDelay: "1.5s" }}>
+                <div className="flex items-center gap-2">
+                  <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-100 text-emerald-700">
+                    <ShieldCheck className="h-4 w-4" />
+                  </div>
+                  <div>
+                    <p className="text-[10px] font-semibold uppercase text-muted-foreground">Verified</p>
+                    <p className="text-xs font-bold">6,124 skills</p>
+                  </div>
+                </div>
+              </div>
+              <div className="animate-float absolute -left-6 bottom-20 rounded-2xl border border-border bg-card p-3 shadow-xl" style={{ animationDelay: "3s" }}>
+                <div className="flex items-center gap-2">
+                  <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-violet-100 text-violet-700">
+                    <Cpu className="h-4 w-4" />
+                  </div>
+                  <div>
+                    <p className="text-[10px] font-semibold uppercase text-muted-foreground">AI score</p>
+                    <p className="text-xs font-bold">Explainable</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function HomeStats() {
+  const stats = [
+    { value: 4872, suffix: "+", label: "Active job seekers", icon: <Users className="h-5 w-5" />, color: "from-violet-500 to-blue-500" },
+    { value: 958, suffix: "+", label: "Hiring employers", icon: <Building2 className="h-5 w-5" />, color: "from-blue-500 to-cyan-500" },
+    { value: 1247, suffix: "", label: "Open roles", icon: <Briefcase className="h-5 w-5" />, color: "from-emerald-500 to-teal-500" },
+    { value: 6124, suffix: "", label: "Verified skills", icon: <ShieldCheck className="h-5 w-5" />, color: "from-amber-500 to-rose-500" },
+  ];
+  return (
+    <section className="border-y border-border bg-background py-12 sm:py-16">
+      <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+        <div className="grid grid-cols-2 gap-4 sm:gap-6 lg:grid-cols-4">
+          {stats.map((s, i) => (
+            <RevealBlock key={s.label} delay={i * 100}>
+              <div className="lift-card rounded-2xl border border-border bg-card p-5 text-center sm:p-6">
+                <div className={cn("mx-auto mb-3 flex h-11 w-11 items-center justify-center rounded-xl bg-gradient-to-br text-white shadow-lg", s.color)}>
+                  {s.icon}
+                </div>
+                <p className="text-2xl font-extrabold tracking-tight sm:text-3xl">
+                  <AnimatedCounter target={s.value} suffix={s.suffix} />
+                </p>
+                <p className="mt-1 text-xs text-muted-foreground sm:text-sm">{s.label}</p>
+              </div>
+            </RevealBlock>
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function HomeGroupPhotos() {
+  return (
+    <section className="relative overflow-hidden border-b border-border bg-muted/30 py-16 sm:py-24">
+      <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+        <RevealBlock className="mx-auto max-w-2xl text-center">
+          <p className="text-xs font-semibold uppercase tracking-wider text-primary">Our community</p>
+          <h2 className="mt-2 text-3xl font-bold tracking-tight sm:text-4xl">
+            Real teams. Real collaboration. Real outcomes.
+          </h2>
+          <p className="mt-4 text-muted-foreground">
+            SkillMatch AI is built by engineers, for engineers. Our community spans 14 African markets and 50+ technology stacks — connected through a shared belief that hiring should be transparent, fair, and skill-based.
+          </p>
+        </RevealBlock>
+
+        <div className="mt-12 grid gap-5 sm:grid-cols-2">
+          {GROUP_PHOTOS.map((photo, i) => (
+            <RevealBlock key={photo.src} delay={i * 120}>
+              <figure className="zoom-img-container lift-card group relative overflow-hidden rounded-2xl border border-border bg-card shadow-md">
+                <div className="relative aspect-[16/9] overflow-hidden">
+                  <img
+                    src={photo.src}
+                    alt={photo.alt}
+                    className="zoom-img h-full w-full object-cover"
+                    loading="lazy"
+                  />
+                  <div className={cn("absolute inset-0 bg-gradient-to-t opacity-60 mix-blend-multiply", photo.accent)} />
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/10 to-transparent" />
+                </div>
+                <figcaption className="absolute inset-x-0 bottom-0 p-5 text-white">
+                  <div className="flex items-end justify-between gap-3">
+                    <div>
+                      <p className="text-xs font-semibold uppercase tracking-wider text-white/80">{photo.caption}</p>
+                      <p className="mt-1 text-sm font-medium leading-tight sm:text-base">{photo.description}</p>
+                    </div>
+                    <div className={cn("flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-gradient-to-br text-white shadow-lg", photo.accent)}>
+                      {i + 1}
+                    </div>
+                  </div>
+                </figcaption>
+              </figure>
+            </RevealBlock>
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function HomeFeatures() {
+  const features = [
+    {
+      icon: <Target className="h-5 w-5" />,
+      title: "Explainable match scores",
+      description: "Every job match comes with a 0–100% score broken down by skill overlap, proficiency, experience, education, and verified skills. No black boxes — every decision is auditable.",
+      color: "from-violet-500 to-blue-500",
+    },
+    {
+      icon: <FileText className="h-5 w-5" />,
+      title: "AI resume analysis",
+      description: "Upload your resume once. We extract skills, normalize them against our ontology, infer proficiency, and flag what's verifiable through assessments or prior employer attestation.",
+      color: "from-blue-500 to-cyan-500",
+    },
+    {
+      icon: <ShieldCheck className="h-5 w-5" />,
+      title: "Verified skills, not vibes",
+      description: "Skills are verified through assessments, certificates, and prior employer attestations. Verified skills carry real, weighted value in every match computation.",
+      color: "from-emerald-500 to-teal-500",
+    },
+    {
+      icon: <TrendingUp className="h-5 w-5" />,
+      title: "Skill-gap analysis",
+      description: "See exactly which skills separate you from your target roles, with curated learning resources and the number of jobs each new skill unlocks.",
+      color: "from-amber-500 to-rose-500",
+    },
+    {
+      icon: <Lock className="h-5 w-5" />,
+      title: "Privacy by default",
+      description: "Employers cannot see your contact information until you apply or accept an interview request. You're always in control of who sees what.",
+      color: "from-fuchsia-500 to-purple-500",
+    },
+    {
+      icon: <Zap className="h-5 w-5" />,
+      title: "Real-time conversations",
+      description: "Once shortlisted, message recruiters directly inside the platform. Track every application from submission to interview to offer — all in one place.",
+      color: "from-rose-500 to-orange-500",
+    },
+  ];
+  return (
+    <section className="border-b border-border bg-background py-16 sm:py-24">
+      <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+        <RevealBlock className="mx-auto max-w-2xl text-center">
+          <p className="text-xs font-semibold uppercase tracking-wider text-primary">Why SkillMatch AI</p>
+          <h2 className="mt-2 text-3xl font-bold tracking-tight sm:text-4xl">
+            Built on skills. Powered by AI. Owned by you.
+          </h2>
+          <p className="mt-4 text-muted-foreground">
+            We're not another keyword job board. Every match is computed from your verified skill graph — and every score is fully explainable.
+          </p>
+        </RevealBlock>
+
+        <div className="mt-12 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {features.map((f, i) => (
+            <RevealBlock key={f.title} delay={i * 100}>
+              <div className="lift-card h-full rounded-xl border border-border bg-card p-6">
+                <div className={cn("flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-br text-white shadow-lg", f.color)}>
+                  {f.icon}
+                </div>
+                <h3 className="mt-4 text-base font-semibold">{f.title}</h3>
+                <p className="mt-2 text-sm leading-relaxed text-muted-foreground">{f.description}</p>
+              </div>
+            </RevealBlock>
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function HomeTestimonials() {
+  const testimonials = [
+    {
+      quote: "SkillMatch AI matched me to a Senior Frontend role at Northwind with a 92% score. The interview felt fair — they already knew what I could do. I started two weeks later.",
+      name: "Amara Okafor",
+      title: "Senior Frontend Engineer · Lagos",
+      initials: "AO",
+      color: "from-violet-500 to-blue-500",
+    },
+    {
+      quote: "We filled three engineering roles in six weeks. The skill verification cut our screening time by 70%. The candidates who showed up could actually do the work.",
+      name: "David Chen",
+      title: "Talent Acquisition Lead · Northwind",
+      initials: "DC",
+      color: "from-emerald-500 to-teal-500",
+    },
+    {
+      quote: "I love that employers can't see my phone number until I accept an interview. No more cold calls from recruiters who haven't even read my profile.",
+      name: "Tunde Bello",
+      title: "Backend Engineer · Nairobi",
+      initials: "TB",
+      color: "from-amber-500 to-rose-500",
+    },
+  ];
+
+  return (
+    <section className="border-b border-border bg-muted/30 py-16 sm:py-24">
+      <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+        <RevealBlock className="mx-auto max-w-2xl text-center">
+          <p className="text-xs font-semibold uppercase tracking-wider text-primary">Success stories</p>
+          <h2 className="mt-2 text-3xl font-bold tracking-tight sm:text-4xl">
+            Trusted by talent and teams across Africa.
+          </h2>
+        </RevealBlock>
+        <div className="mt-12 grid gap-5 lg:grid-cols-3">
+          {testimonials.map((t, i) => (
+            <RevealBlock key={t.name} delay={i * 120}>
+              <figure className="lift-card h-full rounded-2xl border border-border bg-card p-6">
+                <Quote className="h-8 w-8 text-primary/30" />
+                <blockquote className="mt-3 text-sm leading-relaxed text-foreground">
+                  "{t.quote}"
+                </blockquote>
+                <figcaption className="mt-5 flex items-center gap-3 border-t border-border pt-4">
+                  <div className={cn("flex h-10 w-10 items-center justify-center rounded-full bg-gradient-to-br text-sm font-bold text-white shadow-md", t.color)}>
+                    {t.initials}
+                  </div>
+                  <div>
+                    <p className="text-sm font-semibold">{t.name}</p>
+                    <p className="text-xs text-muted-foreground">{t.title}</p>
+                  </div>
+                </figcaption>
+              </figure>
+            </RevealBlock>
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function HomeCTA() {
+  const { go } = useApp();
+  const pickRole = (r: "seeker" | "employer") => {
+    try { sessionStorage.setItem("registerRole", r); } catch { /* ignore */ }
+    go("register");
+  };
+  return (
+    <section className="relative overflow-hidden border-b border-border bg-background py-16 sm:py-24">
+      <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+        <RevealBlock>
+          <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-violet-600 via-blue-600 to-emerald-600 px-6 py-12 text-center text-white shadow-2xl sm:px-12 sm:py-16">
+            {/* Decorative animated blobs */}
+            <div className="pointer-events-none absolute inset-0">
+              <div className="absolute -left-10 -top-10 h-40 w-40 rounded-full bg-white/10 blur-2xl animate-blob" />
+              <div className="absolute -bottom-10 -right-10 h-52 w-52 rounded-full bg-white/10 blur-2xl animate-blob" style={{ animationDelay: "4s" }} />
+            </div>
+            <div className="relative">
+              <h2 className="text-3xl font-bold tracking-tight sm:text-4xl">Ready to be matched?</h2>
+              <p className="mx-auto mt-3 max-w-xl text-sm text-white/90 sm:text-base">
+                Join 4,800+ job seekers and 950+ employers using SkillMatch AI across the continent. Your next opportunity — or your next great hire — is one click away.
+              </p>
+              <div className="mt-7 flex flex-col items-center justify-center gap-3 sm:flex-row">
+                <Button
+                  size="lg"
+                  className="h-12 px-6 bg-white text-violet-700 hover:bg-white/90"
+                  onClick={() => pickRole("seeker")}
+                >
+                  Sign up as job seeker
+                </Button>
+                <Button
+                  size="lg"
+                  variant="outline"
+                  className="h-12 border-white/40 bg-white/10 px-6 text-white hover:bg-white/20 hover:text-white"
+                  onClick={() => pickRole("employer")}
+                >
+                  Sign up as employer
+                </Button>
+              </div>
+            </div>
+          </div>
+        </RevealBlock>
+      </div>
+    </section>
+  );
+}
+
+export function HomePage() {
+  const { go } = useApp();
+  return (
+    <div className="flex min-h-screen flex-col">
+      <PublicHeader onAuth={(r) => go(r)} />
+      <main className="flex-1">
+        <HomeHero />
+        <HomeStats />
+        <HomeGroupPhotos />
+        <HomeFeatures />
+        <HomeTestimonials />
+        <HomeCTA />
+      </main>
+      <PublicFooter />
+    </div>
+  );
+}
+
+// ============================================================
+// FAQ PAGE — eight expandable questions with smooth animations
+// ============================================================
+
+interface FAQItem {
+  q: string;
+  a: string;
+  icon: React.ReactNode;
+  category: string;
+}
+
+const FAQ_ITEMS: FAQItem[] = [
+  {
+    q: "How does the AI matching actually work?",
+    a: "Our AI computes a 0–100% match score for every job application by combining six weighted factors: skill match (25%), required skill coverage (30%), proficiency alignment (15%), experience match (15%), education threshold (10%), and verified-skill bonus (5%). Every factor is explainable — you can drill into exactly which skills boosted or lowered your score. The weights are tunable by platform admins and visible to all users for full transparency.",
+    icon: <Cpu className="h-5 w-5" />,
+    category: "How it works",
+  },
+  {
+    q: "Is SkillMatch AI free for job seekers?",
+    a: "Yes — completely free for job seekers, forever. You can build your profile, upload your resume, get AI-extracted skills, apply to unlimited jobs, and message employers after shortlist, all at no cost. We monetize through employer subscriptions, never through candidate fees. No credit card is required to sign up, and we will never sell your data to third parties.",
+    icon: <Heart className="h-5 w-5" />,
+    category: "Pricing",
+  },
+  {
+    q: "How are skills verified?",
+    a: "Skills move through three verification tiers: unverified (self-reported), pending (in our assessment queue), and verified (confirmed). Verification happens through four channels: (1) automated skill assessments built into the platform, (2) uploaded certificates and certifications, (3) prior employer attestation, and (4) verified education records. Verified skills carry a 5% bonus weight in every match score and are clearly marked with a shield icon throughout the platform.",
+    icon: <ShieldCheck className="h-5 w-5" />,
+    category: "Verification",
+  },
+  {
+    q: "Who can see my contact information?",
+    a: "By default, your name, email, and phone number are hidden from employers. They only see your skills, proficiency levels, experience, education, and match score. Your contact info is unlocked only when you explicitly apply to a job or accept an employer's interview request. You can revoke access at any time by withdrawing an application. This privacy-by-default model is core to how we operate — you're always in control.",
+    icon: <Lock className="h-5 w-5" />,
+    category: "Privacy",
+  },
+  {
+    q: "What happens when I upload my resume?",
+    a: "Our AI extracts skills from your resume, normalizes them against our skill ontology (so 'React.js', 'ReactJS', and 'React' all map to the same skill), infers a proficiency level based on context clues (years used, project complexity, leadership signals), and flags which skills are verifiable through your listed experience. You always review and approve the extracted skills before they're added to your profile — the AI suggests, you decide.",
+    icon: <FileText className="h-5 w-5" />,
+    category: "How it works",
+  },
+  {
+    q: "How do I improve my match scores?",
+    a: "Open the Skill Gap Analysis page for any target role to see exactly which skills separate you from a 90%+ match, ranked by impact. Each gap is paired with curated learning resources and an estimate of how many additional jobs unlocking that skill would create for you. Add the skill to your profile, build it through a project or assessment, request verification, and your match scores across the platform update automatically within 24 hours.",
+    icon: <TrendingUp className="h-5 w-5" />,
+    category: "Career growth",
+  },
+  {
+    q: "Can employers post jobs for free?",
+    a: "Employers can post their first job for free, with full access to AI candidate ranking, skill-gap insights, and interview scheduling. Additional job posts and advanced features (bulk candidate messaging, team collaboration, advanced analytics, priority placement) are available on subscription plans starting at $99/month. All plans include the privacy-by-default candidate protections and GDPR compliance — we never charge for fairness.",
+    icon: <Building2 className="h-5 w-5" />,
+    category: "Pricing",
+  },
+  {
+    q: "Is my data GDPR-compliant?",
+    a: "Yes. We're GDPR-compliant and operate under a strict data-processing agreement. All personally identifiable information is encrypted at rest (AES-256) and in transit (TLS 1.3). You can export all your data at any time from Settings → Privacy, and you can permanently delete your account and all associated records with a single click — no support ticket required. We retain only anonymized, aggregated skill statistics for platform analytics.",
+    icon: <Globe2 className="h-5 w-5" />,
+    category: "Privacy",
+  },
+];
+
+function FAQItemRow({ item, isOpen, onToggle, index }: { item: FAQItem; isOpen: boolean; onToggle: () => void; index: number }) {
+  return (
+    <RevealBlock delay={index * 60}>
+      <div
+        className={cn(
+          "lift-card overflow-hidden rounded-2xl border bg-card transition-colors",
+          isOpen ? "border-primary/40 shadow-md" : "border-border"
+        )}
+      >
+        <button
+          type="button"
+          onClick={onToggle}
+          aria-expanded={isOpen}
+          className="flex w-full items-center gap-4 p-5 text-left sm:p-6"
+        >
+          <div
+            className={cn(
+              "flex h-11 w-11 shrink-0 items-center justify-center rounded-xl transition-all duration-300",
+              isOpen
+                ? "bg-gradient-to-br from-violet-500 to-blue-500 text-white shadow-lg"
+                : "bg-primary/10 text-primary"
+            )}
+          >
+            {item.icon}
+          </div>
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-2">
+              <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                {item.category}
+              </span>
+            </div>
+            <h3 className={cn("mt-0.5 text-sm font-semibold transition-colors sm:text-base", isOpen && "text-primary")}>
+              {item.q}
+            </h3>
+          </div>
+          <div
+            className={cn(
+              "faq-chevron flex h-8 w-8 shrink-0 items-center justify-center rounded-full transition-colors",
+              isOpen ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"
+            )}
+            aria-hidden="true"
+          >
+            <ChevronDown className={cn("h-4 w-4 faq-chevron", isOpen && "is-open")} />
+          </div>
+        </button>
+        <div
+          className={cn(
+            "grid transition-all duration-500 ease-[cubic-bezier(0.16,1,0.3,1)]",
+            isOpen ? "grid-rows-[1fr] opacity-100" : "grid-rows-[0fr] opacity-0"
+          )}
+        >
+          <div className="overflow-hidden">
+            <div className="border-t border-border/60 px-5 pb-5 pt-4 sm:px-6 sm:pb-6">
+              <div className="ml-0 sm:ml-15">
+                <div className="rounded-xl bg-muted/40 p-4">
+                  <p className="text-sm leading-relaxed text-muted-foreground">{item.a}</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </RevealBlock>
+  );
+}
+
+function FAQHero() {
+  return (
+    <section className="relative overflow-hidden border-b border-border bg-hero-glow">
+      <div className="pointer-events-none absolute inset-0">
+        <div className="absolute -left-20 top-10 h-64 w-64 rounded-full bg-violet-400/30 blur-3xl animate-blob" />
+        <div className="absolute right-0 top-32 h-72 w-72 rounded-full bg-emerald-400/20 blur-3xl animate-blob" style={{ animationDelay: "4s" }} />
+      </div>
+      <div className="absolute inset-0 bg-grid-subtle opacity-50 [mask-image:radial-gradient(ellipse_at_center,black,transparent_75%)]" />
+      <div className="relative mx-auto max-w-4xl px-4 py-16 text-center sm:px-6 sm:py-24 lg:px-8">
+        <div className="animate-fade-up inline-flex items-center gap-2 rounded-full border border-primary/20 bg-primary/5 px-3 py-1 text-xs font-medium text-primary">
+          <Lightbulb className="h-3 w-3" />
+          Frequently asked questions
+        </div>
+        <h1 className="animate-fade-up delay-100 mt-6 text-4xl font-extrabold tracking-tight sm:text-5xl">
+          Got questions? <span className="bg-gradient-to-r from-violet-600 via-blue-600 to-emerald-600 bg-clip-text text-transparent animate-gradient-text">We've got answers.</span>
+        </h1>
+        <p className="animate-fade-up delay-200 mx-auto mt-5 max-w-2xl text-base text-muted-foreground sm:text-lg">
+          Everything you need to know about how SkillMatch AI works, how your data is protected, and how to get the most out of the platform. Can't find what you're looking for? Reach out anytime.
+        </p>
+      </div>
+    </section>
+  );
+}
+
+function FAQCategoryPills({ activeCategory, onSelect }: { activeCategory: string; onSelect: (c: string) => void }) {
+  const categories = ["All", ...Array.from(new Set(FAQ_ITEMS.map((i) => i.category)))];
+  return (
+    <div className="flex flex-wrap items-center justify-center gap-2">
+      {categories.map((c) => (
+        <button
+          key={c}
+          onClick={() => onSelect(c)}
+          className={cn(
+            "rounded-full border px-3.5 py-1.5 text-xs font-medium transition-all",
+            activeCategory === c
+              ? "border-primary bg-primary text-primary-foreground shadow-md"
+              : "border-border bg-card text-muted-foreground hover:border-primary/40 hover:text-foreground"
+          )}
+        >
+          {c}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function FAQContactCTA() {
+  const { go } = useApp();
+  return (
+    <section className="border-t border-border bg-muted/30 py-16 sm:py-20">
+      <div className="mx-auto max-w-4xl px-4 sm:px-6 lg:px-8">
+        <RevealBlock>
+          <div className="rounded-3xl border border-border bg-card p-8 text-center shadow-md sm:p-12">
+            <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-violet-500 to-blue-500 text-white shadow-lg">
+              <Mail className="h-6 w-6" />
+            </div>
+            <h2 className="mt-4 text-2xl font-bold tracking-tight sm:text-3xl">Still have questions?</h2>
+            <p className="mx-auto mt-3 max-w-lg text-sm text-muted-foreground sm:text-base">
+              Our team is here to help. Reach out and we'll get back to you within 1–2 business days. We love feedback, ideas, and the occasional bug report.
+            </p>
+            <div className="mt-6 flex flex-col items-center justify-center gap-3 sm:flex-row">
+              <Button size="lg" className="btn-rainbow h-12 px-6" onClick={() => go("contact")}>
+                Contact support <ArrowRight className="h-4 w-4" />
+              </Button>
+              <Button size="lg" variant="outline" className="h-12 px-6" onClick={() => go("about")}>
+                Learn about us
+              </Button>
+            </div>
+          </div>
+        </RevealBlock>
+      </div>
+    </section>
+  );
+}
+
+export function FAQPage() {
+  const { go } = useApp();
+  const [openIndex, setOpenIndex] = useState<number | null>(0); // First one open by default
+  const [category, setCategory] = useState<string>("All");
+
+  const filtered = category === "All" ? FAQ_ITEMS : FAQ_ITEMS.filter((i) => i.category === category);
+
+  return (
+    <div className="flex min-h-screen flex-col">
+      <PublicHeader onAuth={(r) => go(r)} />
+      <main className="flex-1">
+        <FAQHero />
+        <section className="py-12 sm:py-16">
+          <div className="mx-auto max-w-3xl px-4 sm:px-6 lg:px-8">
+            <RevealBlock className="mb-8">
+              <FAQCategoryPills activeCategory={category} onSelect={(c) => { setCategory(c); setOpenIndex(null); }} />
+            </RevealBlock>
+            <div className="space-y-3">
+              {filtered.map((item, i) => (
+                <FAQItemRow
+                  key={item.q}
+                  item={item}
+                  index={i}
+                  isOpen={openIndex === i}
+                  onToggle={() => setOpenIndex(openIndex === i ? null : i)}
+                />
+              ))}
+            </div>
+            {filtered.length === 0 && (
+              <div className="rounded-xl border border-dashed border-border p-8 text-center text-sm text-muted-foreground">
+                No questions in this category yet.
+              </div>
+            )}
+          </div>
+        </section>
+        <FAQContactCTA />
       </main>
       <PublicFooter />
     </div>

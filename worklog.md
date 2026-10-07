@@ -30,3 +30,46 @@ Stage Summary:
 - All major CTA buttons are now functional: Find jobs → public-jobs, Hire talent → register (employer preselected), Sign up CTAs → register, Apply now/Sign in to apply → login, Bell/Message topbar icons → notifications/messages, message send buttons actually append messages, Save for later persists to localStorage.
 - Demo OTP is displayed on-screen (blue info box) so the admin can complete 2FA without a real email service.
 - All changes compile cleanly (no new TypeScript errors introduced; pre-existing errors in unrelated files are unchanged).
+
+---
+Task ID: 2
+Agent: main (Super Z)
+Task: Add two new pages accessible from the existing public header: (1) a modern, animated Home page with four group photos (5 people each, tech/IT environment), and (2) an FAQ page with 8 expandable/collapsible questions. Beautiful colors, smooth animations, responsive across desktop/tablet/mobile.
+
+Work Log:
+- Generated 4 group photos via the image-generation skill (z-ai CLI) at 1344x768 landscape:
+  * /public/groups/group1.jpg — 5 engineers collaborating in glass-walled meeting room
+  * /public/groups/group2.jpg — 5 IT engineers pair-programming at standing desk
+  * /public/groups/group3.jpg — 5 tech professionals celebrating around project whiteboard
+  * /public/groups/group4.jpg — 5 developers in casual lounge for daily standup
+  All photos emphasize multiethnic African/Asian/Latin American diversity, modern tech office environment, professional & collaborative feeling.
+- Extended GuestView type in src/lib/app-context.tsx to add "home" and "faq".
+- Updated src/app/page.tsx Router to dispatch view=home → <HomePage/> and view=faq → <FAQPage/>.
+- Updated PublicHeader nav links to: Home | Browse jobs | FAQ | About | Contact. "Get started" button upgraded to btn-rainbow gradient. Mobile slide-down panel picks up the same links automatically.
+- Updated PublicFooter to add Home, FAQ, and Post a job (employer preselected) links.
+- Created new useScrollReveal hook at src/hooks/use-scroll-reveal.ts — IntersectionObserver-based, returns `isVisible` boolean once element scrolls into view. Used to trigger scroll-reveal animations.
+- Added 13 new keyframes/utilities to globals.css: fadeUp, fadeIn, slideInLeft, slideInRight, scaleIn, floatY, slowSpin, gradientShiftSlow, marquee, expandDown, collapseUp, pulseGlow, blob, plus utility classes (.animate-*, .lift-card, .zoom-img, .reveal-on-scroll, .delay-100..800, .faq-chevron, .shimmer-line).
+- Created HomePage component with 6 sections:
+  * HomeHero — split layout with copy on left + floating group1 photo on right (animated gradient blobs, floating stat badges, pulse-glow ring)
+  * HomeStats — 4 animated counters (4,872+ seekers, 958+ employers, 1,247 roles, 6,124 verified skills) with gradient icon tiles
+  * HomeGroupPhotos — 2x2 grid of all 4 group photos with gradient overlays, captions, hover zoom, lift-card shadow, scroll reveal
+  * HomeFeatures — 6 feature cards (explainable scores, AI resume, verified skills, skill-gap, privacy, real-time) with gradient icon tiles
+  * HomeTestimonials — 3 success-story quote cards with avatar gradients
+  * HomeCTA — gradient call-to-action banner with animated blobs + dual sign-up buttons
+- Created FAQPage component with:
+  * FAQHero — gradient hero with animated blobs and gradient-text headline
+  * Category filter pills (All / How it works / Pricing / Verification / Privacy / Career growth) — click to filter
+  * 8 expandable FAQ rows, each with: gradient icon tile, category label, question, chevron rotation animation, smooth grid-rows[1fr↔0fr] expand/collapse transition (500ms cubic-bezier)
+  * FAQContactCTA — "Still have questions?" card linking to Contact and About pages
+- All sections use RevealBlock wrapper (scroll-triggered fade-up) with staggered delays for a polished, modern feel.
+- Color scheme: violet → blue → emerald gradients throughout, with accent colors (amber, rose, fuchsia, cyan) for variety. Consistent with existing btn-rainbow/btn-blue/btn-green utility classes.
+- Responsive: all grids collapse to single column on mobile, 2 columns on tablet, 3-4 on desktop. Hero photo collage hidden on mobile (lg:block) to keep mobile clean.
+- Verified dev server compiles cleanly (no TypeScript errors in any new file). Group photos all return 200 OK via curl.
+
+Stage Summary:
+- Two new pages live: /home (HomePage) and /faq (FAQPage), both accessible from the existing public header nav.
+- Home page features 4 group photos in a 2x2 grid, animated counters, scroll-reveal sections, floating hero photo with stat badges, and a gradient CTA.
+- FAQ page has 8 expandable questions with smooth grid-rows-based expand/collapse animation, chevron rotation, category filter pills, and a contact CTA.
+- 13 new CSS animations added to globals.css; new useScrollReveal hook added for IntersectionObserver-based scroll triggers.
+- All code is responsive (mobile/tablet/desktop), uses consistent gradient color scheme (violet/blue/emerald), and integrates with existing button styles (btn-rainbow, btn-blue, btn-green).
+- TypeScript clean, dev server running, all 4 group photos served at /groups/group{1-4}.jpg.
