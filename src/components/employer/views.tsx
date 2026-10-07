@@ -130,17 +130,17 @@ export function EmployerDashboard() {
         title="Hiring overview"
         description="Track your active jobs, applicants, and interviews."
         actions={
-          <Button onClick={() => go("job-edit", { jobId: "new" })}>
+          <Button className="btn-rainbow" onClick={() => go("job-edit", { jobId: "new" })}>
             <Plus className="h-4 w-4" /> Post a job
           </Button>
         }
       />
 
       <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <StatCard label="Active jobs" value={publishedJobs.length} icon={<Briefcase className="h-4 w-4" />} hint={`${draftJobs.length} draft${draftJobs.length === 1 ? "" : "s"}`} />
-        <StatCard label="Total applicants" value={totalApplicants} icon={<Users className="h-4 w-4" />} hint="Across all jobs" />
-        <StatCard label="Shortlisted" value={shortlisted} icon={<Star className="h-4 w-4" />} hint="Awaiting next step" />
-        <StatCard label="In interview" value={interviews} icon={<CalendarClock className="h-4 w-4" />} hint="Active interview stage" />
+        <StatCard label="Active jobs" value={publishedJobs.length} icon={<Briefcase className="h-4 w-4" />} hint={`${draftJobs.length} draft${draftJobs.length === 1 ? "" : "s"}`} onClick={() => go("jobs")} />
+        <StatCard label="Total applicants" value={totalApplicants} icon={<Users className="h-4 w-4" />} hint="Across all jobs" onClick={() => go("candidates")} />
+        <StatCard label="Shortlisted" value={shortlisted} icon={<Star className="h-4 w-4" />} hint="Awaiting next step" onClick={() => go("candidates")} />
+        <StatCard label="In interview" value={interviews} icon={<CalendarClock className="h-4 w-4" />} hint="Active interview stage" onClick={() => go("interviews")} />
       </div>
 
       <div className="mt-6 grid gap-4 lg:grid-cols-3">

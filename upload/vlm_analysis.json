@@ -1,0 +1,28 @@
+{
+  "choices": [
+    {
+      "finish_reason": "stop",
+      "index": 0,
+      "message": {
+        "content": "Based on the screenshot provided, here is a detailed analysis of the interface:\n\n### 1. Page/Screen Identification\nThe screen shown is the **Employer Dashboard** for a platform called **\"SkillMatch AI\"**. It serves as the main landing page for an employer to track their hiring activities, view active job postings, and monitor candidate applications.\n\n### 2. Visible Buttons and Interactive Elements\n*   **Top Bar:**\n    *   **Search Bar:** A text input field with a magnifying glass icon containing the placeholder: \"Search jobs, companies, skills...\"\n    *   **Role Selector:** A dropdown button labeled \"Employer\" with a shield icon.\n    *   **Notification Bell:** An icon with a red badge (indicating unread notifications).\n    *   **Messages Icon:** A chat bubble icon.\n    *   **User Profile:** A circular avatar with initials \"DC\", the name \"David Chen\", email \"employer@demo.com\", and a logout/exit arrow icon.\n*   **Sidebar Navigation:**\n    *   **Dashboard:** Currently active/selected item.\n    *   **Company Profile**\n    *   **Jobs**\n    *   **Candidate Ranking**\n    *   **Applications**\n    *   **Interviews**\n    *   **AI Report**\n    *   **Messages**\n    *   **Notifications:** Features a purple circular badge with the number \"2\".\n    *   **User Avatar (Bottom Left):** A dark circle with the letter \"N\".\n*   **Main Content Area:**\n    *   **\"+ Post a job\" Button:** A primary action button located at the top right of the main content.\n    *   **\"View all →\":** A link to see all jobs.\n    *   **\"All →\":** A link to see all recent candidates.\n    *   **Job Listing Cards:**\n        *   \"Backend Engineer (Go)\" card (with an arrow icon).\n        *   \"Senior Frontend Engineer\" card (with an arrow icon).\n\n### 3. Error Messages, Blank Areas, or Broken UI Elements\n*   **Empty State Area:** The \"Recent candidates\" section on the right side is currently empty. It displays a placeholder user icon, the bold text **\"No candidates yet\"**, and the subtext *\"Applicants will appear here.\"*\n*   **Zero Values:** The dashboard metrics for \"TOTAL APPLICANTS\", \"SHORTLISTED\", and \"IN INTERVIEW\" are all currently at **0**.\n\n### 4. Layout Structure\nThe layout follows a standard administrative dashboard design:\n*   **Left Sidebar:** A fixed navigation rail with a white background. It contains the \"SkillMatch AI\" logo at the top, followed by a vertical list of navigation links. The \"Dashboard\" item is highlighted in purple to indicate the current page.\n*   **Top Header Bar:** Spans the width of the screen above the main content. It contains global search, utility icons, and user account information.\n*   **Main Content Area:** Occupies the center and right portion of the screen.\n    *   **Header Section:** Contains the page title \"Hiring overview\", a descriptive subtitle, and the primary CTA button.\n    *   **Metrics Row:** Four distinct cards displaying key hiring statistics (Active Jobs, Total Applicants, Shortlisted, In Interview).\n    *   **Two-Column Grid Below Metrics:**\n        *   **Left Column (\"Your jobs\"):** Lists individual job postings.\n        *   **Right Column (\"Recent candidates\"):** Displays a list or status of recent applicants (currently showing the empty state).\n\n### 5. Specific Text, Labels, Headings, and Numbers\n**Branding & User Info:**\n*   **Logo:** \"SkillMatch AI\" / \"Skill-based hiring\"\n*   **User Name:** \"David Chen\"\n*   **User Email:** \"employer@demo.com\"\n*   **Role Label:** \"EMPLOYER\"\n\n**Headings:**\n*   \"Hiring overview\"\n*   \"ACTIVE JOBS\"\n*   \"TOTAL APPLICANTS\"\n*   \"SHORTLISTED\"\n*   \"IN INTERVIEW\"\n*   \"Your jobs\"\n*   \"Recent candidates\"\n\n**Subtext/Descriptions:**\n*   \"Track your active jobs, applicants, and interviews.\"\n*   \"0 drafts\"\n*   \"Across all jobs\"\n*   \"Awaiting next step\"\n*   \"Active interview stage\"\n*   \"Applicants will appear here.\"\n\n**Data Points & Job Details:**\n*   **Numbers:** 2 (Active Jobs), 0 (Total Applicants), 0 (Shortlisted), 0 (In Interview), 2 (Notification count).\n*   **Job 1 Title:** \"Backend Engineer (Go)\"\n*   **Job 1 Location/Date:** \"Lagos, Nigeria • posted today\"\n*   **Job 1 Status:** \"Published\" (Green label)\n*   **Job 2 Title:** \"Senior Frontend Engineer\"\n*   **Job 2 Location/Date:** \"Lagos, Nigeria • posted today\"\n*   **Job 2 Status:** \"Published\" (Green label)\n*   **Empty State Text:** \"No candidates yet\"",
+        "role": "assistant"
+      }
+    }
+  ],
+  "created": 1791398414,
+  "id": "20261008023950579b841d003d4ec0",
+  "model": "glm-5v-turbo",
+  "object": "chat.completion",
+  "request_id": "20261008023950579b841d003d4ec0",
+  "usage": {
+    "completion_tokens": 1075,
+    "completion_tokens_details": {
+      "reasoning_tokens": 0
+    },
+    "prompt_tokens": 1266,
+    "prompt_tokens_details": {
+      "cached_tokens": 0
+    },
+    "total_tokens": 2341
+  }
+}

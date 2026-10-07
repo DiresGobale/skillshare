@@ -572,6 +572,7 @@ export function StatCard({
   deltaTone = "neutral",
   icon,
   hint,
+  onClick,
 }: {
   label: string;
   value: React.ReactNode;
@@ -579,6 +580,7 @@ export function StatCard({
   deltaTone?: "up" | "down" | "neutral";
   icon?: React.ReactNode;
   hint?: string;
+  onClick?: () => void;
 }) {
   const deltaClass =
     deltaTone === "up"
@@ -586,8 +588,16 @@ export function StatCard({
       : deltaTone === "down"
       ? "text-rose-600 bg-rose-50"
       : "text-muted-foreground bg-muted";
+  const Wrapper: React.ElementType = onClick ? "button" : "div";
   return (
-    <div className="rounded-xl border border-border bg-card p-4 shadow-card-soft">
+    <Wrapper
+      type={onClick ? "button" : undefined}
+      onClick={onClick}
+      className={cn(
+        "block w-full rounded-xl border border-border bg-card p-4 text-left shadow-card-soft",
+        onClick && "transition-all hover:-translate-y-0.5 hover:border-primary/40 hover:shadow-card-hover focus:outline-none focus:ring-2 focus:ring-ring/40"
+      )}
+    >
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
           <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
@@ -607,7 +617,7 @@ export function StatCard({
           {delta}
         </div>
       )}
-    </div>
+    </Wrapper>
   );
 }
 
