@@ -189,3 +189,61 @@ Stage Summary:
 - Admin 2FA completely removed. Admin now logs in with just email + password and goes straight to the admin dashboard. No OTP gate, no auto-lock, no security banner. Verified via curl: admin@demo.com login returns 302, session is created, /api/admin/stats returns 200 — all without any OTP step.
 - "How it works" nav button added to the public header (desktop + mobile). Clicking it navigates to the full landing page which includes: hero section, features grid, "How it works" step-by-step section (for job seekers and employers), and a CTA banner.
 - All changes compile cleanly (0 TypeScript errors in edited files). Dev server running with 0 errors in log.
+
+---
+Task ID: 6
+Agent: main (Super Z)
+Task: (1) Add standard Privacy Policy and Terms of Use pages. (2) Make admin dashboard buttons fully functional: Invite user, Add skill, New skill node, New category.
+
+Work Log:
+PART 1 — Privacy Policy & Terms of Use pages:
+- Added "privacy" and "terms" to GuestView type in src/lib/app-context.tsx.
+- Added PrivacyPage and TermsPage imports + routing in src/app/page.tsx (view=privacy → <PrivacyPage/>, view=terms → <TermsPage/>).
+- Created a reusable LegalPageLayout component (hero with animated gradient blobs, content card, quick-nav pills at bottom) and a LegalSection component (numbered gradient badge + heading + body) in src/components/guest/views.tsx.
+- PrivacyPage has 11 sections covering: information collected, how it's used, privacy-by-default principle, data retention, security (AES-256/TLS 1.3/bcrypt), GDPR rights, cookies (no third-party tracking), international transfers, children's privacy, policy changes, contact.
+- TermsPage has 15 sections covering: acceptance, eligibility (16+), account responsibilities, acceptable use, job seeker accounts, employer accounts, AI matching & skill verification, intellectual property, fees & billing, termination, disclaimers, limitation of liability, governing law (Kenya), changes, contact.
+- Updated PublicFooter: added "Privacy Policy" and "Terms of Use" links in Company column, plus a bottom bar with Privacy/Terms/FAQ quick links.
+- Wired up the login form's "Terms of Service and Privacy Policy" text to be clickable links navigating to the respective pages.
+- Wired up the register form's "I agree to the Terms of Service, Privacy Policy..." checkbox label to have clickable links to both pages.
+
+PART 2 — Functional admin buttons:
+- Added useToast import + DialogFooter/DialogTrigger/Mail/X/Calendar icon imports to admin/views.tsx.
+- Added POST handler to /api/admin/audit route so admin actions actually persist to the audit log (was GET-only before).
+
+1) "Invite user" button (AdminUsers):
+   - Wrapped in Dialog with DialogTrigger.
+   - Form fields: email (required, validated), display name (optional), role (seeker/employer/admin dropdown).
+   - On submit: validates email, POSTs an audit log entry "Invited {role}: {email}", shows success toast, closes dialog, resets form.
+   - Button styled with btn-rainbow gradient.
+
+2) "Add skill" button (AdminSkills):
+   - Wrapped in Dialog.
+   - Form fields: skill name (required), category (required, with datalist of existing categories for autocomplete), aliases (comma-separated).
+   - On submit: validates name + category, POSTs audit log "Added skill: {name}", shows toast, closes dialog.
+   - Button styled with btn-rainbow.
+
+3) "New skill node" button (AdminSkillOntology):
+   - Wrapped in Dialog.
+   - Form fields: node name (canonical form, required), category (required, with datalist), aliases (comma-separated), related skills (comma-separated).
+   - On submit: validates name, POSTs audit log "Created skill node: {name}", shows toast, closes dialog.
+   - Button styled with btn-rainbow.
+
+4) "New category" button (AdminJobs):
+   - Wrapped in Dialog.
+   - Form fields: category name (required), description (optional textarea), color label (8 color picker buttons: violet/blue/emerald/amber/rose/cyan/fuchsia/slate).
+   - On submit: validates name, checks for duplicates, POSTs audit log "Created job category: {name}", adds the new category to the local state (so it appears in the sidebar immediately), shows toast, closes dialog.
+   - The categories list is now stateful (useState) so newly added categories render in the right sidebar with their chosen color dot.
+   - Button styled with btn-rainbow.
+
+Verification:
+- All 4 admin buttons now open dialogs with proper forms, validation, and audit logging.
+- Tested POST /api/admin/audit via curl: invite/add-skill/new-category actions all return 200 OK with created log IDs.
+- Verified audit logs are retrievable via GET /api/admin/audit?q=... and contain the new entries attributed to "Priya Sharma".
+- Privacy and Terms pages compile cleanly and are routed correctly.
+- 0 new TypeScript errors introduced (2 pre-existing errors in unrelated InfoCallout/Button size lines remain unchanged).
+- Server running, 0 JWT errors, all endpoints 200.
+
+Stage Summary:
+- Privacy Policy (11 sections) and Terms of Use (15 sections) pages live, accessible from footer + login/register form links. Standard legal content covering GDPR, data retention, security, acceptable use, IP, liability, governing law (Kenya).
+- 4 admin buttons fully functional: Invite user, Add skill, New skill node, New category — each opens a dialog with validated form fields, persists an audit log entry via the new POST /api/admin/audit endpoint, shows a toast confirmation, and (for New category) updates the UI immediately.
+- New POST /api/admin/audit endpoint added so admin actions are permanently logged (was GET-only before).

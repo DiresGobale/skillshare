@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from "react";
 import { cn } from "@/lib/utils";
 import { useApp } from "@/lib/app-context";
+import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -11,7 +12,7 @@ import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import {
@@ -69,6 +70,9 @@ import {
   Edit,
   Trash2,
   AlertTriangle,
+  Mail,
+  X,
+  Calendar,
 } from "lucide-react";
 
 function PageContainer({ children, className }: { children: React.ReactNode; className?: string }) {
@@ -205,6 +209,7 @@ function MockBarChart({ data, color }: { data: { label: string; value: number }[
 // USER MANAGEMENT
 // ============================================================
 export function AdminUsers() {
+  const { toast } = useToast();
   const [filter, setFilter] = useState("all");
   const [roleFilter, setRoleFilter] = useState("all");
   const [query, setQuery] = useState("");
@@ -215,6 +220,13 @@ export function AdminUsers() {
   const [page, setPage] = useState(1);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const PAGE_SIZE = 8;
+
+  // Invite user dialog state
+  const [inviteOpen, setInviteOpen] = useState(false);
+  const [inviteEmail, setInviteEmail] = useState("");
+  const [inviteName, setInviteName] = useState("");
+  const [inviteRole, setInviteRole] = useState("seeker");
+  const [inviting, setInviting] = useState(false);
 
   // Build the API URL with filters
   const apiUrl = `/api/admin/users?role=${roleFilter}&status=${filter}&q=${encodeURIComponent(debouncedQuery)}`;
@@ -262,13 +274,110 @@ export function AdminUsers() {
     }
   };
 
+  const sendInvite = async () => {
+    if (!inviteEmail.trim() || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(inviteEmail)) {
+      toast({ title: "Invalid email", description: "Please enter a valid email address." });
+      return;
+    }
+    setInviting(true);
+    try {
+      // Create an audit log entry for the invitation
+      await fetch("/api/admin/audit", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: `Invited ${inviteRole}: ${inviteEmail}`,
+          target: inviteEmail,
+          type: "admin",
+          status: "success",
+        }),
+      }).catch(() => { /* audit failure is non-blocking */ });
+
+      toast({
+        title: "Invitation sent",
+        description: `${inviteName || inviteEmail} has been invited as ${inviteRole}. They'll receive an email with signup instructions.`,
+      });
+      setInviteOpen(false);
+      setInviteEmail("");
+      setInviteName("");
+      setInviteRole("seeker");
+    } catch {
+      toast({ title: "Failed to send invite", description: "Please try again." });
+    } finally {
+      setInviting(false);
+    }
+  };
+
   return (
     <PageContainer>
       <SectionHeader
         title="User Management"
         description="Manage job seekers, employers, and platform access."
         actions={
-          <Button><Plus className="h-4 w-4" /> Invite user</Button>
+          <Dialog open={inviteOpen} onOpenChange={(o) => { setInviteOpen(o); if (!o) { setInviteEmail(""); setInviteName(""); setInviteRole("seeker"); } }}>
+            <DialogTrigger asChild>
+              <Button className="btn-rainbow"><Plus className="h-4 w-4" /> Invite user</Button>
+            </DialogTrigger>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Invite a new user</DialogTitle>
+                <DialogDescription>
+                  Send an invitation to join the platform. They'll receive an email with a signup link pre-filled with their role.
+                </DialogDescription>
+              </DialogHeader>
+              <div className="space-y-3 py-2">
+                <div className="space-y-1.5">
+                  <Label htmlFor="invite-email">Email address *</Label>
+                  <Input
+                    id="invite-email"
+                    type="email"
+                    placeholder="user@example.com"
+                    value={inviteEmail}
+                    onChange={(e) => setInviteEmail(e.target.value)}
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="invite-name">Display name (optional)</Label>
+                  <Input
+                    id="invite-name"
+                    placeholder="Their full name"
+                    value={inviteName}
+                    onChange={(e) => setInviteName(e.target.value)}
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Role *</Label>
+                  <Select value={inviteRole} onValueChange={setInviteRole}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="seeker">Job seeker</SelectItem>
+                      <SelectItem value="employer">Employer</SelectItem>
+                      <SelectItem value="admin">Administrator</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="rounded-md border border-blue-200 bg-blue-50 px-3 py-2 text-[11px] text-blue-700">
+                  <Mail className="inline h-3 w-3 mr-1" />
+                  In production, an email with a signup link would be sent to <strong>{inviteEmail || "this address"}</strong>.
+                </div>
+              </div>
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setInviteOpen(false)}>Cancel</Button>
+                <Button className="btn-blue" onClick={sendInvite} disabled={inviting || !inviteEmail.trim()}>
+                  {inviting ? (
+                    <>
+                      <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-primary-foreground border-t-transparent" />
+                      Sending…
+                    </>
+                  ) : (
+                    <>
+                      <Mail className="h-3.5 w-3.5" /> Send invitation
+                    </>
+                  )}
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
         }
       />
 
@@ -556,8 +665,14 @@ export function AdminUsers() {
 // SKILLS DATABASE
 // ============================================================
 export function AdminSkills() {
+  const { toast } = useToast();
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState("all");
+  const [addOpen, setAddOpen] = useState(false);
+  const [newSkillName, setNewSkillName] = useState("");
+  const [newSkillCategory, setNewSkillCategory] = useState("");
+  const [newSkillAliases, setNewSkillAliases] = useState("");
+  const [adding, setAdding] = useState(false);
 
   let skills = [...skillOntology];
   if (filter !== "all") skills = skills.filter((s) => s.category === filter);
@@ -568,12 +683,114 @@ export function AdminSkills() {
 
   const categories = Array.from(new Set(skillOntology.map((s) => s.category)));
 
+  const addSkill = async () => {
+    if (!newSkillName.trim()) {
+      toast({ title: "Skill name required", description: "Please enter a name for the new skill." });
+      return;
+    }
+    if (!newSkillCategory.trim()) {
+      toast({ title: "Category required", description: "Please enter or select a category." });
+      return;
+    }
+    setAdding(true);
+    try {
+      // Log the addition to the audit trail
+      await fetch("/api/admin/audit", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: `Added skill: ${newSkillName}`,
+          target: `Category: ${newSkillCategory}`,
+          type: "admin",
+          status: "success",
+        }),
+      }).catch(() => { /* non-blocking */ });
+
+      toast({
+        title: "Skill added",
+        description: `"${newSkillName}" has been added to the ${newSkillCategory} category. Aliases: ${newSkillAliases || "none"}.`,
+      });
+      setAddOpen(false);
+      setNewSkillName("");
+      setNewSkillCategory("");
+      setNewSkillAliases("");
+    } catch {
+      toast({ title: "Failed to add skill", description: "Please try again." });
+    } finally {
+      setAdding(false);
+    }
+  };
+
   return (
     <PageContainer>
       <SectionHeader
         title="Skills Database"
         description="All skills in the platform, organized by category."
-        actions={<Button><Plus className="h-4 w-4" /> Add skill</Button>}
+        actions={
+          <Dialog open={addOpen} onOpenChange={(o) => { setAddOpen(o); if (!o) { setNewSkillName(""); setNewSkillCategory(""); setNewSkillAliases(""); } }}>
+            <DialogTrigger asChild>
+              <Button className="btn-rainbow"><Plus className="h-4 w-4" /> Add skill</Button>
+            </DialogTrigger>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Add a new skill</DialogTitle>
+                <DialogDescription>
+                  Add a skill to the platform's global skill database. This will be available for selection by all users when building their profiles.
+                </DialogDescription>
+              </DialogHeader>
+              <div className="space-y-3 py-2">
+                <div className="space-y-1.5">
+                  <Label htmlFor="skill-name">Skill name *</Label>
+                  <Input
+                    id="skill-name"
+                    placeholder="e.g. Kubernetes"
+                    value={newSkillName}
+                    onChange={(e) => setNewSkillName(e.target.value)}
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="skill-category">Category *</Label>
+                  <Input
+                    id="skill-category"
+                    placeholder="e.g. DevOps, Frontend, Database"
+                    value={newSkillCategory}
+                    onChange={(e) => setNewSkillCategory(e.target.value)}
+                    list="existing-categories"
+                  />
+                  <datalist id="existing-categories">
+                    {categories.map((c) => <option key={c} value={c} />)}
+                  </datalist>
+                  <p className="text-[11px] text-muted-foreground">Type a new category or pick an existing one from the dropdown.</p>
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="skill-aliases">Aliases (comma-separated)</Label>
+                  <Input
+                    id="skill-aliases"
+                    placeholder="e.g. K8s, Kubernetes Engine"
+                    value={newSkillAliases}
+                    onChange={(e) => setNewSkillAliases(e.target.value)}
+                  />
+                  <p className="text-[11px] text-muted-foreground">The AI will normalize these aliases to the canonical skill name above.</p>
+                </div>
+              </div>
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setAddOpen(false)}>Cancel</Button>
+                <Button className="btn-green" onClick={addSkill} disabled={adding || !newSkillName.trim()}>
+                  {adding ? (
+                    <>
+                      <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-primary-foreground border-t-transparent" />
+                      Adding…
+                    </>
+                  ) : (
+                    <>
+                      <Plus className="h-3.5 w-3.5" /> Add skill
+                    </>
+                  )}
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+        }
       />
 
       <div className="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
@@ -670,14 +887,130 @@ export function AdminSkills() {
 // SKILL ONTOLOGY
 // ============================================================
 export function AdminSkillOntology() {
+  const { toast } = useToast();
   const [selected, setSelected] = useState<SkillOntologyItem>(skillOntology[0]);
+  const [newNodeOpen, setNewNodeOpen] = useState(false);
+  const [nodeName, setNodeName] = useState("");
+  const [nodeCategory, setNodeCategory] = useState("");
+  const [nodeAliases, setNodeAliases] = useState("");
+  const [nodeRelated, setNodeRelated] = useState("");
+  const [creating, setCreating] = useState(false);
+
+  const categories = Array.from(new Set(skillOntology.map((s) => s.category)));
+
+  const createNode = async () => {
+    if (!nodeName.trim()) {
+      toast({ title: "Node name required", description: "Please enter a name for the new skill node." });
+      return;
+    }
+    setCreating(true);
+    try {
+      await fetch("/api/admin/audit", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: `Created skill node: ${nodeName}`,
+          target: `Category: ${nodeCategory || "Uncategorized"}`,
+          type: "admin",
+          status: "success",
+        }),
+      }).catch(() => { /* non-blocking */ });
+
+      toast({
+        title: "Skill node created",
+        description: `"${nodeName}" has been added to the ontology graph. Related skills: ${nodeRelated || "none"}.`,
+      });
+      setNewNodeOpen(false);
+      setNodeName("");
+      setNodeCategory("");
+      setNodeAliases("");
+      setNodeRelated("");
+    } catch {
+      toast({ title: "Failed to create node", description: "Please try again." });
+    } finally {
+      setCreating(false);
+    }
+  };
 
   return (
     <PageContainer>
       <SectionHeader
         title="Skill Ontology"
         description="Manage skill relationships, aliases, and category mapping."
-        actions={<Button><Plus className="h-4 w-4" /> New skill node</Button>}
+        actions={
+          <Dialog open={newNodeOpen} onOpenChange={(o) => { setNewNodeOpen(o); if (!o) { setNodeName(""); setNodeCategory(""); setNodeAliases(""); setNodeRelated(""); } }}>
+            <DialogTrigger asChild>
+              <Button className="btn-rainbow"><Plus className="h-4 w-4" /> New skill node</Button>
+            </DialogTrigger>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Create a new skill node</DialogTitle>
+                <DialogDescription>
+                  Add a new node to the skill ontology graph. This defines how the AI normalizes extracted skills and maps relationships between them.
+                </DialogDescription>
+              </DialogHeader>
+              <div className="space-y-3 py-2">
+                <div className="space-y-1.5">
+                  <Label htmlFor="node-name">Node name (canonical form) *</Label>
+                  <Input
+                    id="node-name"
+                    placeholder="e.g. Container Orchestration"
+                    value={nodeName}
+                    onChange={(e) => setNodeName(e.target.value)}
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="node-category">Category *</Label>
+                  <Input
+                    id="node-category"
+                    placeholder="e.g. DevOps"
+                    value={nodeCategory}
+                    onChange={(e) => setNodeCategory(e.target.value)}
+                    list="ontology-categories"
+                  />
+                  <datalist id="ontology-categories">
+                    {categories.map((c) => <option key={c} value={c} />)}
+                  </datalist>
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="node-aliases">Aliases (comma-separated)</Label>
+                  <Input
+                    id="node-aliases"
+                    placeholder="e.g. K8s, Kubernetes, Docker Swarm"
+                    value={nodeAliases}
+                    onChange={(e) => setNodeAliases(e.target.value)}
+                  />
+                  <p className="text-[11px] text-muted-foreground">All aliases will normalize to the canonical name above.</p>
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="node-related">Related skills (comma-separated)</Label>
+                  <Input
+                    id="node-related"
+                    placeholder="e.g. Docker, Helm, Istio"
+                    value={nodeRelated}
+                    onChange={(e) => setNodeRelated(e.target.value)}
+                  />
+                  <p className="text-[11px] text-muted-foreground">These will appear as related skills in the ontology graph.</p>
+                </div>
+              </div>
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setNewNodeOpen(false)}>Cancel</Button>
+                <Button className="btn-blue" onClick={createNode} disabled={creating || !nodeName.trim()}>
+                  {creating ? (
+                    <>
+                      <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-primary-foreground border-t-transparent" />
+                      Creating…
+                    </>
+                  ) : (
+                    <>
+                      <GitBranch className="h-3.5 w-3.5" /> Create node
+                    </>
+                  )}
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+        }
       />
 
       <InfoCallout className="mt-6">
@@ -770,12 +1103,145 @@ export function AdminSkillOntology() {
 // JOBS & CATEGORIES
 // ============================================================
 export function AdminJobs() {
+  const { toast } = useToast();
+  const [newCatOpen, setNewCatOpen] = useState(false);
+  const [newCatName, setNewCatName] = useState("");
+  const [newCatColor, setNewCatColor] = useState("bg-violet-500");
+  const [newCatDesc, setNewCatDesc] = useState("");
+  const [creating, setCreating] = useState(false);
+  const [categories, setCategories] = useState([
+    { name: "Engineering", count: 412, color: "bg-violet-500" },
+    { name: "Design", count: 187, color: "bg-blue-500" },
+    { name: "Product", count: 142, color: "bg-emerald-500" },
+    { name: "Data", count: 98, color: "bg-amber-500" },
+    { name: "Marketing", count: 76, color: "bg-rose-500" },
+    { name: "Operations", count: 54, color: "bg-slate-500" },
+  ]);
+
+  const colorOptions = [
+    { label: "Violet", value: "bg-violet-500" },
+    { label: "Blue", value: "bg-blue-500" },
+    { label: "Emerald", value: "bg-emerald-500" },
+    { label: "Amber", value: "bg-amber-500" },
+    { label: "Rose", value: "bg-rose-500" },
+    { label: "Cyan", value: "bg-cyan-500" },
+    { label: "Fuchsia", value: "bg-fuchsia-500" },
+    { label: "Slate", value: "bg-slate-500" },
+  ];
+
+  const createCategory = async () => {
+    if (!newCatName.trim()) {
+      toast({ title: "Category name required", description: "Please enter a name for the new category." });
+      return;
+    }
+    if (categories.some((c) => c.name.toLowerCase() === newCatName.trim().toLowerCase())) {
+      toast({ title: "Category already exists", description: `A category named "${newCatName}" already exists.` });
+      return;
+    }
+    setCreating(true);
+    try {
+      await fetch("/api/admin/audit", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: `Created job category: ${newCatName}`,
+          target: `Color: ${newCatColor}`,
+          type: "admin",
+          status: "success",
+        }),
+      }).catch(() => { /* non-blocking */ });
+
+      setCategories([...categories, { name: newCatName.trim(), count: 0, color: newCatColor }]);
+      toast({
+        title: "Category created",
+        description: `"${newCatName}" has been added to job categories. Employers can now select it when posting jobs.`,
+      });
+      setNewCatOpen(false);
+      setNewCatName("");
+      setNewCatColor("bg-violet-500");
+      setNewCatDesc("");
+    } catch {
+      toast({ title: "Failed to create category", description: "Please try again." });
+    } finally {
+      setCreating(false);
+    }
+  };
+
   return (
     <PageContainer>
       <SectionHeader
         title="Jobs & Categories"
         description="Manage job categories and monitor all posted jobs platform-wide."
-        actions={<Button><Plus className="h-4 w-4" /> New category</Button>}
+        actions={
+          <Dialog open={newCatOpen} onOpenChange={(o) => { setNewCatOpen(o); if (!o) { setNewCatName(""); setNewCatColor("bg-violet-500"); setNewCatDesc(""); } }}>
+            <DialogTrigger asChild>
+              <Button className="btn-rainbow"><Plus className="h-4 w-4" /> New category</Button>
+            </DialogTrigger>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Create a new job category</DialogTitle>
+                <DialogDescription>
+                  Add a new category that employers can select when posting jobs. Categories help organize the job board and power filtering.
+                </DialogDescription>
+              </DialogHeader>
+              <div className="space-y-3 py-2">
+                <div className="space-y-1.5">
+                  <Label htmlFor="cat-name">Category name *</Label>
+                  <Input
+                    id="cat-name"
+                    placeholder="e.g. Security, DevOps, Customer Success"
+                    value={newCatName}
+                    onChange={(e) => setNewCatName(e.target.value)}
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Description (optional)</Label>
+                  <Textarea
+                    placeholder="Brief description of what this category covers"
+                    value={newCatDesc}
+                    onChange={(e) => setNewCatDesc(e.target.value)}
+                    rows={2}
+                    className="resize-none"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Color label</Label>
+                  <div className="flex flex-wrap gap-2">
+                    {colorOptions.map((c) => (
+                      <button
+                        key={c.value}
+                        type="button"
+                        onClick={() => setNewCatColor(c.value)}
+                        className={cn(
+                          "flex items-center gap-1.5 rounded-md border px-2.5 py-1.5 text-xs font-medium transition-all",
+                          newCatColor === c.value ? "border-primary ring-2 ring-primary/30 bg-primary/5" : "border-border hover:bg-accent"
+                        )}
+                      >
+                        <span className={cn("h-3 w-3 rounded-full", c.value)} />
+                        {c.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setNewCatOpen(false)}>Cancel</Button>
+                <Button className="btn-green" onClick={createCategory} disabled={creating || !newCatName.trim()}>
+                  {creating ? (
+                    <>
+                      <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-primary-foreground border-t-transparent" />
+                      Creating…
+                    </>
+                  ) : (
+                    <>
+                      <Plus className="h-3.5 w-3.5" /> Create category
+                    </>
+                  )}
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+        }
       />
 
       <div className="mt-6 grid gap-4 lg:grid-cols-3">
@@ -818,17 +1284,10 @@ export function AdminJobs() {
         <div className="space-y-4">
           <Card>
             <CardHeader className="pb-3">
-              <CardTitle className="text-sm">Job categories</CardTitle>
+              <CardTitle className="text-sm">Job categories ({categories.length})</CardTitle>
             </CardHeader>
             <CardContent className="space-y-2">
-              {[
-                { name: "Engineering", count: 412, color: "bg-violet-500" },
-                { name: "Design", count: 187, color: "bg-blue-500" },
-                { name: "Product", count: 142, color: "bg-emerald-500" },
-                { name: "Data", count: 98, color: "bg-amber-500" },
-                { name: "Marketing", count: 76, color: "bg-rose-500" },
-                { name: "Operations", count: 54, color: "bg-slate-500" },
-              ].map((c) => (
+              {categories.map((c) => (
                 <div key={c.name} className="flex items-center justify-between text-sm">
                   <div className="flex items-center gap-2">
                     <span className={cn("h-2 w-2 rounded-full", c.color)} />

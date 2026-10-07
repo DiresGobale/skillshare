@@ -229,11 +229,18 @@ function PublicFooter() {
               <li><button className="text-muted-foreground hover:text-foreground" onClick={() => go("about")}>About</button></li>
               <li><button className="text-muted-foreground hover:text-foreground" onClick={() => go("contact")}>Contact</button></li>
               <li><button className="text-muted-foreground hover:text-foreground" onClick={() => go("faq")}>FAQ</button></li>
+              <li><button className="text-muted-foreground hover:text-foreground" onClick={() => go("privacy")}>Privacy Policy</button></li>
+              <li><button className="text-muted-foreground hover:text-foreground" onClick={() => go("terms")}>Terms of Use</button></li>
             </ul>
           </div>
         </div>
-        <div className="mt-8 border-t border-border pt-6 text-xs text-muted-foreground">
-          © 2026 SkillMatch AI. All rights reserved.
+        <div className="mt-8 flex flex-col items-center justify-between gap-3 border-t border-border pt-6 text-xs text-muted-foreground sm:flex-row">
+          <span>© 2026 SkillMatch AI. All rights reserved.</span>
+          <div className="flex gap-4">
+            <button className="hover:text-foreground" onClick={() => go("privacy")}>Privacy</button>
+            <button className="hover:text-foreground" onClick={() => go("terms")}>Terms</button>
+            <button className="hover:text-foreground" onClick={() => go("faq")}>FAQ</button>
+          </div>
         </div>
       </div>
     </footer>
@@ -1239,6 +1246,404 @@ export function FAQPage() {
 }
 
 // ============================================================
+// PRIVACY POLICY PAGE
+// ============================================================
+
+// Shared layout for legal pages
+function LegalPageLayout({
+  title,
+  lastUpdated,
+  intro,
+  children,
+}: {
+  title: string;
+  lastUpdated: string;
+  intro: string;
+  children: React.ReactNode;
+}) {
+  const { go } = useApp();
+  return (
+    <div className="flex min-h-screen flex-col">
+      <PublicHeader onAuth={(r) => go(r)} />
+      <main className="flex-1 bg-muted/20">
+        {/* Hero */}
+        <section className="relative overflow-hidden border-b border-border bg-hero-glow">
+          <div className="pointer-events-none absolute inset-0">
+            <div className="absolute -left-20 top-10 h-64 w-64 rounded-full bg-violet-400/30 blur-3xl animate-blob" />
+            <div className="absolute right-0 top-32 h-72 w-72 rounded-full bg-emerald-400/20 blur-3xl animate-blob" style={{ animationDelay: "4s" }} />
+          </div>
+          <div className="absolute inset-0 bg-grid-subtle opacity-50 [mask-image:radial-gradient(ellipse_at_center,black,transparent_75%)]" />
+          <div className="relative mx-auto max-w-4xl px-4 py-14 text-center sm:px-6 sm:py-20 lg:px-8">
+            <div className="animate-fade-up inline-flex items-center gap-2 rounded-full border border-primary/20 bg-primary/5 px-3 py-1 text-xs font-medium text-primary">
+              <ShieldCheck className="h-3 w-3" />
+              Legal
+            </div>
+            <h1 className="animate-fade-up delay-100 mt-6 text-4xl font-extrabold tracking-tight sm:text-5xl">
+              {title}
+            </h1>
+            <p className="animate-fade-up delay-200 mx-auto mt-5 max-w-2xl text-base text-muted-foreground sm:text-lg">
+              {intro}
+            </p>
+            <p className="animate-fade-up delay-300 mt-4 text-xs text-muted-foreground">
+              Last updated: {lastUpdated}
+            </p>
+          </div>
+        </section>
+
+        {/* Content */}
+        <section className="py-12 sm:py-16">
+          <div className="mx-auto max-w-4xl px-4 sm:px-6 lg:px-8">
+            <div className="rounded-2xl border border-border bg-card p-6 shadow-sm sm:p-10">
+              <div className="legal-content space-y-8">
+                {children}
+              </div>
+            </div>
+
+            {/* Quick navigation back */}
+            <div className="mt-8 flex flex-wrap items-center justify-center gap-3 text-xs">
+              <button onClick={() => go("terms")} className="rounded-full border border-border bg-card px-3 py-1.5 font-medium text-muted-foreground hover:border-primary/40 hover:text-foreground">
+                Terms of Use
+              </button>
+              <button onClick={() => go("faq")} className="rounded-full border border-border bg-card px-3 py-1.5 font-medium text-muted-foreground hover:border-primary/40 hover:text-foreground">
+                FAQ
+              </button>
+              <button onClick={() => go("contact")} className="rounded-full border border-border bg-card px-3 py-1.5 font-medium text-muted-foreground hover:border-primary/40 hover:text-foreground">
+                Contact us
+              </button>
+              <button onClick={() => go("home")} className="rounded-full border border-border bg-card px-3 py-1.5 font-medium text-muted-foreground hover:border-primary/40 hover:text-foreground">
+                Back to Home
+              </button>
+            </div>
+          </div>
+        </section>
+      </main>
+      <PublicFooter />
+    </div>
+  );
+}
+
+// Reusable section component for legal pages
+function LegalSection({ number, title, children }: { number: number; title: string; children: React.ReactNode }) {
+  return (
+    <div>
+      <h2 className="flex items-center gap-3 text-lg font-bold tracking-tight sm:text-xl">
+        <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-violet-500 to-blue-500 text-xs font-bold text-white">
+          {number}
+        </span>
+        {title}
+      </h2>
+      <div className="mt-3 space-y-3 pl-0 sm:pl-10 text-sm leading-relaxed text-muted-foreground">
+        {children}
+      </div>
+    </div>
+  );
+}
+
+export function PrivacyPage() {
+  return (
+    <LegalPageLayout
+      title="Privacy Policy"
+      lastUpdated="October 7, 2026"
+      intro="Your privacy is foundational to everything we build. This policy explains what data we collect, why we collect it, how we use it, and the controls you have over it."
+    >
+      <LegalSection number={1} title="Information we collect">
+        <p>
+          We collect information that you provide directly to us when you create an account, build your profile, upload a resume, apply to jobs, or communicate with employers. This includes:
+        </p>
+        <ul className="ml-4 list-disc space-y-1.5">
+          <li><strong className="text-foreground">Account data:</strong> name, email address, password (bcrypt-hashed), role (seeker/employer/admin), and profile photo.</li>
+          <li><strong className="text-foreground">Profile data:</strong> skills, proficiency levels, work experience, education, location, and about/bio text.</li>
+          <li><strong className="text-foreground">Resume data:</strong> the contents of any resume you upload for AI analysis. We extract skills, normalize them, and store the normalized form.</li>
+          <li><strong className="text-foreground">Application data:</strong> which jobs you apply to, application status, match scores, and messages exchanged with employers.</li>
+          <li><strong className="text-foreground">Usage data:</strong> aggregated, anonymized analytics about feature usage, page views, and performance. We do not link this back to your identity.</li>
+        </ul>
+      </LegalSection>
+
+      <LegalSection number={2} title="How we use your information">
+        <p>We use your information to operate, maintain, and improve the platform:</p>
+        <ul className="ml-4 list-disc space-y-1.5">
+          <li>To compute match scores between your skill profile and posted jobs.</li>
+          <li>To display your profile (minus contact details) to employers when you apply or are shortlisted.</li>
+          <li>To send you notifications about applications, interviews, and platform updates.</li>
+          <li>To generate aggregated, anonymized analytics about skill trends and platform health.</li>
+          <li>To detect, prevent, and address fraud, abuse, and security incidents.</li>
+          <li>To comply with our legal obligations under Kenyan, Nigerian, and EU data-protection law.</li>
+        </ul>
+        <p>We never sell your personal data to third parties. We never share your contact information with employers until you explicitly apply to a job or accept an interview request.</p>
+      </LegalSection>
+
+      <LegalSection number={3} title="Privacy by default">
+        <p>
+          Privacy-by-default is a core product principle, not just a legal checkbox. Specifically:
+        </p>
+        <ul className="ml-4 list-disc space-y-1.5">
+          <li>Your name, email, and phone number are hidden from employers until you apply or accept an interview.</li>
+          <li>Employers see only your skills, proficiency, experience, education, and match score during candidate ranking.</li>
+          <li>You can revoke an employer's access to your contact details at any time by withdrawing your application.</li>
+          <li>You can export or permanently delete your account and all associated data from Settings → Privacy with a single click — no support ticket required.</li>
+        </ul>
+      </LegalSection>
+
+      <LegalSection number={4} title="Data retention">
+        <p>
+          We retain your data for as long as your account is active. If you delete your account, we permanently remove your personal data (profile, resume, applications, messages) within 30 days. We retain only anonymized, aggregated skill statistics for platform analytics — these cannot be traced back to you.
+        </p>
+        <p>
+          If you simply stop using the platform without deleting your account, we will retain your data for 24 months of inactivity before automatically archiving it. You will receive two email reminders (at 18 and 23 months) before this happens.
+        </p>
+      </LegalSection>
+
+      <LegalSection number={5} title="Data security">
+        <p>
+          We use industry-standard technical and organizational measures to protect your data:
+        </p>
+        <ul className="ml-4 list-disc space-y-1.5">
+          <li><strong className="text-foreground">Encryption at rest:</strong> AES-256 for all personally identifiable information stored in our database.</li>
+          <li><strong className="text-foreground">Encryption in transit:</strong> TLS 1.3 for all network traffic between your browser and our servers.</li>
+          <li><strong className="text-foreground">Password hashing:</strong> bcrypt with a cost factor of 10. We never store plaintext passwords.</li>
+          <li><strong className="text-foreground">Access controls:</strong> strict role-based access for our team. Admin accounts require 2FA.</li>
+          <li><strong className="text-foreground">Regular audits:</strong> quarterly security reviews and penetration testing.</li>
+        </ul>
+      </LegalSection>
+
+      <LegalSection number={6} title="Your rights (GDPR & similar laws)">
+        <p>
+          Depending on your jurisdiction, you may have the following rights regarding your personal data:
+        </p>
+        <ul className="ml-4 list-disc space-y-1.5">
+          <li><strong className="text-foreground">Right of access:</strong> request a copy of all data we hold about you.</li>
+          <li><strong className="text-foreground">Right to rectification:</strong> correct inaccurate or incomplete data.</li>
+          <li><strong className="text-foreground">Right to erasure:</strong> permanently delete your account and data.</li>
+          <li><strong className="text-foreground">Right to restrict processing:</strong> limit how we use your data while a dispute is resolved.</li>
+          <li><strong className="text-foreground">Right to data portability:</strong> export your data in a machine-readable format.</li>
+          <li><strong className="text-foreground">Right to object:</strong> opt out of certain processing activities.</li>
+        </ul>
+        <p>
+          To exercise any of these rights, use the in-app controls in Settings → Privacy, or email us at privacy@skillmatch.ai. We respond to all valid requests within 30 days.
+        </p>
+      </LegalSection>
+
+      <LegalSection number={7} title="Cookies and tracking">
+        <p>
+          We use only essential cookies required for the platform to function:
+        </p>
+        <ul className="ml-4 list-disc space-y-1.5">
+          <li><strong className="text-foreground">Session cookie:</strong> authenticates you after login. HttpOnly, Secure, SameSite=Lax.</li>
+          <li><strong className="text-foreground">CSRF cookie:</strong> protects against cross-site request forgery on form submissions.</li>
+          <li><strong className="text-foreground">Theme preference cookie:</strong> remembers your light/dark mode choice.</li>
+        </ul>
+        <p>
+          We do not use third-party advertising, marketing, or cross-site tracking cookies. We do not use Google Analytics, Facebook Pixel, or any similar service. The only third-party scripts we load are for email delivery and error monitoring — both configured to process only the minimum data necessary.
+        </p>
+      </LegalSection>
+
+      <LegalSection number={8} title="International data transfers">
+        <p>
+          SkillMatch AI operates across 14 African markets. Your data may be processed on servers located in Kenya (primary), Nigeria (secondary), and the EU (backup). All transfers are governed by Standard Contractual Clauses approved by the European Commission, and we ensure an equivalent level of protection in every jurisdiction.
+        </p>
+      </LegalSection>
+
+      <LegalSection number={9} title="Children's privacy">
+        <p>
+          SkillMatch AI is not directed to children under 16. We do not knowingly collect personal information from anyone under 16. If you believe we have collected data from a minor, please contact us at privacy@skillmatch.ai and we will delete it immediately.
+        </p>
+      </LegalSection>
+
+      <LegalSection number={10} title="Changes to this policy">
+        <p>
+          We may update this Privacy Policy from time to time to reflect changes in our practices or legal requirements. We will notify you by email and via an in-app banner at least 30 days before any material change takes effect. The "Last updated" date at the top of this page reflects the most recent revision.
+        </p>
+      </LegalSection>
+
+      <LegalSection number={11} title="Contact us">
+        <p>
+          If you have any questions, concerns, or requests regarding this Privacy Policy or your personal data, please contact us:
+        </p>
+        <ul className="ml-4 list-disc space-y-1.5">
+          <li>Email: <strong className="text-foreground">privacy@skillmatch.ai</strong></li>
+          <li>Postal: SkillMatch AI, PO Box 12345-00100, Nairobi, Kenya</li>
+          <li>Or use the in-app contact form on the Contact page.</li>
+        </ul>
+        <p>We are committed to resolving every privacy inquiry within 5 business days.</p>
+      </LegalSection>
+    </LegalPageLayout>
+  );
+}
+
+// ============================================================
+// TERMS OF USE PAGE
+// ============================================================
+
+export function TermsPage() {
+  return (
+    <LegalPageLayout
+      title="Terms of Use"
+      lastUpdated="October 7, 2026"
+      intro="These terms govern your use of SkillMatch AI. Please read them carefully — by creating an account, you agree to be bound by them."
+    >
+      <LegalSection number={1} title="Acceptance of terms">
+        <p>
+          By accessing or using SkillMatch AI (the "Platform"), you agree to be bound by these Terms of Use and our Privacy Policy. If you do not agree to these terms, you may not access or use the Platform. If you are using the Platform on behalf of a company, you represent that you have the authority to bind that company to these terms.
+        </p>
+      </LegalSection>
+
+      <LegalSection number={2} title="Eligibility">
+        <p>
+          You must be at least 16 years old to use SkillMatch AI. By creating an account, you represent and warrant that:
+        </p>
+        <ul className="ml-4 list-disc space-y-1.5">
+          <li>You are at least 16 years of age (or the age of digital consent in your jurisdiction, whichever is higher).</li>
+          <li>You are legally capable of entering into a binding agreement.</li>
+          <li>All information you provide is accurate, current, and complete.</li>
+          <li>You will maintain the accuracy of your information and update it as needed.</li>
+        </ul>
+      </LegalSection>
+
+      <LegalSection number={3} title="Account responsibilities">
+        <p>
+          You are solely responsible for maintaining the confidentiality and security of your account credentials. You agree to:
+        </p>
+        <ul className="ml-4 list-disc space-y-1.5">
+          <li>Use a strong, unique password and not share it with anyone.</li>
+          <li>Notify us immediately of any unauthorized use of your account.</li>
+          <li>Be responsible for all activities that occur under your account, whether authorized or not.</li>
+          <li>Not create more than one account per person (or per company, for employer accounts).</li>
+          <li>Not transfer, sell, or assign your account to anyone else.</li>
+        </ul>
+      </LegalSection>
+
+      <LegalSection number={4} title="Acceptable use">
+        <p>You agree not to use the Platform to:</p>
+        <ul className="ml-4 list-disc space-y-1.5">
+          <li>Post false, misleading, or fraudulent information — including fake skills, experience, or education.</li>
+          <li>Impersonate another person or entity, or misrepresent your affiliation.</li>
+          <li>Harass, threaten, or discriminate against any other user.</li>
+          <li>Scrape, crawl, or otherwise extract data from the Platform using automated means without our written permission.</li>
+          <li>Upload viruses, malware, or any other malicious code.</li>
+          <li>Attempt to gain unauthorized access to any part of the Platform, another user's account, or our systems.</li>
+          <li>Use the Platform for any illegal or unauthorized purpose.</li>
+          <li>Circumvent the privacy-by-default protections (e.g., trying to extract contact info before a candidate has applied).</li>
+        </ul>
+        <p>
+          Violations may result in immediate account suspension or termination, and we reserve the right to report illegal activity to the appropriate authorities.
+        </p>
+      </LegalSection>
+
+      <LegalSection number={5} title="Job seeker accounts">
+        <p>
+          Job seeker accounts are free. As a job seeker, you agree to:
+        </p>
+        <ul className="ml-4 list-disc space-y-1.5">
+          <li>Provide accurate information about your skills, experience, and education.</li>
+          <li>Not misrepresent your proficiency levels or claim skills you do not have.</li>
+          <li>Use the platform in good faith to find employment — not to spam employers or waste their time.</li>
+          <li>Respond to interview requests in a timely manner (within 5 business days) or withdraw your application if you are no longer interested.</li>
+        </ul>
+      </LegalSection>
+
+      <LegalSection number={6} title="Employer accounts">
+        <p>
+          Employer accounts may be subject to subscription fees. As an employer, you agree to:
+        </p>
+        <ul className="ml-4 list-disc space-y-1.5">
+          <li>Post only genuine job openings that you are actively hiring for.</li>
+          <li>Provide accurate company information, including company name, location, and hiring contact.</li>
+          <li>Respect candidate privacy — do not attempt to contact candidates outside the platform before they have applied or accepted an interview.</li>
+          <li>Not discriminate on the basis of race, gender, religion, age, disability, sexual orientation, or any other protected characteristic.</li>
+          <li>Pay all applicable subscription fees on time. Failure to pay may result in account suspension.</li>
+        </ul>
+      </LegalSection>
+
+      <LegalSection number={7} title="AI matching and skill verification">
+        <p>
+          SkillMatch AI uses explainable artificial intelligence to compute match scores between candidates and jobs. You understand and agree that:
+        </p>
+        <ul className="ml-4 list-disc space-y-1.5">
+          <li>Match scores are recommendations, not guarantees. They do not replace human judgment in hiring decisions.</li>
+          <li>The AI relies on the accuracy of the data you provide. Inaccurate data will produce inaccurate matches.</li>
+          <li>Skill verification is based on assessments, certificates, and prior employer attestation — not on self-reporting alone.</li>
+          <li>We continuously improve the matching algorithm, so scores may change over time even if your profile does not.</li>
+        </ul>
+      </LegalSection>
+
+      <LegalSection number={8} title="Intellectual property">
+        <p>
+          You retain all rights to the content you submit to the Platform (resume, profile photo, skills, experience). By submitting content, you grant SkillMatch AI a non-exclusive, royalty-free, worldwide license to use, store, and process that content solely for the purpose of operating and improving the Platform.
+        </p>
+        <p>
+          The Platform itself — including the SkillMatch AI name, logo, design, software, and AI models — is the intellectual property of SkillMatch AI and is protected by copyright, trademark, and other laws. You may not copy, modify, or distribute any part of the Platform without our written permission.
+        </p>
+      </LegalSection>
+
+      <LegalSection number={9} title="Fees and billing">
+        <p>
+          Job seeker accounts are free forever. Employer accounts are free for the first job post, with subscription plans starting at $99/month for additional features. All fees are billed in USD and are non-refundable except as required by law. We will notify you at least 30 days before any price increase takes effect.
+        </p>
+      </LegalSection>
+
+      <LegalSection number={10} title="Termination">
+        <p>
+          You may delete your account at any time from Settings → Privacy. We may suspend or terminate your account if:
+        </p>
+        <ul className="ml-4 list-disc space-y-1.5">
+          <li>You violate these Terms of Use.</li>
+          <li>Your account has been inactive for 24 months.</li>
+          <li>We are required to do so by law.</li>
+          <li>We discontinue the Platform or a specific feature (with at least 60 days' notice).</li>
+        </ul>
+        <p>
+          Upon termination, your right to use the Platform ends immediately. We will retain your data for 30 days after termination to allow for recovery, after which it is permanently deleted (subject to our data retention policy).
+        </p>
+      </LegalSection>
+
+      <LegalSection number={11} title="Disclaimers">
+        <p>
+          The Platform is provided "as is" and "as available" without warranties of any kind, either express or implied. We do not guarantee that:
+        </p>
+        <ul className="ml-4 list-disc space-y-1.5">
+          <li>The Platform will be uninterrupted, error-free, or secure.</li>
+          <li>Match scores will result in interviews or job offers.</li>
+          <li>Employers will respond to your applications, or that candidates will accept your offers.</li>
+          <li>Any errors or defects will be corrected.</li>
+        </ul>
+        <p>
+          You use the Platform at your own risk. We are not responsible for the conduct of any user on or off the Platform.
+        </p>
+      </LegalSection>
+
+      <LegalSection number={12} title="Limitation of liability">
+        <p>
+          To the fullest extent permitted by law, SkillMatch AI shall not be liable for any indirect, incidental, special, consequential, or punitive damages, including but not limited to loss of profits, data, or goodwill, arising out of or related to your use of (or inability to use) the Platform. Our total liability for any claim shall not exceed the amount you paid us in the 12 months preceding the claim.
+        </p>
+      </LegalSection>
+
+      <LegalSection number={13} title="Governing law">
+        <p>
+          These Terms are governed by the laws of the Republic of Kenya, without regard to conflict-of-law principles. Any dispute arising from these Terms or your use of the Platform shall be resolved exclusively in the courts of Nairobi, Kenya — except that you may bring a claim in your local jurisdiction if you are a consumer protected by mandatory EU consumer-protection law.
+        </p>
+      </LegalSection>
+
+      <LegalSection number={14} title="Changes to these terms">
+        <p>
+          We may update these Terms from time to time. We will notify you by email and via an in-app banner at least 30 days before any material change takes effect. If you continue to use the Platform after the effective date, you are deemed to have accepted the updated Terms.
+        </p>
+      </LegalSection>
+
+      <LegalSection number={15} title="Contact">
+        <p>
+          If you have any questions about these Terms, please contact us:
+        </p>
+        <ul className="ml-4 list-disc space-y-1.5">
+          <li>Email: <strong className="text-foreground">legal@skillmatch.ai</strong></li>
+          <li>Postal: SkillMatch AI, PO Box 12345-00100, Nairobi, Kenya</li>
+          <li>Or use the in-app contact form on the Contact page.</li>
+        </ul>
+      </LegalSection>
+    </LegalPageLayout>
+  );
+}
+
+// ============================================================
 // AUTH (login + register)
 // ============================================================
 function AuthShell({ title, subtitle, children }: { title: string; subtitle: string; children: React.ReactNode }) {
@@ -1254,7 +1659,10 @@ function AuthShell({ title, subtitle, children }: { title: string; subtitle: str
           </div>
           <div className="mt-6">{children}</div>
           <p className="mt-6 text-center text-xs text-muted-foreground">
-            By continuing you agree to our Terms of Service and Privacy Policy.
+            By continuing you agree to our{" "}
+            <button onClick={() => go("terms")} className="font-medium text-primary hover:underline">Terms of Service</button>{" "}
+            and{" "}
+            <button onClick={() => go("privacy")} className="font-medium text-primary hover:underline">Privacy Policy</button>.
           </p>
         </div>
       </main>
@@ -1769,7 +2177,9 @@ export function Register() {
             <div className="flex items-start gap-2">
               <Checkbox id="terms" checked={agree} onCheckedChange={(v) => setAgree(Boolean(v))} />
               <label htmlFor="terms" className="text-xs text-muted-foreground">
-                I agree to the Terms of Service, Privacy Policy, and the candidate-privacy commitment that protects contact information until I apply or accept an interview.
+                I agree to the{" "}
+                <button type="button" onClick={() => go("terms")} className="font-medium text-primary hover:underline">Terms of Service</button>,{" "}
+                <button type="button" onClick={() => go("privacy")} className="font-medium text-primary hover:underline">Privacy Policy</button>, and the candidate-privacy commitment that protects contact information until I apply or accept an interview.
               </label>
             </div>
             {errors.terms && <p className="text-xs text-rose-600">{errors.terms}</p>}

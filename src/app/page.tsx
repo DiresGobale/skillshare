@@ -11,6 +11,8 @@ import {
   Landing,
   HomePage,
   FAQPage,
+  PrivacyPage,
+  TermsPage,
   Login,
   Register,
   PublicJobs,
@@ -84,6 +86,8 @@ function Router() {
     if (view === "register") return <Register />;
     if (view === "home") return <HomePage />;
     if (view === "faq") return <FAQPage />;
+    if (view === "privacy") return <PrivacyPage />;
+    if (view === "terms") return <TermsPage />;
     if (view === "landing") return <Landing />;
     if (view === "public-jobs") return <PublicJobs />;
     if (view === "public-job-detail") return <PublicJobDetail />;

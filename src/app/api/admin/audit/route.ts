@@ -43,3 +43,40 @@ export async function GET(req: NextRequest) {
 
   return NextResponse.json({ ok: true, logs: formatted });
 }
+
+// POST /api/admin/audit — create a new audit log entry (admin only)
+// Body: { action, target, type?, status? }
+export async function POST(req: NextRequest) {
+  const session = await getServerSession(authOptions);
+  if (!session?.user?.email) return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
+  if (session.user.role !== "admin") return NextResponse.json({ ok: false, error: "Admins only" }, { status: 403 });
+
+  try {
+    const body = await req.json();
+    const { action, target, type = "admin", status = "success" } = body;
+
+    if (!action || !target) {
+      return NextResponse.json({ ok: false, error: "Action and target are required." }, { status: 400 });
+    }
+
+    // Look up the admin user to attach the audit log to
+    const user = await db.user.findUnique({ where: { email: session.user.email } });
+
+    const log = await db.auditLog.create({
+      data: {
+        userId: user?.id,
+        action: String(action).slice(0, 500),
+        target: String(target).slice(0, 500),
+        type: String(type),
+        status: String(status),
+      },
+    });
+
+    return NextResponse.json({ ok: true, id: log.id });
+  } catch (e) {
+    return NextResponse.json(
+      { ok: false, error: e instanceof Error ? e.message : "Failed to create audit log" },
+      { status: 500 }
+    );
+  }
+}
