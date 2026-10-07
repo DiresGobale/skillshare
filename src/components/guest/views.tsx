@@ -125,7 +125,7 @@ function PublicHeader({ onAuth }: { onAuth: (r: "login" | "register") => void })
             className="lg:hidden"
           />
 
-          <button onClick={() => go("landing")} className="flex items-center">
+          <button onClick={() => go("home")} className="flex items-center">
             <BrandMark />
           </button>
 

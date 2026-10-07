@@ -85,7 +85,6 @@ function Router() {
   if (status === "unauthenticated" || !session?.user) {
     if (view === "login") return <Login />;
     if (view === "register") return <Register />;
-    if (view === "home") return <HomePage />;
     if (view === "faq") return <FAQPage />;
     if (view === "privacy") return <PrivacyPage />;
     if (view === "terms") return <TermsPage />;
@@ -94,7 +93,8 @@ function Router() {
     if (view === "public-job-detail") return <PublicJobDetail />;
     if (view === "about") return <AboutPage />;
     if (view === "contact") return <ContactPage />;
-    return <Landing />;
+    // Default to the Home page for first-time visitors
+    return <HomePage />;
   }
 
   // ---------- AUTHENTICATED VIEWS ----------

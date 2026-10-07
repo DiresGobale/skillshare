@@ -83,7 +83,7 @@ const ADMIN_KEY = "skillmatch.admin-unlocked";
 
 export function AppProvider({ children }: { children: React.ReactNode }) {
   const { data: session, status } = useSession();
-  const [view, setView] = useState<View>("landing");
+  const [view, setView] = useState<View>("home");
   const [selectedJobId, setSelectedJobId] = useState<string | undefined>();
   const [selectedCandidateId, setSelectedCandidateId] = useState<string | undefined>();
   const [selectedConversationId, setSelectedConversationId] = useState<string | undefined>();
@@ -143,7 +143,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       /* ignore */
     }
     setIsAdminUnlocked(false);
-    setView("landing");
+    setView("home");
     nextAuthSignOut({ redirect: false });
   }, []);
 

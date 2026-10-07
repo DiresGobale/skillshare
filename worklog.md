@@ -366,3 +366,27 @@ Stage Summary:
 - Sidebar is now visible/accessible on mobile via 3 mechanisms: (1) auto-opens briefly after login, (2) hamburger button pulses as a hint, (3) persistent bottom nav bar for quick access to the 4 most important pages.
 - Bottom nav bar is role-specific (seeker/employer/admin get different shortcuts).
 - All changes are mobile-only (`lg:hidden` / `lg:flex` / `lg:pb-0`) — desktop layout is unchanged.
+
+---
+Task ID: 9
+Agent: main (Super Z)
+Task: When the system is opened for the first time, it should initially display the Home page.
+
+Work Log:
+- Changed the initial view state in src/lib/app-context.tsx from `"landing"` to `"home"` — so when the app first loads, the view context defaults to the Home page.
+- Changed the default fallback in the Router (src/app/page.tsx) from `return <Landing />` to `return <HomePage />` — so any unmatched guest view land on the Home page.
+- Changed the signOut function in app-context.tsx to set view to `"home"` instead of `"landing"` — so after signing out, users return to the Home page.
+- Changed the BrandMark click handler in the public header from `go("landing")` to `go("home")` — so clicking the logo returns to the Home page.
+- The "How it works" nav link still goes to `landing` (the full landing page with the how-it-works section) — that's intentional and correct.
+
+Verification:
+- Server running, 0 TypeScript errors.
+- Initial view state = "home" ✓
+- Default router fallback = <HomePage /> ✓
+- signOut → view = "home" ✓
+- Brand mark click → go("home") ✓
+
+Stage Summary:
+- First-time visitors now see the Home page (with hero, group photos, stats, features, testimonials, CTA) instead of the Landing page.
+- All entry points (initial load, sign out, logo click) default to the Home page.
+- The Landing page is still accessible via the "How it works" nav button.
