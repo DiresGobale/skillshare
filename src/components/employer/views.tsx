@@ -46,6 +46,7 @@ import {
   currentUser,
 } from "@/lib/mock-data";
 import { useFetch } from "@/lib/use-fetch";
+import { ProfilePhotoUpload } from "@/components/shared/profile-photo-upload";
 import type { Job, Candidate, ApplicationStatus, Conversation, ProficiencyLevel } from "@/lib/types";
 import {
   Building2,
@@ -73,6 +74,7 @@ import {
   Lock,
   Mail,
   Phone,
+  GraduationCap,
   TrendingUp,
   ChevronRight,
   UserCheck,
@@ -250,93 +252,168 @@ export function EmployerDashboard() {
 // COMPANY PROFILE
 // ============================================================
 export function EmployerCompanyProfile() {
-  const user = currentUser.employer;
+  const { user: sessionUser } = useApp();
+  const { data, loading, refetch } = useFetch<any>("/api/profile");
+  const profile = data?.profile;
+
+  const [name, setName] = useState("");
+  const [company, setCompany] = useState("");
+  const [title, setTitle] = useState("");
+  const [location, setLocation] = useState("");
+  const [about, setAbout] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [saveMsg, setSaveMsg] = useState<{ ok: boolean; msg: string } | null>(null);
+
+  useEffect(() => {
+    if (profile) {
+      setName(profile.name ?? "");
+      setCompany(profile.company ?? "");
+      setTitle(profile.title ?? "");
+      setLocation(profile.location ?? "");
+      setAbout(profile.about ?? "");
+    }
+  }, [profile]);
+
+  const save = async () => {
+    setSaving(true);
+    setSaveMsg(null);
+    try {
+      const res = await fetch("/api/profile", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name, title, location, about, company }),
+      });
+      const json = await res.json();
+      if (json.ok) {
+        setSaveMsg({ ok: true, msg: "Company profile updated successfully." });
+        refetch();
+      } else {
+        setSaveMsg({ ok: false, msg: json.error ?? "Save failed." });
+      }
+    } catch {
+      setSaveMsg({ ok: false, msg: "Network error." });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  if (loading) return <PageContainer><LoadingState label="Loading company profile…" rows={3} /></PageContainer>;
+
   return (
     <PageContainer>
       <SectionHeader
         title="Company Profile"
         description="This information appears on every job you post."
+        actions={
+          <ProfilePhotoUpload
+            photo={profile?.profilePhoto}
+            initials={profile?.initials ?? sessionUser?.initials ?? "CO"}
+            color={profile?.avatarColor ?? sessionUser?.avatarColor ?? "oklch(0.6 0.18 240)"}
+            onUploaded={() => refetch()}
+          />
+        }
       />
 
+      {saveMsg && (
+        <div className={cn(
+          "mt-4 flex items-center gap-2 rounded-lg border px-4 py-3 text-sm",
+          saveMsg.ok ? "border-emerald-200 bg-emerald-50 text-emerald-700" : "border-rose-200 bg-rose-50 text-rose-700"
+        )}>
+          {saveMsg.ok ? <CheckCircle2 className="h-4 w-4" /> : <AlertCircle className="h-4 w-4" />}
+          {saveMsg.msg}
+        </div>
+      )}
+
       <div className="mt-6 grid gap-4 lg:grid-cols-3">
+        {/* Company card */}
         <Card className="lg:col-span-1">
           <CardContent className="p-6">
             <div className="flex flex-col items-center text-center">
-              <CompanyLogo initials={user.companyLogo || user.company.slice(0, 2).toUpperCase()} size="lg" className="!h-20 !w-20 !text-2xl" />
-              <h2 className="mt-3 text-base font-semibold">{user.company}</h2>
-              <p className="text-xs text-muted-foreground">{user.location}</p>
+              {profile?.profilePhoto ? (
+                <img src={profile.profilePhoto} alt="Company logo" className="h-20 w-20 rounded-xl object-cover shadow-md" />
+              ) : (
+                <CompanyLogo initials={company?.slice(0, 2).toUpperCase() || "CO"} size="lg" className="!h-20 !w-20 !text-2xl" />
+              )}
+              <h2 className="mt-3 text-base font-semibold">{company || "Your Company"}</h2>
+              <p className="text-xs text-muted-foreground">{location || "—"}</p>
               <div className="mt-3 flex flex-wrap justify-center gap-1.5">
                 <Badge variant="outline" className="bg-violet-50 text-violet-700 border-violet-200">Technology</Badge>
-                <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200">51-200 employees</Badge>
-                <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-200">Verified</Badge>
+                <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200">Employer</Badge>
+                <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-200 gap-1">
+                  <ShieldCheck className="h-2.5 w-2.5" /> Verified
+                </Badge>
               </div>
-              <Button variant="outline" size="sm" className="mt-4 w-full">
-                <ShieldCheck className="h-3.5 w-3.5" /> Re-verify domain
-              </Button>
+              <div className="mt-4 w-full space-y-1 border-t border-border pt-3 text-xs">
+                <div className="flex items-center gap-2 text-muted-foreground">
+                  <Mail className="h-3.5 w-3.5" /> {sessionUser?.email}
+                </div>
+              </div>
             </div>
           </CardContent>
         </Card>
 
+        {/* Editable fields */}
         <div className="lg:col-span-2 space-y-4">
           <Card>
             <CardHeader className="pb-3">
-              <CardTitle className="text-sm">About company</CardTitle>
+              <CardTitle className="text-sm">Company information</CardTitle>
+              <CardDescription>Edit your company name, contact info, and description.</CardDescription>
             </CardHeader>
-            <CardContent>
-              <Textarea
-                defaultValue="Northwind Technologies builds analytics infrastructure for Sub-Saharan African fintechs. We process 40M+ events per day and serve 40k+ daily active users. Our team is fully distributed across 7 African countries."
-                rows={4}
-                className="resize-none"
-              />
-              <div className="mt-2 flex justify-end gap-2">
-                <Button variant="ghost" size="sm">Cancel</Button>
-                <Button size="sm">Save</Button>
+            <CardContent className="space-y-3">
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div className="space-y-1.5">
+                  <Label htmlFor="company-name">Company name *</Label>
+                  <Input id="company-name" value={company} onChange={(e) => setCompany(e.target.value)} placeholder="e.g. Northwind Technologies" />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="contact-name">Contact person</Label>
+                  <Input id="contact-name" value={name} onChange={(e) => setName(e.target.value)} placeholder="Your name" />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="contact-title">Your title</Label>
+                  <Input id="contact-title" value={title} onChange={(e) => setTitle(e.target.value)} placeholder="e.g. Talent Acquisition Lead" />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="company-location">Location *</Label>
+                  <Input id="company-location" value={location} onChange={(e) => setLocation(e.target.value)} placeholder="e.g. Lagos, Nigeria" />
+                </div>
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="company-about">About the company</Label>
+                <Textarea
+                  id="company-about"
+                  value={about}
+                  onChange={(e) => setAbout(e.target.value)}
+                  rows={4}
+                  className="resize-none"
+                  placeholder="Describe your company, mission, and what you do."
+                />
+              </div>
+              <div className="flex justify-end gap-2">
+                <Button variant="ghost" size="sm" onClick={() => refetch()} disabled={saving}>Cancel</Button>
+                <Button size="sm" className="btn-blue" onClick={save} disabled={saving}>
+                  {saving ? (
+                    <>
+                      <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-primary-foreground border-t-transparent" />
+                      Saving…
+                    </>
+                  ) : "Save changes"}
+                </Button>
               </div>
             </CardContent>
           </Card>
 
           <Card>
-            <CardHeader className="pb-3 flex flex-row items-center justify-between space-y-0">
-              <CardTitle className="text-sm">Company details</CardTitle>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-sm">Hiring contact</CardTitle>
+              <CardDescription>This email receives application notifications.</CardDescription>
             </CardHeader>
-            <CardContent className="grid gap-3 sm:grid-cols-2">
-              <div className="space-y-1.5">
-                <Label>Website</Label>
-                <Input defaultValue="https://northwind.tech" />
+            <CardContent className="space-y-2 text-xs">
+              <div className="flex items-center gap-2">
+                <Mail className="h-3.5 w-3.5 text-muted-foreground" />
+                <span className="font-medium">{sessionUser?.email}</span>
               </div>
-              <div className="space-y-1.5">
-                <Label>Industry</Label>
-                <Select defaultValue="technology">
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="technology">Technology</SelectItem>
-                    <SelectItem value="finance">Financial services</SelectItem>
-                    <SelectItem value="healthcare">Healthcare</SelectItem>
-                    <SelectItem value="retail">Retail</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-1.5">
-                <Label>Company size</Label>
-                <Select defaultValue="51-200">
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="1-10">1-10 employees</SelectItem>
-                    <SelectItem value="11-50">11-50 employees</SelectItem>
-                    <SelectItem value="51-200">51-200 employees</SelectItem>
-                    <SelectItem value="201-1000">201-1000 employees</SelectItem>
-                    <SelectItem value="1000+">1000+ employees</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-1.5">
-                <Label>Headquarters</Label>
-                <Input defaultValue="Lagos, Nigeria" />
-              </div>
-              <div className="space-y-1.5 sm:col-span-2">
-                <Label>Hiring contact email</Label>
-                <Input defaultValue={user.email} />
-              </div>
+              <p className="text-muted-foreground">To change the hiring contact email, contact your platform administrator.</p>
             </CardContent>
           </Card>
         </div>
@@ -1013,9 +1090,32 @@ export function EmployerCandidates() {
 // ============================================================
 export function EmployerCandidateDetail() {
   const { go, selectedCandidateId } = useApp();
-  const c = candidates.find((x) => x.id === selectedCandidateId) || candidates[0];
-  const [shortlisted, setShortlisted] = useState(c.applicationStatus === "shortlisted" || c.applicationStatus === "interview");
+  const { data, loading, refetch } = useFetch<any>(`/api/candidates`);
+  const allCandidates: any[] = data?.candidates ?? [];
+  const c = allCandidates.find((x: any) => x.id === selectedCandidateId) || allCandidates[0];
   const [interviewDialogOpen, setInterviewDialogOpen] = useState(false);
+  const [actionLoading, setActionLoading] = useState(false);
+
+  const updateStatus = async (status: string) => {
+    if (!c?.applicationId) return;
+    setActionLoading(true);
+    try {
+      await fetch("/api/applications", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ applicationId: c.applicationId, status }),
+      });
+      refetch();
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  if (loading || !c) {
+    return <PageContainer><LoadingState label="Loading candidate profile…" rows={3} /></PageContainer>;
+  }
+
+  const isShortlisted = c.applicationStatus === "shortlisted" || c.applicationStatus === "interview";
 
   return (
     <PageContainer>
@@ -1028,91 +1128,92 @@ export function EmployerCandidateDetail() {
 
       <div className="grid gap-4 lg:grid-cols-3">
         <div className="lg:col-span-2 space-y-4">
+          {/* Candidate header */}
           <Card>
             <CardContent className="p-6">
               <div className="flex flex-col gap-4 sm:flex-row sm:items-start">
-                <Avatar initials={c.initials} color={c.avatarColor} size="lg" />
+                {c.profilePhoto ? (
+                  <img src={c.profilePhoto} alt={c.name} className="h-14 w-14 rounded-full object-cover" />
+                ) : (
+                  <Avatar initials={c.initials} color={c.avatarColor} size="lg" />
+                )}
                 <div className="min-w-0 flex-1">
                   <h1 className="text-xl font-bold tracking-tight">{c.name}</h1>
                   <p className="text-sm text-muted-foreground">{c.title}</p>
                   <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
                     <span className="flex items-center gap-1"><MapPin className="h-3 w-3" />{c.location}</span>
-                    <span className="flex items-center gap-1"><Briefcase className="h-3 w-3" />{c.experienceYears}y experience</span>
-                    <span className="flex items-center gap-1"><ShieldCheck className="h-3 w-3 text-emerald-600" />{c.verifiedSkills} verified skills</span>
+                    <span>Applied {timeAgo(c.appliedAt)}</span>
                   </div>
                   <div className="mt-3 flex flex-wrap gap-2">
                     <ApplicationStatusBadge status={c.applicationStatus} />
-                    <Badge variant="outline" className="bg-violet-50 text-violet-700 border-violet-200">
-                      Applied {timeAgo(c.appliedAt)}
-                    </Badge>
                   </div>
                 </div>
-                <MatchScore score={c.matchScore} size="lg" />
+                {c.matchScore > 0 && <MatchScore score={c.matchScore} size="lg" />}
               </div>
+              {c.about && (
+                <p className="mt-4 text-sm text-muted-foreground border-t border-border pt-3">{c.about}</p>
+              )}
             </CardContent>
           </Card>
 
-          <Card>
-            <CardHeader className="pb-3">
-              <CardTitle className="text-sm">Skill breakdown</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="grid gap-3 sm:grid-cols-2">
-                <div>
-                  <p className="text-xs font-semibold text-emerald-700 mb-2">Matching skills ({c.matchingSkills.length})</p>
-                  <div className="flex flex-wrap gap-1.5">
-                    {c.matchingSkills.map((s) => (
-                      <SkillChip key={s} name={s} verified size="sm" />
-                    ))}
-                  </div>
-                </div>
-                <div>
-                  <p className="text-xs font-semibold text-rose-700 mb-2">Missing skills ({c.missingSkills.length})</p>
-                  <div className="space-y-1.5">
-                    {c.missingSkills.map((s) => (
-                      <div key={s} className="flex items-center gap-1.5 text-xs">
-                        <AlertCircle className="h-3.5 w-3.5 text-rose-600" />
-                        <span>{s}</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </div>
-
-              <div className="mt-4 border-t border-border pt-4">
-                <p className="text-xs font-semibold mb-2">Top skills</p>
+          {/* Skills */}
+          {c.skills && c.skills.length > 0 && (
+            <Card>
+              <CardHeader className="pb-3">
+                <CardTitle className="text-sm">Candidate skills</CardTitle>
+                <CardDescription>{c.skills.length} skills on profile</CardDescription>
+              </CardHeader>
+              <CardContent>
                 <div className="flex flex-wrap gap-1.5">
-                  {c.topSkills.map((s) => (
-                    <SkillChip key={s.name} name={s.name} proficiency={s.proficiency} verified={s.verified} size="sm" />
+                  {c.skills.map((s: any) => (
+                    <SkillChip key={s.id} name={s.name} proficiency={s.proficiency} verified={s.verified} size="sm" />
                   ))}
                 </div>
-              </div>
-            </CardContent>
-          </Card>
+              </CardContent>
+            </Card>
+          )}
 
-          <Card>
-            <CardHeader className="pb-3">
-              <CardTitle className="text-sm">Experience & education</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-3 text-sm">
-              <div className="rounded-lg border border-border bg-card p-3">
-                <p className="font-semibold">Senior Frontend Engineer · Twiga Foods</p>
-                <p className="text-xs text-muted-foreground">2022 — Present · Nairobi, Kenya</p>
-                <p className="mt-1 text-xs text-muted-foreground">Led the frontend rewrite from Vue to React/Next.js, improving Lighthouse scores by 47%.</p>
-              </div>
-              <div className="rounded-lg border border-border bg-card p-3">
-                <p className="font-semibold">Frontend Engineer · Safaricom PLC</p>
-                <p className="text-xs text-muted-foreground">2019 — 2022 · Nairobi, Kenya</p>
-                <p className="mt-1 text-xs text-muted-foreground">Built customer-facing dashboards for the M-Pesa merchant portal serving 1.2M monthly users.</p>
-              </div>
-              <div className="rounded-lg border border-border bg-card p-3">
-                <p className="font-semibold">B.Sc. Computer Science · University of Nairobi</p>
-                <p className="text-xs text-muted-foreground">2014 — 2018</p>
-              </div>
-            </CardContent>
-          </Card>
+          {/* Experience */}
+          {c.experiences && c.experiences.length > 0 && (
+            <Card>
+              <CardHeader className="pb-3">
+                <CardTitle className="text-sm flex items-center gap-2">
+                  <Briefcase className="h-4 w-4 text-primary" /> Experience
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                {c.experiences.map((e: any) => (
+                  <div key={e.id} className="rounded-lg border border-border bg-card p-3">
+                    <p className="font-semibold text-sm">{e.title}</p>
+                    <p className="text-xs text-muted-foreground">{e.company} · {e.startDate} — {e.endDate}</p>
+                    {e.description && <p className="mt-1 text-xs text-muted-foreground">{e.description}</p>}
+                  </div>
+                ))}
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Education */}
+          {c.educations && c.educations.length > 0 && (
+            <Card>
+              <CardHeader className="pb-3">
+                <CardTitle className="text-sm flex items-center gap-2">
+                  <GraduationCap className="h-4 w-4 text-primary" /> Education
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                {c.educations.map((ed: any) => (
+                  <div key={ed.id} className="rounded-lg border border-border bg-card p-3">
+                    <p className="font-semibold text-sm">{ed.degree}, {ed.field}</p>
+                    <p className="text-xs text-muted-foreground">{ed.institution} · {ed.startDate} — {ed.endDate}</p>
+                  </div>
+                ))}
+              </CardContent>
+            </Card>
+          )}
         </div>
 
+        {/* Actions sidebar */}
         <aside className="space-y-4">
           <Card>
             <CardHeader className="pb-3">
@@ -1120,15 +1221,16 @@ export function EmployerCandidateDetail() {
             </CardHeader>
             <CardContent className="space-y-2">
               <Button
-                className="w-full"
-                variant={shortlisted ? "secondary" : "default"}
-                onClick={() => setShortlisted(!shortlisted)}
+                className="w-full btn-green"
+                variant={isShortlisted ? "secondary" : "default"}
+                onClick={() => updateStatus(isShortlisted ? "screening" : "shortlisted")}
+                disabled={actionLoading}
               >
-                <Star className="h-4 w-4" /> {shortlisted ? "Shortlisted" : "Shortlist"}
+                <Star className="h-4 w-4" /> {isShortlisted ? "Remove shortlist" : "Shortlist"}
               </Button>
               <Dialog open={interviewDialogOpen} onOpenChange={setInterviewDialogOpen}>
                 <DialogTrigger asChild>
-                  <Button className="w-full" variant="outline">
+                  <Button className="w-full btn-blue" variant="outline">
                     <CalendarClock className="h-4 w-4" /> Schedule interview
                   </Button>
                 </DialogTrigger>
@@ -1164,7 +1266,7 @@ export function EmployerCandidateDetail() {
                     </div>
                     <div className="space-y-1.5">
                       <Label>Notes for candidate</Label>
-                      <Textarea rows={3} placeholder="Anything they should prepare?" />
+                      <Textarea rows={3} placeholder="Anything they should prepare?" className="resize-none" />
                     </div>
                     <InfoCallout>
                       <span className="font-medium">Privacy:</span> Contact details unlock only after {c.name} accepts this invitation.
@@ -1172,14 +1274,16 @@ export function EmployerCandidateDetail() {
                   </div>
                   <DialogFooter>
                     <Button variant="outline" onClick={() => setInterviewDialogOpen(false)}>Cancel</Button>
-                    <Button onClick={() => { setInterviewDialogOpen(false); go("interviews"); }}>Send invitation</Button>
+                    <Button className="btn-green" onClick={() => { updateStatus("interview"); setInterviewDialogOpen(false); }}>
+                      Send invitation
+                    </Button>
                   </DialogFooter>
                 </DialogContent>
               </Dialog>
               <Button className="w-full" variant="outline" onClick={() => go("messages")}>
                 <MessageSquare className="h-4 w-4" /> Message
               </Button>
-              <Button className="w-full" variant="ghost">
+              <Button className="w-full" variant="ghost" onClick={() => updateStatus("rejected")}>
                 <X className="h-4 w-4" /> Reject
               </Button>
             </CardContent>
@@ -1195,11 +1299,7 @@ export function EmployerCandidateDetail() {
                 <div className="space-y-2 text-xs">
                   <div className="flex items-center gap-2">
                     <Mail className="h-3.5 w-3.5 text-muted-foreground" />
-                    <span>{c.name.toLowerCase().replace(" ", ".")}@gmail.com</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Phone className="h-3.5 w-3.5 text-muted-foreground" />
-                    <span>+254 712 345 678</span>
+                    <span>{c.email}</span>
                   </div>
                 </div>
               ) : (
@@ -1207,7 +1307,6 @@ export function EmployerCandidateDetail() {
                   <PrivacyLock />
                   <div className="rounded-md bg-muted/40 p-2 text-xs text-muted-foreground">
                     <p>🔒 Email hidden</p>
-                    <p className="mt-1">🔒 Phone hidden</p>
                   </div>
                   <p className="text-[11px] text-muted-foreground">
                     Per our privacy commitment, contact details become visible only after the candidate accepts your interview request.
