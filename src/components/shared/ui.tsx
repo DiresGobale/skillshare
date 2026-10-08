@@ -189,6 +189,7 @@ const JOB_STATUS_STYLE: Record<JobStatus, { label: string; className: string }> 
   published: { label: "Published", className: "bg-emerald-50 text-emerald-700 border-emerald-200" },
   paused: { label: "Paused", className: "bg-amber-50 text-amber-700 border-amber-200" },
   closed: { label: "Closed", className: "bg-rose-50 text-rose-600 border-rose-200" },
+  expired: { label: "Expired", className: "bg-rose-50 text-rose-700 border-rose-200" },
 };
 
 export function JobStatusBadge({ status }: { status: JobStatus }) {
@@ -196,6 +197,75 @@ export function JobStatusBadge({ status }: { status: JobStatus }) {
   return (
     <Badge variant="outline" className={cn("font-medium", s.className)}>
       {s.label}
+    </Badge>
+  );
+}
+
+// ============================================================
+// JOB EXPIRY BADGE — shows "Expires in X" or "Job Expired"
+// ============================================================
+
+// Formats a remaining time duration into a human-readable string.
+// e.g. "Expires in 2 days", "Expires in 5 hours", "Expires in 20 minutes"
+export function formatTimeRemaining(expiresAt: string | Date | null): string | null {
+  if (!expiresAt) return null;
+  const expiry = new Date(expiresAt).getTime();
+  const now = Date.now();
+  const diff = expiry - now;
+
+  if (diff <= 0) return "Job Expired";
+
+  const seconds = Math.floor(diff / 1000);
+  const minutes = Math.floor(seconds / 60);
+  const hours = Math.floor(minutes / 60);
+  const days = Math.floor(hours / 24);
+
+  if (days > 0) return `Expires in ${days} day${days === 1 ? "" : "s"}`;
+  if (hours > 0) return `Expires in ${hours} hour${hours === 1 ? "" : "s"}`;
+  if (minutes > 0) return `Expires in ${minutes} minute${minutes === 1 ? "" : "s"}`;
+  return "Expires in less than a minute";
+}
+
+// Returns true if the job's expiresAt has passed
+export function isJobExpired(expiresAt: string | Date | null): boolean {
+  if (!expiresAt) return false;
+  return new Date(expiresAt).getTime() <= Date.now();
+}
+
+export function JobExpiryBadge({ expiresAt, status }: { expiresAt?: string | Date | null; status?: string }) {
+  // If the job is already marked as expired by the backend, show "Job Expired"
+  if (status === "expired") {
+    return (
+      <Badge variant="outline" className="bg-rose-50 text-rose-700 border-rose-200 gap-1 font-medium">
+        <Clock className="h-3 w-3" /> Job Expired
+      </Badge>
+    );
+  }
+
+  const remaining = formatTimeRemaining(expiresAt ?? null);
+  if (!remaining) return null;
+
+  if (remaining === "Job Expired") {
+    return (
+      <Badge variant="outline" className="bg-rose-50 text-rose-700 border-rose-200 gap-1 font-medium">
+        <Clock className="h-3 w-3" /> Job Expired
+      </Badge>
+    );
+  }
+
+  // Calculate urgency — if less than 24h, show amber; if less than 1h, show red
+  const diff = new Date(expiresAt!).getTime() - Date.now();
+  const hours = diff / (1000 * 60 * 60);
+
+  const className = hours < 1
+    ? "bg-rose-50 text-rose-700 border-rose-200"
+    : hours < 24
+    ? "bg-amber-50 text-amber-700 border-amber-200"
+    : "bg-blue-50 text-blue-700 border-blue-200";
+
+  return (
+    <Badge variant="outline" className={cn("gap-1 font-medium", className)}>
+      <Clock className="h-3 w-3" /> {remaining}
     </Badge>
   );
 }

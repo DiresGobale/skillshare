@@ -26,6 +26,7 @@ import {
   SkillChip,
   ApplicationStatusBadge,
   JobStatusBadge,
+  JobExpiryBadge,
   Avatar,
   CompanyLogo,
   SectionHeader,
@@ -48,6 +49,14 @@ import {
 } from "@/lib/mock-data";
 import { useFetch } from "@/lib/use-fetch";
 import { ProfilePhotoUpload } from "@/components/shared/profile-photo-upload";
+import {
+  validateJobTitle,
+  validateLocation,
+  validateNumber,
+  validateRequired,
+  validateExpirationDuration,
+  sanitizeNumber,
+} from "@/lib/validation";
 import type { Job, Candidate, ApplicationStatus, Conversation, ProficiencyLevel } from "@/lib/types";
 import {
   Building2,
@@ -174,7 +183,10 @@ export function EmployerDashboard() {
                     <p className="truncate text-sm font-semibold group-hover:text-primary">{j.title}</p>
                     <p className="text-xs text-muted-foreground">{j.location} · posted {timeAgo(j.postedAt)}</p>
                   </div>
-                  <JobStatusBadge status={j.status} />
+                  <div className="flex flex-col items-end gap-1">
+                    <JobStatusBadge status={j.status} />
+                    {j.status === "published" && j.expiresAt && <JobExpiryBadge expiresAt={j.expiresAt} status={j.status} />}
+                  </div>
                   <ChevronRight className="h-4 w-4 text-muted-foreground" />
                 </button>
               ))
@@ -515,7 +527,12 @@ export function EmployerJobs() {
                       </div>
                     </div>
                   </td>
-                  <td className="hidden px-4 py-3 sm:table-cell"><JobStatusBadge status={j.status} /></td>
+                  <td className="hidden px-4 py-3 sm:table-cell">
+                    <div className="flex flex-col gap-1">
+                      <JobStatusBadge status={j.status} />
+                      {j.status === "published" && j.expiresAt && <JobExpiryBadge expiresAt={j.expiresAt} status={j.status} />}
+                    </div>
+                  </td>
                   <td className="hidden px-4 py-3 text-xs text-muted-foreground lg:table-cell">{timeAgo(j.postedAt)}</td>
                   <td className="px-4 py-3 text-right">
                     <div className="flex justify-end gap-1">
@@ -579,6 +596,8 @@ export function EmployerJobEdit() {
   const [salaryMin, setSalaryMin] = useState("5000");
   const [salaryMax, setSalaryMax] = useState("8000");
   const [description, setDescription] = useState("");
+  const [expirationDays, setExpirationDays] = useState("30"); // default 30 days
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [skills, setSkills] = useState<
     { id: string; name: string; category: string; proficiency: ProficiencyLevel; mandatory: boolean; weight: number }[]
   >([]);
@@ -597,6 +616,11 @@ export function EmployerJobEdit() {
       setSalaryMin(String(existing.salaryMin ?? 5000));
       setSalaryMax(String(existing.salaryMax ?? 8000));
       setDescription(existing.description ?? "");
+      // If the job has an expiresAt, calculate remaining days for display
+      if (existing.expiresAt) {
+        const remaining = Math.ceil((new Date(existing.expiresAt).getTime() - Date.now()) / (1000 * 60 * 60 * 24));
+        setExpirationDays(String(Math.max(1, remaining)));
+      }
     }
   }, [existing]);
 
@@ -613,24 +637,29 @@ export function EmployerJobEdit() {
 
   const saveJob = async (status: "draft" | "published") => {
     setError(null);
-    // Validation
-    if (!title.trim()) {
-      setError("Job title is required.");
-      setStep(1);
-      return;
+    setFieldErrors({});
+
+    // ---------- FRONTEND VALIDATION ----------
+    const errs: Record<string, string> = {};
+    const titleCheck = validateJobTitle(title);
+    if (!titleCheck.ok) errs.title = titleCheck.error!;
+    const locCheck = validateLocation(location);
+    if (!locCheck.ok) errs.location = locCheck.error!;
+    const descCheck = validateRequired(description, "Job description", { minLength: 10, maxLength: 5000 });
+    if (!descCheck.ok) errs.description = descCheck.error!;
+    const minCheck = validateNumber(salaryMin, "Salary minimum", { min: 0, max: 1000000 });
+    if (!minCheck.ok) errs.salaryMin = minCheck.error!;
+    const maxCheck = validateNumber(salaryMax, "Salary maximum", { min: 0, max: 1000000 });
+    if (!maxCheck.ok) errs.salaryMax = maxCheck.error!;
+    if (Number(salaryMin) >= Number(salaryMax)) errs.salaryMax = "Salary maximum must be greater than the minimum.";
+    if (status === "published") {
+      const expCheck = validateExpirationDuration(expirationDays);
+      if (!expCheck.ok) errs.expirationDays = expCheck.error!;
     }
-    if (!description.trim()) {
-      setError("Job description is required.");
-      setStep(1);
-      return;
-    }
-    if (!location.trim()) {
-      setError("Location is required.");
-      setStep(1);
-      return;
-    }
-    if (Number(salaryMin) >= Number(salaryMax)) {
-      setError("Salary maximum must be greater than the minimum.");
+
+    if (Object.keys(errs).length > 0) {
+      setFieldErrors(errs);
+      setError("Please fix the errors highlighted below before continuing.");
       setStep(1);
       return;
     }
@@ -647,6 +676,7 @@ export function EmployerJobEdit() {
         salaryMax: Number(salaryMax),
         description: description.trim(),
         status,
+        expirationDays: status === "published" ? Number(expirationDays) : undefined,
         skills: skills.map((s) => ({ name: s.name, proficiency: s.proficiency, mandatory: s.mandatory })),
       };
       let res;
@@ -672,6 +702,14 @@ export function EmployerJobEdit() {
         setSavedDraft(true);
       } else {
         setPublished(true);
+        // Trigger the notification popup + sound on the client
+        try {
+          sessionStorage.setItem("skillmatch.jobPosted", JSON.stringify({
+            title: title.trim(),
+            company: existing?.company ?? "Your company",
+            timestamp: Date.now(),
+          }));
+        } catch { /* ignore */ }
         setTimeout(() => go("jobs"), 1500);
       }
     } catch {
@@ -735,7 +773,13 @@ export function EmployerJobEdit() {
             <div className="space-y-4">
               <div className="space-y-1.5">
                 <Label>Job title *</Label>
-                <Input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="e.g. Senior Frontend Engineer" />
+                <Input
+                  value={title}
+                  onChange={(e) => setTitle(e.target.value)}
+                  placeholder="e.g. Senior Frontend Engineer"
+                  className={cn(fieldErrors.title && "border-rose-400 focus-visible:ring-rose-200")}
+                />
+                {fieldErrors.title && <p className="text-xs text-rose-600">{fieldErrors.title}</p>}
               </div>
               <div className="grid gap-4 sm:grid-cols-2">
                 <div className="space-y-1.5">
@@ -765,7 +809,13 @@ export function EmployerJobEdit() {
                 </div>
                 <div className="space-y-1.5">
                   <Label>Location *</Label>
-                  <Input value={location} onChange={(e) => setLocation(e.target.value)} placeholder="e.g. Lagos, Nigeria" />
+                  <Input
+                    value={location}
+                    onChange={(e) => setLocation(e.target.value)}
+                    placeholder="e.g. Lagos, Nigeria"
+                    className={cn(fieldErrors.location && "border-rose-400 focus-visible:ring-rose-200")}
+                  />
+                  {fieldErrors.location && <p className="text-xs text-rose-600">{fieldErrors.location}</p>}
                 </div>
                 <div className="space-y-1.5">
                   <Label>Workplace</Label>
@@ -780,12 +830,74 @@ export function EmployerJobEdit() {
                 </div>
                 <div className="space-y-1.5">
                   <Label>Salary min (USD / month) *</Label>
-                  <Input type="number" min="0" value={salaryMin} onChange={(e) => setSalaryMin(e.target.value)} />
+                  <Input
+                    type="number"
+                    min="0"
+                    value={salaryMin}
+                    onChange={(e) => setSalaryMin(sanitizeNumber(e.target.value))}
+                    className={cn(fieldErrors.salaryMin && "border-rose-400 focus-visible:ring-rose-200")}
+                  />
+                  {fieldErrors.salaryMin && <p className="text-xs text-rose-600">{fieldErrors.salaryMin}</p>}
                 </div>
                 <div className="space-y-1.5">
                   <Label>Salary max (USD / month) *</Label>
-                  <Input type="number" min="0" value={salaryMax} onChange={(e) => setSalaryMax(e.target.value)} />
+                  <Input
+                    type="number"
+                    min="0"
+                    value={salaryMax}
+                    onChange={(e) => setSalaryMax(sanitizeNumber(e.target.value))}
+                    className={cn(fieldErrors.salaryMax && "border-rose-400 focus-visible:ring-rose-200")}
+                  />
+                  {fieldErrors.salaryMax && <p className="text-xs text-rose-600">{fieldErrors.salaryMax}</p>}
                 </div>
+              </div>
+              {/* Expiration duration — required when publishing */}
+              <div className="space-y-1.5">
+                <Label>Expiration duration (days) *</Label>
+                <div className="flex flex-wrap items-center gap-2">
+                  <Input
+                    type="number"
+                    min="1"
+                    max="365"
+                    value={expirationDays}
+                    onChange={(e) => setExpirationDays(sanitizeNumber(e.target.value))}
+                    placeholder="30"
+                    className={cn("w-32", fieldErrors.expirationDays && "border-rose-400 focus-visible:ring-rose-200")}
+                  />
+                  <div className="flex gap-1.5">
+                    {[
+                      { label: "7 days", val: "7" },
+                      { label: "14 days", val: "14" },
+                      { label: "30 days", val: "30" },
+                      { label: "60 days", val: "60" },
+                      { label: "90 days", val: "90" },
+                    ].map((preset) => (
+                      <button
+                        key={preset.val}
+                        type="button"
+                        onClick={() => setExpirationDays(preset.val)}
+                        className={cn(
+                          "rounded-md border px-2 py-1 text-xs font-medium transition-all",
+                          expirationDays === preset.val
+                            ? "border-primary bg-primary/10 text-primary"
+                            : "border-border text-muted-foreground hover:bg-accent"
+                        )}
+                      >
+                        {preset.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                {fieldErrors.expirationDays ? (
+                  <p className="text-xs text-rose-600">{fieldErrors.expirationDays}</p>
+                ) : (
+                  <p className="text-[11px] text-muted-foreground">
+                    The job will automatically expire and change to "Expired" status after this many days.
+                    {expirationDays && Number(expirationDays) > 0 && (
+                      <> Expires on <strong>{new Date(Date.now() + Number(expirationDays) * 86400000).toLocaleDateString()}</strong>.</>
+                    )}
+                  </p>
+                )}
               </div>
               <div className="space-y-1.5">
                 <Label>Job description *</Label>
@@ -794,7 +906,9 @@ export function EmployerJobEdit() {
                   value={description}
                   onChange={(e) => setDescription(e.target.value)}
                   placeholder="Describe the role, team, and what success looks like…"
+                  className={cn(fieldErrors.description && "border-rose-400 focus-visible:ring-rose-200")}
                 />
+                {fieldErrors.description && <p className="text-xs text-rose-600">{fieldErrors.description}</p>}
               </div>
               {error && (
                 <div className="flex items-center gap-2 rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-700">
@@ -889,12 +1003,23 @@ export function EmployerJobEdit() {
 
               <div className="rounded-lg border border-border bg-muted/30 p-4">
                 <div className="grid gap-3 sm:grid-cols-2">
-                  <div><p className="text-[10px] uppercase text-muted-foreground">Title</p><p className="text-sm font-semibold">{existing?.title || "Senior Frontend Engineer"}</p></div>
-                  <div><p className="text-[10px] uppercase text-muted-foreground">Category</p><p className="text-sm">{existing?.category || "Engineering"}</p></div>
-                  <div><p className="text-[10px] uppercase text-muted-foreground">Location</p><p className="text-sm">{existing?.location || "Lagos, Nigeria"}</p></div>
-                  <div><p className="text-[10px] uppercase text-muted-foreground">Workplace</p><p className="text-sm capitalize">{existing?.remote || "hybrid"}</p></div>
-                  <div><p className="text-[10px] uppercase text-muted-foreground">Salary</p><p className="text-sm">${(existing?.salary.min ?? 5000).toLocaleString()}–${(existing?.salary.max ?? 8000).toLocaleString()} / month</p></div>
+                  <div><p className="text-[10px] uppercase text-muted-foreground">Title</p><p className="text-sm font-semibold">{title || "—"}</p></div>
+                  <div><p className="text-[10px] uppercase text-muted-foreground">Category</p><p className="text-sm">{category}</p></div>
+                  <div><p className="text-[10px] uppercase text-muted-foreground">Location</p><p className="text-sm">{location || "—"}</p></div>
+                  <div><p className="text-[10px] uppercase text-muted-foreground">Workplace</p><p className="text-sm capitalize">{remote}</p></div>
+                  <div><p className="text-[10px] uppercase text-muted-foreground">Salary</p><p className="text-sm">${Number(salaryMin || 0).toLocaleString()}–${Number(salaryMax || 0).toLocaleString()} / month</p></div>
                   <div><p className="text-[10px] uppercase text-muted-foreground">Skills</p><p className="text-sm">{skills.length} required ({skills.filter(s=>s.mandatory).length} mandatory)</p></div>
+                  <div className="sm:col-span-2">
+                    <p className="text-[10px] uppercase text-muted-foreground">Expiration</p>
+                    <p className="text-sm font-semibold">
+                      {expirationDays && Number(expirationDays) > 0 ? (
+                        <>
+                          Expires in {expirationDays} day{Number(expirationDays) === 1 ? "" : "s"}
+                          {" "}(<strong>{new Date(Date.now() + Number(expirationDays) * 86400000).toLocaleDateString()}</strong>)
+                        </>
+                      ) : "—"}
+                    </p>
+                  </div>
                 </div>
               </div>
 

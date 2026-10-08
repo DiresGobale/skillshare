@@ -20,6 +20,7 @@ import {
   AboutPage,
   ContactPage,
 } from "@/components/guest/views";
+import { JobPostedNotifier } from "@/components/shared/job-posted-notifier";
 // Seeker views
 import {
   SeekerDashboard,
@@ -160,6 +161,7 @@ export default function Home() {
     <AppProvider>
       <TooltipProvider delayDuration={200}>
         <Router />
+        <JobPostedNotifier />
       </TooltipProvider>
     </AppProvider>
   );

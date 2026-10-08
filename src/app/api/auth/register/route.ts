@@ -1,35 +1,42 @@
 import { NextRequest, NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
 import { db } from "@/lib/db";
+import { validateName, validateEmail, validatePassword } from "@/lib/validation";
 
 // POST /api/auth/register
 // Body: { name, email, password, role }
 export async function POST(req: NextRequest) {
   try {
     const { name, email, password, role } = await req.json();
-    if (!name || !email || !password) {
-      return NextResponse.json({ ok: false, error: "Name, email, and password are required." }, { status: 400 });
-    }
-    if (password.length < 8) {
-      return NextResponse.json({ ok: false, error: "Password must be at least 8 characters." }, { status: 400 });
-    }
+
+    // ---------- BACKEND VALIDATION ----------
+    const nameCheck = validateName(name ?? "", "Name");
+    if (!nameCheck.ok) return NextResponse.json({ ok: false, error: nameCheck.error }, { status: 400 });
+
+    const emailCheck = validateEmail(email ?? "");
+    if (!emailCheck.ok) return NextResponse.json({ ok: false, error: emailCheck.error }, { status: 400 });
+
+    const passCheck = validatePassword(password ?? "");
+    if (!passCheck.ok) return NextResponse.json({ ok: false, error: passCheck.error }, { status: 400 });
+
     if (!["seeker", "employer"].includes(role)) {
       return NextResponse.json({ ok: false, error: "Invalid role. Only seeker or employer can self-register." }, { status: 400 });
     }
 
-    const existing = await db.user.findUnique({ where: { email: email.toLowerCase() } });
+    const existing = await db.user.findUnique({ where: { email: email.toLowerCase().trim() } });
     if (existing) {
       return NextResponse.json({ ok: false, error: "An account with this email already exists." }, { status: 409 });
     }
 
     const passwordHash = await bcrypt.hash(password, 10);
-    const initials = name.trim().split(/\s+/).map((w: string) => w[0]).slice(0, 2).join("").toUpperCase();
+    const cleanName = name.trim();
+    const initials = cleanName.split(/\s+/).map((w: string) => w[0]).slice(0, 2).join("").toUpperCase();
     const avatarColor = role === "employer" ? "oklch(0.6 0.18 240)" : "oklch(0.55 0.22 285)";
 
     const user = await db.user.create({
       data: {
-        email: email.toLowerCase(),
-        name: name.trim(),
+        email: email.toLowerCase().trim(),
+        name: cleanName,
         passwordHash,
         role,
         title: role === "employer" ? "Employer" : "Job Seeker",

@@ -15,7 +15,7 @@ export type ApplicationStatus =
   | "rejected"
   | "withdrawn";
 
-export type JobStatus = "draft" | "published" | "closed" | "paused";
+export type JobStatus = "draft" | "published" | "closed" | "paused" | "expired";
 
 export type MatchFactorKey =
   | "skill_match"

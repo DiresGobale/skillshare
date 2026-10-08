@@ -390,3 +390,81 @@ Stage Summary:
 - First-time visitors now see the Home page (with hero, group photos, stats, features, testimonials, CTA) instead of the Landing page.
 - All entry points (initial load, sign out, logo click) default to the Home page.
 - The Landing page is still accessible via the "How it works" nav button.
+
+---
+Task ID: 10
+Agent: main (Super Z)
+Task: (1) Form validation — every field must have proper validation (name=letters only, numbers=numbers only, clear error messages, required fields not empty, validation on both frontend and backend). (2) Job post creation with expiration — save to DB, popup notification with sound, expiration duration/date, remaining time display ("Expires in 2 days"), auto-expire to "Expired" status enforced by backend.
+
+Work Log:
+PART 1 — Shared validation utility:
+- Created src/lib/validation.ts with reusable validation functions:
+  * validateName — letters only (unicode \p{L}), spaces, hyphens, apostrophes, periods. Rejects numbers and special characters.
+  * validateEmail — RFC-compatible email pattern.
+  * validatePassword — min 8 chars, max 128.
+  * validateNumber — digits only, optional min/max.
+  * validateRequired — non-empty, optional min/max length.
+  * validateJobTitle — letters, numbers, spaces, common punctuation.
+  * validateLocation — letters, spaces, commas, hyphens, periods.
+  * validateExpirationDuration — whole number, 1-365 days.
+  * sanitizeName — strips non-letter characters live.
+  * sanitizeNumber — strips non-digits live.
+
+PART 2 — Backend validation:
+- Updated /api/auth/register to use validateName, validateEmail, validatePassword. Name field rejects numbers and special characters.
+- Updated /api/jobs POST to use validateJobTitle, validateLocation, validateRequired, validateNumber, validateExpirationDuration. All fields validated before saving.
+- Updated /api/jobs/[id] PATCH to validate all updated fields.
+- All validation errors return 400 with clear error messages.
+
+PART 3 — Frontend validation (Register form):
+- Added live validation with `touched` state — errors show on blur and on submit.
+- Name field: for seeker accounts, strips numbers/special characters live (letters only). For employer accounts (company names), allows letters + business punctuation.
+- Email and password fields validate on change after first blur.
+- Error messages displayed in red below each field.
+- Invalid fields get red border (border-rose-400).
+- Helper text shows "Letters only — numbers and special characters are not allowed." for seeker name field.
+
+PART 4 — Frontend validation (Job post form):
+- Added field-level validation with `fieldErrors` state.
+- All fields (title, location, salary min/max, description, expiration) show red borders + error messages when invalid.
+- Salary fields use sanitizeNumber to strip non-digits live.
+- Added "Expiration duration (days)" field with preset buttons (7/14/30/60/90 days) and live expiry date display.
+
+PART 5 — Job expiration system:
+- Added `expiresAt DateTime?` field to the Job model in Prisma schema. Pushed to DB.
+- Added `expired` to JobStatus type and JOB_STATUS_STYLE map (rose badge).
+- Backend auto-expire: both GET /api/jobs and GET /api/jobs/[id] call autoExpireJobs() which runs `db.job.updateMany({ where: { status: { in: ["published","paused"] }, expiresAt: { lte: new Date() } }, data: { status: "expired" } })` before returning. This means expiration is enforced by the backend — expired jobs are automatically marked and excluded from public listings.
+- When a job is published, the employer must provide expirationDays (1-365). The API calculates expiresAt = now + days.
+- Created JobExpiryBadge component + formatTimeRemaining utility:
+  * Shows "Expires in 2 days", "Expires in 5 hours", "Expires in 20 minutes", or "Job Expired"
+  * Color-coded: blue (>24h), amber (<24h), rose (<1h or expired)
+  * Shows on employer dashboard + jobs table next to the status badge
+- Updated employer job-edit form step 3 (review) to show expiration info.
+- The employer jobs list and dashboard now show both JobStatusBadge + JobExpiryBadge for published jobs.
+
+PART 6 — Notification system (popup + sound):
+- When a job is published, the API creates Notification records for all active seekers: `type: "job", title: "New job posted", message: "{title} at {company} — {location}. Expires in {days} days."`
+- Created JobPostedNotifier component (globally mounted in page.tsx):
+  * Checks sessionStorage for "skillmatch.jobPosted" flag (set by employer after publishing)
+  * Shows a popup notification in the bottom-right corner with gradient accent bar, job icon, title, company, and "View job" button
+  * Plays a 3-note chime (C5-E5-G5) using the Web Audio API — no external sound file needed
+  * Auto-dismisses after 8 seconds
+  * Also polls /api/notifications every 60s for new job-posted notifications from other employers (so seekers see popups in real-time)
+- The employer's job-edit page sets the sessionStorage flag after successful publish, which triggers the popup on the next page load.
+
+Verification (all tested via curl):
+- Job creation with expiration: ✅ Created with expiresAt = now + 14 days
+- Empty title: ✅ "Job title is required."
+- Salary min >= max: ✅ "Salary maximum must be greater than the minimum."
+- Publish without expiration: ✅ "Expiration duration is required."
+- Invalid location (numbers): ✅ "Location can only contain letters, spaces, commas, and hyphens."
+- Register: name with numbers: ✅ "Name can only contain letters, spaces, hyphens, and apostrophes. Numbers and special characters are not allowed."
+- Register: invalid email: ✅ "Please enter a valid email address."
+- Register: short password: ✅ "Password must be at least 8 characters."
+- Register: empty name: ✅ "Name is required."
+- Auto-expire: backend runs updateMany on every GET to mark expired jobs
+- Expiry badge: shows "Expires in X days" with color coding
+
+Stage Summary:
+- Form validation: every field has frontend + backend validation. Name fields accept letters only (seeker) or letters+punctuation (employer). Number fields accept digits only. Clear error messages displayed below each field. Required fields cannot be submitted empty.
+- Job post creation: saved to DB with expiresAt. Popup notification with sound (3-note chime via Web Audio API) shown to all seekers. Expiration duration required (1-365 days) with preset buttons. Remaining time displayed as "Expires in X days/hours/minutes" with color-coded urgency. Backend auto-expires jobs on every GET — expired jobs change to "expired" status and are excluded from public listings. JobExpiryBadge shows "Job Expired" when expired.

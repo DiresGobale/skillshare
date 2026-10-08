@@ -80,6 +80,7 @@ import {
 } from "lucide-react";
 import { Textarea } from "@/components/ui/textarea";
 import { useScrollReveal } from "@/hooks/use-scroll-reveal";
+import { validateName, validateEmail, validatePassword } from "@/lib/validation";
 
 // ============================================================
 // Public top nav (guest header)
@@ -2166,21 +2167,66 @@ export function Register() {
   const [password, setPassword] = useState("");
   const [agree, setAgree] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [touched, setTouched] = useState<Record<string, boolean>>({});
   const [submitting, setSubmitting] = useState(false);
   const [serverError, setServerError] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
 
+  // Live validation — runs on every keystroke for touched fields
+  const validateField = (field: string, value: string) => {
+    let err = "";
+    if (field === "name") {
+      const c = validateName(value, role === "employer" ? "Company name" : "Full name");
+      if (!c.ok) err = c.error ?? "";
+    } else if (field === "email") {
+      const c = validateEmail(value);
+      if (!c.ok) err = c.error ?? "";
+    } else if (field === "password") {
+      const c = validatePassword(value);
+      if (!c.ok) err = c.error ?? "";
+    }
+    setErrors((prev) => ({ ...prev, [field]: err }));
+  };
+
+  const handleNameChange = (value: string) => {
+    // For seeker accounts, enforce letters-only by stripping numbers/special chars live
+    // For employer accounts (company names), allow letters + common business punctuation
+    const cleaned = role === "seeker"
+      ? value.replace(/[^\p{L}\p{M}\s'.-]/gu, "")
+      : value.replace(/[^\p{L}\p{M}\p{N}\s'.\-&,.()]/gu, "");
+    setName(cleaned);
+    if (touched.name) validateField("name", cleaned);
+  };
+
+  const handleEmailChange = (value: string) => {
+    setEmail(value);
+    if (touched.email) validateField("email", value);
+  };
+
+  const handlePasswordChange = (value: string) => {
+    setPassword(value);
+    if (touched.password) validateField("password", value);
+  };
+
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     setServerError(null);
+
+    // Mark all fields as touched so errors show
+    setTouched({ name: true, email: true, password: true, terms: true });
+
+    // Full validation
     const next: Record<string, string> = {};
-    if (!name.trim()) next.name = "Please enter your name.";
-    if (!email.trim()) next.email = "Please enter your email.";
-    else if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) next.email = "Please enter a valid email.";
-    if (password.length < 8) next.password = "Password must be at least 8 characters.";
+    const nameCheck = validateName(name, role === "employer" ? "Company name" : "Full name");
+    if (!nameCheck.ok) next.name = nameCheck.error!;
+    const emailCheck = validateEmail(email);
+    if (!emailCheck.ok) next.email = emailCheck.error!;
+    const passCheck = validatePassword(password);
+    if (!passCheck.ok) next.password = passCheck.error!;
     if (!agree) next.terms = "You must accept the terms to continue.";
     setErrors(next);
     if (Object.keys(next).length > 0) return;
+
     setSubmitting(true);
     try {
       const res = await fetch("/api/auth/register", {
@@ -2247,9 +2293,18 @@ export function Register() {
                 id="name"
                 placeholder={role === "employer" ? "Acme Inc." : "Amara Okafor"}
                 value={name}
-                onChange={(e) => setName(e.target.value)}
+                onChange={(e) => handleNameChange(e.target.value)}
+                onBlur={() => { setTouched((t) => ({ ...t, name: true })); validateField("name", name); }}
+                className={cn(errors.name && "border-rose-400 focus-visible:ring-rose-200")}
+                autoComplete="name"
               />
-              {errors.name && <p className="text-xs text-rose-600">{errors.name}</p>}
+              {errors.name ? (
+                <p className="text-xs text-rose-600">{errors.name}</p>
+              ) : (
+                <p className="text-[11px] text-muted-foreground">
+                  {role === "seeker" ? "Letters only — numbers and special characters are not allowed." : "Company name with letters and basic punctuation."}
+                </p>
+              )}
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="email">Work email</Label>
@@ -2258,7 +2313,10 @@ export function Register() {
                 type="email"
                 placeholder="you@company.com"
                 value={email}
-                onChange={(e) => setEmail(e.target.value)}
+                onChange={(e) => handleEmailChange(e.target.value)}
+                onBlur={() => { setTouched((t) => ({ ...t, email: true })); validateField("email", email); }}
+                className={cn(errors.email && "border-rose-400 focus-visible:ring-rose-200")}
+                autoComplete="email"
               />
               {errors.email && <p className="text-xs text-rose-600">{errors.email}</p>}
             </div>
@@ -2269,7 +2327,10 @@ export function Register() {
                 type="password"
                 placeholder="At least 8 characters"
                 value={password}
-                onChange={(e) => setPassword(e.target.value)}
+                onChange={(e) => handlePasswordChange(e.target.value)}
+                onBlur={() => { setTouched((t) => ({ ...t, password: true })); validateField("password", password); }}
+                className={cn(errors.password && "border-rose-400 focus-visible:ring-rose-200")}
+                autoComplete="new-password"
               />
               {errors.password && <p className="text-xs text-rose-600">{errors.password}</p>}
             </div>
