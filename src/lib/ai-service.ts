@@ -239,7 +239,9 @@ function computeFactors(input: MatchInput): {
     const req = jobSkills.find((r) => areSameSkill(normalizeSkill(r.name), normalizeSkill(s.name)));
     return req?.mandatory;
   }).length;
-  const requiredSkillScore = mandatoryTotal > 0 ? Math.round((mandatoryMatched / mandatoryTotal) * 100) : 100;
+  const requiredSkillScore = mandatoryTotal > 0
+    ? Math.min(100, Math.round((mandatoryMatched / mandatoryTotal) * 100))
+    : 100;
 
   // Factor 3: Proficiency match — how often candidate meets proficiency threshold
   let profSum = 0;
@@ -374,7 +376,9 @@ Write a 1-2 sentence rationale explaining why this is a good (or weak) match, me
     }).slice(0, 3);
   }
 
-  const result: MatchResult = { overall, factors, matchingSkills: matching, missingSkills: missing, recommendedSkills, rationale };
+  // Clamp overall to 0-100 range (semantic bonuses can push above 100)
+  const clampedOverall = Math.max(0, Math.min(100, overall));
+  const result: MatchResult = { overall: clampedOverall, factors, matchingSkills: matching, missingSkills: missing, recommendedSkills, rationale };
   
   // ---- Priority 10: Cache the result ----
   setCached(key, result);
@@ -396,12 +400,33 @@ export interface RecommendInput {
     preferences?: string;
   };
   jobs: Job[];
+  // ---- Priority 7: Personalization signals ----
+  // Data from past user behavior to personalize recommendations over time
+  personalization?: {
+    appliedJobIds?: string[];      // jobs the candidate already applied to (to dedupe or weight)
+    viewedJobIds?: string[];       // jobs the candidate clicked/viewed
+    savedJobIds?: string[];        // jobs the candidate saved
+    feedback?: { jobId: string; action: "positive" | "negative" }[]; // thumbs up/down
+    preferredCategories?: string[]; // categories the candidate interacts with most
+    preferredLocations?: string[];  // locations the candidate prefers
+  };
 }
+
+// ---- Recommendation cache (Priority 10: Performance) ----
+const RECO_CACHE = new Map<string, { result: Job[]; expires: number }>();
+const RECO_CACHE_TTL = 3 * 60 * 1000; // 3 minutes (shorter than match cache since recos change more often)
 
 export async function recommendJobs(input: RecommendInput): Promise<Job[]> {
   if (input.jobs.length === 0) return [];
 
-  // First: deterministic scoring per job using computeMatch
+  // ---- Check recommendation cache ----
+  const recoKey = `${input.candidate.name}|${input.jobs.map(j => j.id).sort().join(",")}|${input.personalization?.appliedJobIds?.length ?? 0}`;
+  const cachedReco = RECO_CACHE.get(recoKey);
+  if (cachedReco && Date.now() < cachedReco.expires) {
+    return cachedReco.result;
+  }
+
+  // First: deterministic scoring per job using computeMatch (which is itself cached)
   const scored = await Promise.all(
     input.jobs.map(async (job) => {
       const matchInput: MatchInput = {
@@ -421,7 +446,65 @@ export async function recommendJobs(input: RecommendInput): Promise<Job[]> {
     })
   );
 
-  // Second: ask the LLM to rerank based on candidate's full profile + preferences
+  // ---- Priority 7: Personalization layer ----
+  // Apply personalization boosts/penalties on top of the base match score
+  const personalized = scored.map((s) => {
+    let adjustedScore = s.score;
+    const reasons: string[] = [];
+
+    if (input.personalization) {
+      const p = input.personalization;
+
+      // 1. Dedupe: penalize already-applied jobs (don't show again)
+      if (p.appliedJobIds?.includes(s.job.id)) {
+        adjustedScore -= 30;
+        reasons.push("Already applied");
+      }
+
+      // 2. Boost: jobs in preferred categories
+      if (p.preferredCategories?.includes(s.job.category)) {
+        adjustedScore += 8;
+        reasons.push(`Matches your preferred category: ${s.job.category}`);
+      }
+
+      // 3. Boost: jobs in preferred locations
+      if (p.preferredLocations?.some(loc => s.job.location.toLowerCase().includes(loc.toLowerCase()))) {
+        adjustedScore += 5;
+        reasons.push(`In your preferred location`);
+      }
+
+      // 4. Boost: jobs similar to viewed/saved jobs (implicit interest)
+      if (p.viewedJobIds?.includes(s.job.id)) {
+        adjustedScore += 3;
+        reasons.push("You viewed this before");
+      }
+      if (p.savedJobIds?.includes(s.job.id)) {
+        adjustedScore += 6;
+        reasons.push("You saved this job");
+      }
+
+      // 5. Penalize: jobs the candidate gave negative feedback on
+      const negFeedback = p.feedback?.find(f => f.jobId === s.job.id && f.action === "negative");
+      if (negFeedback) {
+        adjustedScore -= 15;
+        reasons.push("You dismissed this before");
+      }
+
+      // 6. Boost: jobs with positive feedback
+      const posFeedback = p.feedback?.find(f => f.jobId === s.job.id && f.action === "positive");
+      if (posFeedback) {
+        adjustedScore += 10;
+        reasons.push("You showed interest in this");
+      }
+    }
+
+    return { ...s, score: Math.max(0, Math.min(100, adjustedScore)), personalizationReasons: reasons };
+  });
+
+  // Sort by adjusted score (personalized) desc
+  personalized.sort((a, b) => b.score - a.score);
+
+  // Second: ask the LLM to rerank based on candidate's full profile + preferences + personalization
   try {
     const zai = await getZai();
     const completion = await zai.chat.completions.create({
@@ -429,7 +512,7 @@ export async function recommendJobs(input: RecommendInput): Promise<Job[]> {
         {
           role: "system",
           content:
-            "You are an AI talent-matching engine. Given a candidate profile and a list of jobs with their computed match scores, return the best job ordering. Return ONLY JSON: {\"orderedIds\": [string]} where each string is a job ID, ordered best-first.",
+            "You are an AI talent-matching engine with personalization. Given a candidate profile, their behavior signals, and a list of jobs with computed match scores, return the best job ordering. Consider the candidate's preferences and past interactions. Return ONLY JSON: {\"orderedIds\": [string]} where each string is a job ID, ordered best-first.",
         },
         {
           role: "user",
@@ -442,8 +525,15 @@ export async function recommendJobs(input: RecommendInput): Promise<Job[]> {
 - Preferences: ${input.candidate.preferences ?? "open to all"}
 - Top skills: ${input.candidate.skills.map((s) => `${s.name} (${s.proficiency}${s.verified ? ", verified" : ""})`).join(", ")}
 
-Jobs (id, title, company, computed score):
-${scored.map((s) => `- ${s.job.id}: ${s.job.title} @ ${s.job.company} (score ${s.score})`).join("\n")}
+Personalization signals:
+- Already applied to: ${input.personalization?.appliedJobIds?.length ?? 0} jobs
+- Viewed: ${input.personalization?.viewedJobIds?.length ?? 0} jobs
+- Saved: ${input.personalization?.savedJobIds?.length ?? 0} jobs
+- Preferred categories: ${input.personalization?.preferredCategories?.join(", ") ?? "N/A"}
+- Preferred locations: ${input.personalization?.preferredLocations?.join(", ") ?? "N/A"}
+
+Jobs (id, title, company, category, location, computed score):
+${personalized.map((s) => `- ${s.job.id}: ${s.job.title} @ ${s.job.company} [${s.job.category}, ${s.job.location}] (score ${s.score}${s.personalizationReasons.length > 0 ? `, ${s.personalizationReasons.join("; ")}` : ""})`).join("\n")}
 
 Return JSON: {"orderedIds": ["job-id-1", "job-id-2", ...]}`,
         },
@@ -455,7 +545,7 @@ Return JSON: {"orderedIds": ["job-id-1", "job-id-2", ...]}`,
     const parsed = JSON.parse(cleaned);
     const orderedIds: string[] = parsed.orderedIds ?? [];
     if (orderedIds.length > 0) {
-      const map = new Map(scored.map((s) => [s.job.id, s]));
+      const map = new Map(personalized.map((s) => [s.job.id, s]));
       const reranked: Job[] = [];
       for (const id of orderedIds) {
         const item = map.get(id);
@@ -476,20 +566,24 @@ Return JSON: {"orderedIds": ["job-id-1", "job-id-2", ...]}`,
           matchExplanation: item.explanation as JobMatchExplanation,
         });
       }
+      // Cache the result
+      RECO_CACHE.set(recoKey, { result: reranked, expires: Date.now() + RECO_CACHE_TTL });
       return reranked;
     }
   } catch {
     // Fall through to deterministic ordering
   }
 
-  // Fallback: sort by score desc
-  return scored
-    .sort((a, b) => b.score - a.score)
-    .map((s) => ({
-      ...s.job,
-      matchScore: s.score,
-      matchExplanation: s.explanation as JobMatchExplanation,
-    }));
+  // Fallback: sort by personalized score desc
+  const result = personalized.map((s) => ({
+    ...s.job,
+    matchScore: s.score,
+    matchExplanation: s.explanation as JobMatchExplanation,
+  }));
+
+  // Cache the result
+  RECO_CACHE.set(recoKey, { result, expires: Date.now() + RECO_CACHE_TTL });
+  return result;
 }
 
 // ============================================================
@@ -1187,5 +1281,295 @@ export async function analyzeSkillGap(input: {
     matchedSkills: matched,
     learningRecommendations,
     careerPath,
+  };
+}
+
+// ============================================================
+// 9. CANDIDATE RANKING AI (Priority 5)
+// Rank applicants according to skill match, proficiency, experience, and verification
+// ============================================================
+export interface CandidateRankingInput {
+  job: {
+    title: string;
+    requiredSkills: { name: string; proficiency: ProficiencyLevel; mandatory: boolean }[];
+    minExperienceYears: number;
+    category: string;
+  };
+  candidates: {
+    id: string;
+    name: string;
+    title: string;
+    skills: { name: string; proficiency: ProficiencyLevel; verified: boolean }[];
+    experienceYears: number;
+    education: string;
+    applicationStatus: string;
+    appliedAt: string;
+  }[];
+}
+
+export interface CandidateRankingResult {
+  rankings: {
+    candidateId: string;
+    name: string;
+    title: string;
+    overallScore: number;
+    factors: {
+      skillMatch: number;
+      proficiencyMatch: number;
+      experienceMatch: number;
+      verifiedSkillsBonus: number;
+      recencyBonus: number;
+      semanticMatches: { required: string; matched: string; similarity: number }[];
+    };
+    rank: number;
+    explanation: string;
+    strengths: string[];
+    weaknesses: string[];
+  }[];
+  summary: string;
+}
+
+// ---- Candidate ranking cache ----
+const RANK_CACHE = new Map<string, { result: CandidateRankingResult; expires: number }>();
+const RANK_CACHE_TTL = 5 * 60 * 1000;
+
+export async function rankCandidates(input: CandidateRankingInput): Promise<CandidateRankingResult> {
+  if (input.candidates.length === 0) {
+    return { rankings: [], summary: "No candidates to rank." };
+  }
+
+  // Check cache
+  const cacheK = `${input.job.title}|${input.candidates.map(c => c.id).sort().join(",")}`;
+  const cached = RANK_CACHE.get(cacheK);
+  if (cached && Date.now() < cached.expires) return cached.result;
+
+  // Score each candidate using computeMatch + additional ranking factors
+  const scoredCandidates = await Promise.all(
+    input.candidates.map(async (candidate) => {
+      // Use the existing computeMatch for the base score + factor breakdown
+      const matchInput: MatchInput = {
+        candidate: {
+          name: candidate.name,
+          title: candidate.title,
+          skills: candidate.skills,
+          experienceYears: candidate.experienceYears,
+          education: candidate.education,
+        },
+        job: {
+          title: input.job.title,
+          requiredSkills: input.job.requiredSkills,
+          minExperienceYears: input.job.minExperienceYears,
+        },
+      };
+      const matchResult = await computeMatch(matchInput);
+
+      // Extract individual factor scores
+      const factorMap = new Map(matchResult.factors.map(f => [f.key, f.score]));
+      const skillMatch = factorMap.get("skill_match") ?? 0;
+      const proficiencyMatch = factorMap.get("proficiency_match") ?? 0;
+      const experienceMatch = factorMap.get("experience_match") ?? 0;
+      const verifiedScore = factorMap.get("verified_skills") ?? 0;
+
+      // ---- Additional ranking factors beyond computeMatch ----
+
+      // Recency bonus: candidates who applied recently get a small boost
+      // (fresh applications are more likely to still be available)
+      const appliedDate = new Date(candidate.appliedAt);
+      const daysSinceApplied = (Date.now() - appliedDate.getTime()) / (1000 * 60 * 60 * 24);
+      const recencyBonus = daysSinceApplied < 3 ? 5 : daysSinceApplied < 7 ? 3 : daysSinceApplied < 14 ? 1 : 0;
+
+      // Verified skills bonus: candidates with more verified skills get a trust boost
+      const verifiedCount = candidate.skills.filter(s => s.verified).length;
+      const verifiedBonus = Math.min(10, verifiedCount * 2);
+
+      // Overall score: weighted combination
+      const overallScore = Math.round(
+        skillMatch * 0.30 +
+        proficiencyMatch * 0.15 +
+        experienceMatch * 0.15 +
+        verifiedScore * 0.10 +
+        recencyBonus * 0.10 +
+        verifiedBonus * 0.10 +
+        matchResult.overall * 0.10
+      );
+
+      // Generate strengths and weaknesses (Priority 9: Explainability)
+      const strengths: string[] = [];
+      const weaknesses: string[] = [];
+
+      if (matchResult.matchingSkills.length > 0) {
+        const expertMatched = matchResult.matchingSkills.filter(s => s.proficiency === "expert");
+        if (expertMatched.length > 0) {
+          strengths.push(`Expert-level in ${expertMatched.length} required skill${expertMatched.length === 1 ? "" : "s"}: ${expertMatched.map(s => s.name).join(", ")}`);
+        }
+      }
+      if (verifiedCount >= 3) {
+        strengths.push(`${verifiedCount} verified skills — above average credibility`);
+      }
+      if (candidate.experienceYears >= input.job.minExperienceYears) {
+        strengths.push(`${candidate.experienceYears} years experience (exceeds minimum of ${input.job.minExperienceYears})`);
+      }
+
+      const missingMandatory = matchResult.missingSkills.filter(s => s.mandatory);
+      if (missingMandatory.length > 0) {
+        weaknesses.push(`Missing ${missingMandatory.length} mandatory skill${missingMandatory.length === 1 ? "" : "s"}: ${missingMandatory.map(s => s.name).join(", ")}`);
+      }
+      if (matchResult.missingSkills.length > matchResult.matchingSkills.length) {
+        weaknesses.push(`More missing skills (${matchResult.missingSkills.length}) than matched (${matchResult.matchingSkills.length})`);
+      }
+      if (verifiedCount === 0 && candidate.skills.length > 0) {
+        weaknesses.push("No verified skills — verification boosts ranking");
+      }
+
+      // Generate explanation (Priority 9: Explainability)
+      let explanation = `${candidate.name} has an overall score of ${overallScore}%. `;
+      if (matchResult.matchingSkills.length > 0) {
+        explanation += `Matches ${matchResult.matchingSkills.length}/${input.job.requiredSkills.length} required skills`;
+        if (matchResult.missingSkills.length > 0) {
+          explanation += `, missing ${matchResult.missingSkills.length}`;
+        }
+        explanation += `. `;
+      }
+      if (verifiedCount > 0) {
+        explanation += `${verifiedCount} verified skill${verifiedCount === 1 ? "" : "s"}. `;
+      }
+      if (recencyBonus > 0) {
+        explanation += `Applied recently (+${recencyBonus} recency bonus). `;
+      }
+      if (weaknesses.length > 0) {
+        explanation += `Areas of concern: ${weaknesses[0]}.`;
+      }
+
+      return {
+        candidateId: candidate.id,
+        name: candidate.name,
+        title: candidate.title,
+        overallScore,
+        factors: {
+          skillMatch,
+          proficiencyMatch,
+          experienceMatch,
+          verifiedSkillsBonus: verifiedBonus,
+          recencyBonus,
+          semanticMatches: [], // populated from computeMatch's internal semanticMatches
+        },
+        matchResult,
+        strengths,
+        weaknesses,
+        explanation,
+      };
+    })
+  );
+
+  // Sort by overall score desc
+  scoredCandidates.sort((a, b) => b.overallScore - a.overallScore);
+
+  // Assign ranks
+  const rankings: CandidateRankingResult["rankings"] = scoredCandidates.map((s, i) => ({
+    candidateId: s.candidateId,
+    name: s.name,
+    title: s.title,
+    overallScore: s.overallScore,
+    factors: s.factors,
+    rank: i + 1,
+    explanation: s.explanation,
+    strengths: s.strengths,
+    weaknesses: s.weaknesses,
+  }));
+
+  // Generate summary
+  const avgScore = Math.round(scoredCandidates.reduce((a, s) => a + s.overallScore, 0) / scoredCandidates.length);
+  const topCandidate = rankings[0];
+  const summary = `${rankings.length} candidate${rankings.length === 1 ? "" : "s"} ranked. ` +
+    `Top match: ${topCandidate.name} (${topCandidate.overallScore}%). ` +
+    `Average score: ${avgScore}%. ` +
+    `${rankings.filter(r => r.overallScore >= 75).length} candidate${rankings.filter(r => r.overallScore >= 75).length === 1 ? "" : "s"} above 75% threshold.`;
+
+  const result: CandidateRankingResult = { rankings, summary };
+
+  // Cache
+  RANK_CACHE.set(cacheK, { result, expires: Date.now() + RANK_CACHE_TTL });
+  return result;
+}
+
+// ============================================================
+// 10. AI EXPLAINABILITY (Priority 9)
+// Generate detailed explanations for why a match score was computed
+// ============================================================
+export interface MatchExplanation {
+  overallScore: number;
+  scoreBreakdown: { factor: string; score: number; weight: number; contribution: number; description: string }[];
+  matchedSkills: { name: string; proficiency: string; verified: boolean; how: "exact" | "semantic"; matchedTo?: string }[];
+  missingSkills: { name: string; proficiency: string; mandatory: boolean; impact: string }[];
+  semanticInsights: string[];
+  recommendations: string[];
+  summary: string;
+}
+
+export function explainMatch(matchResult: MatchResult): MatchExplanation {
+  const breakdown: MatchExplanation["scoreBreakdown"] = matchResult.factors.map(f => ({
+    factor: f.label,
+    score: f.score,
+    weight: f.weight,
+    contribution: Math.round(f.score * f.weight),
+    description: f.description,
+  }));
+
+  const matchedSkills: MatchExplanation["matchedSkills"] = matchResult.matchingSkills.map(s => ({
+    name: s.name,
+    proficiency: s.proficiency,
+    verified: s.verified,
+    how: "exact" as const,
+  }));
+
+  const missingSkills: MatchExplanation["missingSkills"] = matchResult.missingSkills.map(s => ({
+    name: s.name,
+    proficiency: s.requiredProficiency,
+    mandatory: s.mandatory,
+    impact: s.mandatory
+      ? `This is a mandatory skill — not having it reduces your match score significantly.`
+      : `This is a preferred skill — having it would boost your score by ~${Math.round(100 / (matchedSkills.length + matchResult.missingSkills.length))}%.`,
+  }));
+
+  // Generate semantic insights
+  const semanticInsights: string[] = [];
+  // Check if any matched skills have related skills in the ontology
+  for (const matched of matchResult.matchingSkills) {
+    const related = getRelatedSkills(matched.name);
+    if (related.length > 0) {
+      semanticInsights.push(`${matched.name} is related to ${related.slice(0, 3).join(", ")} — if the job requires any of these, you'd get partial credit.`);
+    }
+  }
+
+  // Generate recommendations
+  const recommendations: string[] = [];
+  const mandatoryMissing = matchResult.missingSkills.filter(s => s.mandatory);
+  if (mandatoryMissing.length > 0) {
+    recommendations.push(`Learn ${mandatoryMissing[0].name} — it's mandatory and currently your biggest gap.`);
+  }
+  if (matchResult.recommendedSkills.length > 0) {
+    recommendations.push(`Consider learning: ${matchResult.recommendedSkills.slice(0, 3).join(", ")}.`);
+  }
+  const unverified = matchResult.matchingSkills.filter(s => !s.verified);
+  if (unverified.length > 0) {
+    recommendations.push(`Verify ${unverified[0].name} to boost your verified-skills factor by up to 20%.`);
+  }
+
+  // Generate summary
+  const topFactor = breakdown.reduce((max, f) => f.contribution > max.contribution ? f : max, breakdown[0]);
+  const weakestFactor = breakdown.reduce((min, f) => f.contribution < min.contribution ? f : min, breakdown[0]);
+  const summary = `Your overall match score is ${matchResult.overall}%. ` +
+    `Your strongest area is "${topFactor.factor}" (contributing ${topFactor.contribution} points). ` +
+    `Your weakest area is "${weakestFactor.factor}" (contributing only ${weakestFactor.contribution} points). ` +
+    (matchResult.rationale ? matchResult.rationale : "");
+
+  return {
+    overallScore: matchResult.overall,
+    scoreBreakdown: breakdown,
+    matchedSkills,
+    missingSkills,
+    semanticInsights,
+    recommendations,
+    summary,
   };
 }

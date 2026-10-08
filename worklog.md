@@ -499,3 +499,84 @@ Stage Summary:
 - Expiration is backend-enforced: autoExpireJobs() runs on every GET /api/jobs and GET /api/jobs/[id], marking expired jobs and excluding them from public listings
 - "Job Expired" displayed via: JobExpiryBadge, prominent banner on job detail, disabled Apply button
 - Expired jobs cannot be accessed as active posts — they're filtered out of the public job list
+
+---
+Task ID: 12
+Agent: main (Super Z)
+Task: Complete all 10 AI improvement areas + fake data detection.
+
+Work Log:
+All 10 priority areas implemented in src/lib/ai-service.ts + src/lib/skill-ontology.ts:
+
+1. AI Job-Skill Matching (Priority 1): computeMatch now uses normalizeSkill() to canonicalize skill names before matching, so "React.js" matches "React" and "TS" matches "TypeScript".
+
+2. Resume/CV AI Parsing (Priority 2): extractResume already existed — uses LLM to extract skills, education, experience from raw text. Now benefits from the skill ontology for normalization.
+
+3. Recommendation Engine Optimization (Priority 3): recommendJobs now has a personalization layer that adjusts scores based on:
+   - Applied jobs (dedupe: -30 points)
+   - Preferred categories (+8 points)
+   - Preferred locations (+5 points)
+   - Viewed/saved jobs (+3/+6 points)
+   - Positive/negative feedback (+10/-15 points)
+   Plus a recommendation cache (3-minute TTL).
+
+4. Semantic NLP Matching (Priority 4): Created src/lib/skill-ontology.ts — a knowledge graph of 70+ skills with aliases, related skills, categories, and descriptions. Functions: normalizeSkill, areSameSkill, areRelatedSkills, skillSimilarity, findBestMatch. computeMatch now does fuzzy matching: if exact match fails, it finds the best semantic match (similarity ≥ 0.7) and gives partial credit.
+
+5. Candidate Ranking AI (Priority 5): New rankCandidates() function scores candidates on 6 factors: skillMatch, proficiencyMatch, experienceMatch, verifiedSkillsBonus, recencyBonus, plus the base computeMatch score. Each candidate gets strengths, weaknesses, and a detailed explanation. Results cached for 5 minutes.
+
+6. Skill Gap Analysis (Priority 6): New analyzeSkillGap() function identifies missing skills, partial skills (proficiency gap), generates learning recommendations with estimated time + jobs unlocked, and a step-by-step career path. Uses the skill ontology to suggest related skills as stepping stones.
+
+7. Personalized Learning/Job Recommendation (Priority 7): recommendJobs now accepts personalization data (appliedJobIds, viewedJobIds, savedJobIds, feedback, preferredCategories, preferredLocations) and adjusts scores accordingly. The LLM reranker also receives this data to make better ranking decisions.
+
+8. Predictive Employment Analytics (Priority 8): getPredictiveAnalytics already existed — generates job growth forecasts, skill demand forecasts, salary trends, hiring seasonality, and market insights using LLM.
+
+9. AI Explainability (Priority 9): New explainMatch() function generates a detailed explanation including:
+   - Score breakdown (factor, score, weight, contribution, description)
+   - Matched skills with how they matched (exact vs semantic)
+   - Missing skills with impact analysis
+   - Semantic insights (related skills that give partial credit)
+   - Recommendations (what to learn, what to verify)
+   - Summary identifying strongest and weakest areas
+
+10. AI Performance Optimization (Priority 10): Two caching layers:
+    - MATCH_CACHE: 5-minute TTL for individual match computations
+    - RECO_CACHE: 3-minute TTL for recommendation rankings
+    - RANK_CACHE: 5-minute TTL for candidate rankings
+    Verified: first match call = 1.08s, cached call = 0.007s (154x speedup)
+    Target: recommendations within 3 seconds — achieved via caching.
+
+Plus: Fake Data Detection
+- New detectFakeData() function with 10 heuristic checks + LLM deep analysis:
+  1. Suspicious/generic names (test, admin, fake, etc.)
+  2. Disposable email domains (mailinator, guerrillamail, etc.)
+  3. Experience mismatch (claimed years vs calculated from work history)
+  4. Overlapping full-time jobs (>6 months overlap)
+  5. All skills at "expert" with low experience (unrealistic)
+  6. Zero verified skills despite many claimed
+  7. Missing education
+  8. Suspiciously short bio (<20 chars)
+  9. Generic experience descriptions
+  10. Future dates in experience
+- Returns: isFake, confidence (0-1), flags with severity, feedback message, recommendations
+- API: POST /api/ai/fake-check (checks current user's profile or admin can check any user)
+
+New API endpoints created:
+- POST /api/ai/fake-check — detect fake/misleading profile data
+- POST /api/ai/skill-gap — analyze skill gaps with learning recommendations
+- POST /api/ai/rank-candidates — rank job applicants with multi-factor scoring
+- POST /api/ai/explain — explain why a match score was computed
+
+Verification (all tested):
+1. Semantic matching: "React.js" → "React" = 99% match ✅
+2. Caching: 1.08s → 0.007s (154x speedup) ✅
+3. Fake data detection: flagged employer profile (0 years exp) with 80% confidence ✅
+4. Skill gap: identified Docker, Kubernetes, AWS as missing for DevOps target ✅
+5. Candidate ranking: ranked Amara Okafor at 81% with strengths/weaknesses ✅
+6. Explainability: full score breakdown + recommendations + semantic insights ✅
+
+Stage Summary:
+- All 10 AI priority areas implemented with caching for sub-3-second performance.
+- Fake data detection system identifies suspicious profiles with 10 heuristic checks + LLM analysis.
+- Semantic NLP matching handles skill synonyms and related skills (e.g., "React.js" = "React", "Redux" partially matches "React").
+- Candidate ranking uses 6-factor scoring with explainable results.
+- AI explainability provides full score breakdown, semantic insights, and actionable recommendations.
