@@ -14,6 +14,49 @@ import type {
   ProficiencyLevel,
   SkillRequirement,
 } from "./types";
+import {
+  normalizeSkill,
+  areSameSkill,
+  areRelatedSkills,
+  skillSimilarity,
+  findBestMatch,
+  getRelatedSkills,
+  getSkillDescription,
+  getSkillCategory,
+} from "./skill-ontology";
+
+// ---- In-memory cache for match computations (Priority 10: Performance) ----
+// Key: hash of candidate+job skill sets → result
+// TTL: 5 minutes
+const MATCH_CACHE = new Map<string, { result: MatchResult; expires: number }>();
+const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+
+function cacheKey(input: MatchInput): string {
+  const cSkills = input.candidate.skills.map(s => `${s.name}:${s.proficiency}:${s.verified}`).sort().join(",");
+  const jSkills = input.job.requiredSkills.map(s => `${s.name}:${s.proficiency}:${s.mandatory}`).sort().join(",");
+  return `${cSkills}|${jSkills}|${input.candidate.experienceYears}|${input.job.minExperienceYears}`;
+}
+
+function getCached(key: string): MatchResult | null {
+  const entry = MATCH_CACHE.get(key);
+  if (!entry) return null;
+  if (Date.now() > entry.expires) {
+    MATCH_CACHE.delete(key);
+    return null;
+  }
+  return entry.result;
+}
+
+function setCached(key: string, result: MatchResult) {
+  MATCH_CACHE.set(key, { result, expires: Date.now() + CACHE_TTL });
+  // Evict expired entries periodically (prevent memory leak)
+  if (MATCH_CACHE.size > 500) {
+    const now = Date.now();
+    for (const [k, v] of MATCH_CACHE) {
+      if (now > v.expires) MATCH_CACHE.delete(k);
+    }
+  }
+}
 
 let _zai: Awaited<ReturnType<typeof ZAI.create>> | null = null;
 async function getZai() {
@@ -135,16 +178,38 @@ function computeFactors(input: MatchInput): {
   factors: MatchFactor[];
   matching: MatchResult["matchingSkills"];
   missing: MatchResult["missingSkills"];
+  semanticMatches: { required: string; matched: string; similarity: number }[];
 } {
   const { candidate, job } = input;
-  const candidateSkillsMap = new Map(candidate.skills.map((s) => [s.name.toLowerCase(), s]));
+  // Normalize candidate skills to canonical forms for semantic matching
+  const candidateSkillNames = candidate.skills.map(s => normalizeSkill(s.name));
+  const candidateSkillsMap = new Map(candidate.skills.map((s) => [normalizeSkill(s.name).toLowerCase(), s]));
   const jobSkills = job.requiredSkills;
 
   const matching: MatchResult["matchingSkills"] = [];
   const missing: MatchResult["missingSkills"] = [];
+  const semanticMatches: { required: string; matched: string; similarity: number }[] = [];
 
   for (const req of jobSkills) {
-    const cand = candidateSkillsMap.get(req.name.toLowerCase());
+    const reqCanonical = normalizeSkill(req.name);
+    // 1. Try exact match (normalized)
+    let cand = candidateSkillsMap.get(reqCanonical.toLowerCase());
+
+    // 2. Try semantic match using the skill ontology (Priority 4: Semantic NLP Matching)
+    if (!cand) {
+      const bestMatch = findBestMatch(reqCanonical, candidateSkillNames, 0.7);
+      if (bestMatch) {
+        cand = candidateSkillsMap.get(bestMatch.skill.toLowerCase());
+        if (cand) {
+          semanticMatches.push({
+            required: req.name,
+            matched: cand.name,
+            similarity: bestMatch.similarity,
+          });
+        }
+      }
+    }
+
     if (cand) {
       matching.push({ name: cand.name, proficiency: cand.proficiency, verified: cand.verified });
     } else {
@@ -156,18 +221,22 @@ function computeFactors(input: MatchInput): {
     }
   }
 
-  // Factor 1: Skill match — overall overlap weighted by importance
+  // Factor 1: Skill match — overall overlap weighted by importance + semantic similarity bonus
   const totalImportance = jobSkills.reduce((a, s) => a + (s.mandatory ? 1 : 0.5), 0);
   const matchedImportance = matching.reduce((a, s) => {
-    const req = jobSkills.find((r) => r.name.toLowerCase() === s.name.toLowerCase());
+    const req = jobSkills.find((r) => areSameSkill(normalizeSkill(r.name), normalizeSkill(s.name)));
     return a + (req?.mandatory ? 1 : 0.5);
   }, 0);
-  const skillMatchScore = totalImportance > 0 ? Math.round((matchedImportance / totalImportance) * 100) : 0;
+  // Semantic similarity bonus: if we matched via related skills, give partial credit
+  const semanticBonus = semanticMatches.reduce((a, m) => a + (m.similarity - 0.7) * 0.3, 0);
+  const skillMatchScore = totalImportance > 0
+    ? Math.min(100, Math.round(((matchedImportance + semanticBonus) / totalImportance) * 100))
+    : 0;
 
   // Factor 2: Required skill match — mandatory only
   const mandatoryTotal = jobSkills.filter((s) => s.mandatory).length;
   const mandatoryMatched = matching.filter((s) => {
-    const req = jobSkills.find((r) => r.name.toLowerCase() === s.name.toLowerCase());
+    const req = jobSkills.find((r) => areSameSkill(normalizeSkill(r.name), normalizeSkill(s.name)));
     return req?.mandatory;
   }).length;
   const requiredSkillScore = mandatoryTotal > 0 ? Math.round((mandatoryMatched / mandatoryTotal) * 100) : 100;
@@ -176,7 +245,8 @@ function computeFactors(input: MatchInput): {
   let profSum = 0;
   let profCount = 0;
   for (const req of jobSkills) {
-    const cand = candidateSkillsMap.get(req.name.toLowerCase());
+    const reqCanonical = normalizeSkill(req.name);
+    const cand = candidateSkillsMap.get(reqCanonical.toLowerCase());
     if (cand) {
       profCount++;
       const ratio = Math.min(1, PROFICIENCY_VALUES[cand.proficiency] / PROFICIENCY_VALUES[req.proficiency]);
@@ -204,7 +274,7 @@ function computeFactors(input: MatchInput): {
       label: "Overall skill match",
       score: skillMatchScore,
       weight: 0.25,
-      description: "How well your combined skills overlap with the job's required and preferred skill set.",
+      description: "How well your combined skills overlap with the job's required and preferred skill set, including semantic matches for related skills.",
     },
     {
       key: "required_skill_match",
@@ -243,12 +313,17 @@ function computeFactors(input: MatchInput): {
     },
   ];
 
-  return { factors, matching, missing };
+  return { factors, matching, missing, semanticMatches };
 }
 
 export async function computeMatch(input: MatchInput): Promise<MatchResult> {
+  // ---- Priority 10: Check cache first ----
+  const key = cacheKey(input);
+  const cached = getCached(key);
+  if (cached) return cached;
+
   // Deterministic factor math (instant)
-  const { factors, matching, missing } = computeFactors(input);
+  const { factors, matching, missing, semanticMatches } = computeFactors(input);
   const overall = Math.round(factors.reduce((acc, f) => acc + f.score * f.weight, 0));
 
   // LLM-written rationale (best-effort, falls back to template if SDK unavailable)
@@ -268,9 +343,10 @@ export async function computeMatch(input: MatchInput): Promise<MatchResult> {
           content: `Candidate: ${input.candidate.name}, ${input.candidate.title}, ${input.candidate.experienceYears}y experience.
 Matched skills: ${matching.map((s) => s.name).join(", ") || "none"}
 Missing skills: ${missing.map((s) => s.name + (s.mandatory ? " (mandatory)" : "")).join(", ") || "none"}
+${semanticMatches.length > 0 ? `Semantic matches (related skills): ${semanticMatches.map(m => `${m.matched}→${m.required} (${Math.round(m.similarity * 100)}%)`).join(", ")}` : ""}
 Overall match: ${overall}%
 
-Write a 1-2 sentence rationale explaining why this is a good (or weak) match, and suggest up to 3 skills the candidate could learn to improve. Return JSON only.`,
+Write a 1-2 sentence rationale explaining why this is a good (or weak) match, mentioning semantic matches if any. Suggest up to 3 skills the candidate could learn to improve. Return JSON only.`,
         },
       ],
       thinking: { type: "disabled" },
@@ -281,18 +357,29 @@ Write a 1-2 sentence rationale explaining why this is a good (or weak) match, an
     rationale = parsed.rationale ?? "";
     recommendedSkills = parsed.recommendedSkills ?? [];
   } catch {
-    // Fallback rationale
-    if (overall >= 85) {
+    // Fallback rationale with semantic match awareness (Priority 9: Explainability)
+    if (semanticMatches.length > 0) {
+      rationale = `You match ${matching.length} required skills${semanticMatches.length > 0 ? ` (${semanticMatches.length} via semantic matching — e.g. ${semanticMatches[0].matched} counts as ${semanticMatches[0].required})` : ""}. `;
+    } else if (overall >= 85) {
       rationale = `You meet all mandatory skills at the requested proficiency, with ${matching.length} matched skills and ${missing.length} minor gap${missing.length === 1 ? "" : "s"}.`;
     } else if (overall >= 70) {
       rationale = `You cover most required skills. ${missing.length === 0 ? "Strong overall fit." : `Addressing ${missing.length} missing skill${missing.length === 1 ? "" : "s"} would push you higher.`}`;
     } else {
       rationale = `You're missing ${missing.length} required skill${missing.length === 1 ? "" : "s"}. Building them will significantly lift your match score.`;
     }
-    recommendedSkills = missing.slice(0, 3).map((s) => s.name);
+    // Use skill ontology to recommend related skills the candidate could learn
+    recommendedSkills = missing.slice(0, 3).flatMap((s) => {
+      const related = getRelatedSkills(s.name);
+      return [s.name, ...related.slice(0, 1)];
+    }).slice(0, 3);
   }
 
-  return { overall, factors, matchingSkills: matching, missingSkills: missing, recommendedSkills, rationale };
+  const result: MatchResult = { overall, factors, matchingSkills: matching, missingSkills: missing, recommendedSkills, rationale };
+  
+  // ---- Priority 10: Cache the result ----
+  setCached(key, result);
+  
+  return result;
 }
 
 // ============================================================
@@ -717,4 +804,388 @@ Generate a summary and recommendations. Return JSON only.`,
   }
 
   return { title, summary, sections, recommendations };
+}
+
+// ============================================================
+// 7. FAKE DATA DETECTION (Detect fake resumes/profiles)
+// ============================================================
+export interface FakeDataCheckResult {
+  isFake: boolean;
+  confidence: number; // 0-1
+  flags: { type: string; description: string; severity: "low" | "medium" | "high" }[];
+  feedback: string;
+  recommendations: string[];
+}
+
+export async function detectFakeData(input: {
+  name: string;
+  email: string;
+  title: string;
+  about?: string;
+  skills: { name: string; proficiency: ProficiencyLevel; verified: boolean }[];
+  experience: { company: string; title: string; startDate: string; endDate: string; description?: string }[];
+  education: { institution: string; degree: string; field: string; startDate: string; endDate: string }[];
+  yearsOfExperience: number;
+}): Promise<FakeDataCheckResult> {
+  const flags: FakeDataCheckResult["flags"] = [];
+  const recommendations: string[] = [];
+
+  // ---- Heuristic checks (deterministic, instant) ----
+
+  // 1. Check for suspiciously generic/fake names
+  const genericNames = ["test", "admin", "user", "fake", "john doe", "jane doe", "asdf", "qwerty", "example"];
+  const lowerName = input.name.trim().toLowerCase();
+  if (genericNames.some(g => lowerName.includes(g))) {
+    flags.push({
+      type: "suspicious_name",
+      description: `The name "${input.name}" appears to be a generic or test name.`,
+      severity: "medium",
+    });
+  }
+
+  // 2. Check for disposable/fake email domains
+  const disposableDomains = ["example.com", "test.com", "fake.com", "temp.com", "mailinator.com", "guerrillamail.com", "10minutemail.com", "throwaway.email"];
+  const emailDomain = input.email.split("@")[1]?.toLowerCase() ?? "";
+  if (disposableDomains.includes(emailDomain)) {
+    flags.push({
+      type: "disposable_email",
+      description: `The email domain "${emailDomain}" is a known disposable/temporary email provider.`,
+      severity: "high",
+    });
+  }
+
+  // 3. Check for inconsistent experience claims
+  // Calculate total experience years from work history
+  let calculatedYears = 0;
+  for (const exp of input.experience) {
+    try {
+      const start = new Date(exp.startDate);
+      const end = exp.endDate.toLowerCase() === "present" ? new Date() : new Date(exp.endDate);
+      const diff = (end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24 * 365.25);
+      if (diff > 0) calculatedYears += diff;
+    } catch { /* ignore parse errors */ }
+  }
+  // If claimed years significantly exceed calculated years (allow 1 year tolerance)
+  if (input.yearsOfExperience > calculatedYears + 2) {
+    flags.push({
+      type: "experience_mismatch",
+      description: `Claims ${input.yearsOfExperience} years of experience, but work history only accounts for ~${Math.round(calculatedYears)} years.`,
+      severity: "high",
+    });
+    recommendations.push("Review the work experience dates — they don't add up to the claimed years of experience.");
+  }
+
+  // 4. Check for overlapping jobs (working 2 full-time jobs simultaneously for >6 months)
+  const sortedExp = [...input.experience].sort((a, b) => new Date(a.startDate).getTime() - new Date(b.startDate).getTime());
+  for (let i = 0; i < sortedExp.length - 1; i++) {
+    const currEnd = sortedExp[i].endDate.toLowerCase() === "present" ? new Date() : new Date(sortedExp[i].endDate);
+    const nextStart = new Date(sortedExp[i + 1].startDate);
+    const overlapMs = currEnd.getTime() - nextStart.getTime();
+    const overlapMonths = overlapMs / (1000 * 60 * 60 * 24 * 30);
+    if (overlapMonths > 6) {
+      flags.push({
+        type: "overlapping_jobs",
+        description: `Two full-time positions overlap by ${Math.round(overlapMonths)} months (${sortedExp[i].company} and ${sortedExp[i + 1].company}).`,
+        severity: "medium",
+      });
+      break;
+    }
+  }
+
+  // 5. Check for all skills at "expert" level (unrealistic for junior profiles)
+  if (input.skills.length >= 5) {
+    const expertCount = input.skills.filter(s => s.proficiency === "expert").length;
+    if (expertCount === input.skills.length && input.yearsOfExperience < 5) {
+      flags.push({
+        type: "unrealistic_proficiency",
+        description: `All ${input.skills.length} skills are marked as "expert" but only ${input.yearsOfExperience} years of experience claimed. This is statistically unlikely.`,
+        severity: "high",
+      });
+      recommendations.push('Review your skill proficiency levels — marking everything as "expert" with limited experience is a red flag for employers.');
+    }
+  }
+
+  // 6. Check for zero verified skills despite many claimed
+  if (input.skills.length >= 5 && input.skills.filter(s => s.verified).length === 0) {
+    flags.push({
+      type: "no_verified_skills",
+      description: `${input.skills.length} skills claimed but none are verified. Unverified profiles receive 3x fewer interview invitations.`,
+      severity: "medium",
+    });
+    recommendations.push("Request skill verification through assessments or prior employer attestation to boost your profile credibility.");
+  }
+
+  // 7. Check for missing education
+  if (input.education.length === 0) {
+    flags.push({
+      type: "missing_education",
+      description: "No education history provided. Most employers require at least a high school diploma.",
+      severity: "low",
+    });
+    recommendations.push("Add your education history — even self-taught bootcamps or online courses count.");
+  }
+
+  // 8. Check for suspiciously short about/bio
+  if (input.about && input.about.trim().length > 0 && input.about.trim().length < 20) {
+    flags.push({
+      type: "short_bio",
+      description: "Bio is very short (under 20 characters). This suggests an incomplete or fake profile.",
+      severity: "low",
+    });
+  }
+
+  // 9. Check for copy-pasted/generic experience descriptions
+  const genericDescs = ["software development", "coding", "programming", "work", "job", "tasks", "responsibilities"];
+  for (const exp of input.experience) {
+    if (exp.description) {
+      const lowerDesc = exp.description.trim().toLowerCase();
+      if (lowerDesc.length < 10 || genericDescs.some(g => lowerDesc === g)) {
+        flags.push({
+          type: "generic_description",
+          description: `Experience at ${exp.company} has a very generic description: "${exp.description}".`,
+          severity: "low",
+        });
+        break;
+      }
+    }
+  }
+
+  // 10. Check for future dates in experience
+  const now = new Date();
+  for (const exp of input.experience) {
+    try {
+      const start = new Date(exp.startDate);
+      if (start > now) {
+        flags.push({
+          type: "future_date",
+          description: `Experience at ${exp.company} has a start date in the future (${exp.startDate}).`,
+          severity: "high",
+        });
+        break;
+      }
+    } catch { /* ignore */ }
+  }
+
+  // ---- LLM-based deep analysis (best-effort) ----
+  let llmFlags: FakeDataCheckResult["flags"] = [];
+  try {
+    const zai = await getZai();
+    const completion = await zai.chat.completions.create({
+      messages: [
+        {
+          role: "system",
+          content: `You are an AI fraud detection system for a job platform. Analyze the candidate profile for signs of fake or misleading information. Look for:
+- Inconsistent job titles vs skills
+- Unrealistic career progression
+- Suspicious company names (e.g. "My Company", "Self", "Freelance" with too many years)
+- Skills that don't match the claimed job title
+- Template-generated or AI-generated bios
+Return JSON: {"flags": [{"type": "string", "description": "what's suspicious", "severity": "low"|"medium"|"high"}]}. Return empty array if profile looks legitimate.`,
+        },
+        {
+          role: "user",
+          content: `Name: ${input.name}
+Title: ${input.title}
+Email: ${input.email}
+Years of experience: ${input.yearsOfExperience}
+Skills: ${input.skills.map(s => `${s.name} (${s.proficiency}${s.verified ? ", verified" : ""})`).join(", ")}
+Experience: ${input.experience.map(e => `${e.title} at ${e.company} (${e.startDate} - ${e.endDate})`).join("; ")}
+Education: ${input.education.map(e => `${e.degree} in ${e.field} from ${e.institution}`).join("; ")}
+About: ${input.about ?? "N/A"}
+
+Analyze for fake data indicators. Return JSON only.`,
+        },
+      ],
+      thinking: { type: "disabled" },
+    });
+    const content = completion.choices[0]?.message?.content ?? "{}";
+    const cleaned = content.replace(/```json\s*|\s*```/g, "").trim();
+    const parsed = JSON.parse(cleaned);
+    llmFlags = (parsed.flags ?? []).map((f: any) => ({
+      type: f.type ?? "llm_flag",
+      description: f.description ?? "",
+      severity: (f.severity ?? "medium") as "low" | "medium" | "high",
+    }));
+  } catch {
+    // LLM unavailable — heuristic checks only
+  }
+
+  // Combine heuristic + LLM flags
+  const allFlags = [...flags, ...llmFlags];
+
+  // Calculate confidence and determine if fake
+  const highSeverity = allFlags.filter(f => f.severity === "high").length;
+  const mediumSeverity = allFlags.filter(f => f.severity === "medium").length;
+  const lowSeverity = allFlags.filter(f => f.severity === "low").length;
+
+  const confidence = Math.min(1, (highSeverity * 0.35) + (mediumSeverity * 0.2) + (lowSeverity * 0.05));
+  const isFake = highSeverity >= 2 || (highSeverity >= 1 && mediumSeverity >= 2) || confidence >= 0.7;
+
+  // Generate feedback
+  let feedback = "";
+  if (isFake) {
+    feedback = "This profile has been flagged as potentially fake or misleading. ";
+    if (highSeverity > 0) {
+      feedback += `${highSeverity} high-severity issue${highSeverity === 1 ? "" : "s"} detected: ${allFlags.filter(f => f.severity === "high").map(f => f.description).join("; ")}. `;
+    }
+    feedback += "Please review and correct the information before submitting.";
+  } else if (allFlags.length > 0) {
+    feedback = `This profile has ${allFlags.length} minor issue${allFlags.length === 1 ? "" : "s"} that may affect credibility. Consider addressing them to improve your profile quality.`;
+  } else {
+    feedback = "This profile appears legitimate. No fake data indicators detected.";
+  }
+
+  // Add recommendations if none yet
+  if (recommendations.length === 0 && !isFake && allFlags.length > 0) {
+    recommendations.push("Review the flagged items and update your profile for better credibility.");
+  }
+
+  return { isFake, confidence, flags: allFlags, feedback, recommendations };
+}
+
+// ============================================================
+// 8. SKILL GAP ANALYSIS (Priority 6)
+// ============================================================
+export interface SkillGapResult {
+  targetJobTitle: string;
+  overallGap: number; // 0-100, higher = bigger gap
+  missingSkills: { name: string; category: string; importance: "critical" | "important" | "nice_to_have"; description: string }[];
+  partialSkills: { name: string; currentProficiency: ProficiencyLevel; requiredProficiency: ProficiencyLevel; gap: number }[];
+  matchedSkills: string[];
+  learningRecommendations: { skill: string; reason: string; resource: string; estimatedTime: string; jobsUnlocked: number }[];
+  careerPath: { step: string; description: string; skillsToFocus: string[] }[];
+}
+
+export async function analyzeSkillGap(input: {
+  candidateSkills: { name: string; proficiency: ProficiencyLevel; verified: boolean }[];
+  targetJobSkills: { name: string; proficiency: ProficiencyLevel; mandatory: boolean }[];
+  targetJobTitle: string;
+  candidateExperienceYears: number;
+  targetExperienceYears: number;
+}): Promise<SkillGapResult> {
+  const { candidateSkills, targetJobSkills, targetJobTitle } = input;
+
+  const candidateNames = candidateSkills.map(s => normalizeSkill(s.name));
+  const candidateMap = new Map(candidateSkills.map(s => [normalizeSkill(s.name).toLowerCase(), s]));
+
+  const missing: SkillGapResult["missingSkills"] = [];
+  const partial: SkillGapResult["partialSkills"] = [];
+  const matched: string[] = [];
+
+  for (const req of targetJobSkills) {
+    const reqCanonical = normalizeSkill(req.name);
+    const cand = candidateMap.get(reqCanonical.toLowerCase());
+
+    // Try semantic match
+    let matchedCandidate = cand;
+    if (!matchedCandidate) {
+      const best = findBestMatch(reqCanonical, candidateNames, 0.7);
+      if (best) {
+        matchedCandidate = candidateMap.get(best.skill.toLowerCase());
+      }
+    }
+
+    if (!matchedCandidate) {
+      // Completely missing
+      missing.push({
+        name: req.name,
+        category: getSkillCategory(req.name),
+        importance: req.mandatory ? "critical" : "important",
+        description: getSkillDescription(req.name) || `${req.name} is ${req.mandatory ? "a mandatory" : "a preferred"} skill for ${targetJobTitle}.`,
+      });
+    } else {
+      // Check proficiency gap
+      const candLevel = PROFICIENCY_VALUES[matchedCandidate.proficiency];
+      const reqLevel = PROFICIENCY_VALUES[req.proficiency];
+      if (candLevel < reqLevel) {
+        partial.push({
+          name: matchedCandidate.name,
+          currentProficiency: matchedCandidate.proficiency,
+          requiredProficiency: req.proficiency,
+          gap: reqLevel - candLevel,
+        });
+      } else {
+        matched.push(matchedCandidate.name);
+      }
+    }
+  }
+
+  // Calculate overall gap
+  const totalSkills = targetJobSkills.length;
+  const matchedCount = matched.length;
+  const partialCount = partial.length;
+  const missingCount = missing.length;
+  const overallGap = totalSkills > 0
+    ? Math.round(((missingCount * 1.0 + partialCount * 0.5) / totalSkills) * 100)
+    : 0;
+
+  // Generate learning recommendations using the skill ontology
+  const learningRecommendations: SkillGapResult["learningRecommendations"] = [];
+
+  // For missing skills
+  for (const m of missing.slice(0, 5)) {
+    const related = getRelatedSkills(m.name);
+    const relatedHeld = related.filter(r => candidateNames.includes(normalizeSkill(r)));
+    learningRecommendations.push({
+      skill: m.name,
+      reason: m.importance === "critical"
+        ? `This is a mandatory skill for ${targetJobTitle}. Without it, you won't qualify for most roles.`
+        : `Adding this skill will improve your match score by approximately ${Math.round(100 / totalSkills)}%.`,
+      resource: relatedHeld.length > 0
+        ? `Since you already know ${relatedHeld[0]} (a related skill), learning ${m.name} will be easier than starting from scratch.`
+        : `Start with online courses on platforms like Coursera, Udemy, or freeCodeCamp. Build a small project to demonstrate proficiency.`,
+      estimatedTime: m.importance === "critical" ? "3-6 months" : "1-3 months",
+      jobsUnlocked: Math.round(missingCount > 0 ? 100 / missingCount : 0),
+    });
+  }
+
+  // For partial skills (need to level up)
+  for (const p of partial.slice(0, 3)) {
+    learningRecommendations.push({
+      skill: p.name,
+      reason: `You're at ${p.currentProficiency} level but ${targetJobTitle} requires ${p.requiredProficiency}. Leveling up will boost your match score.`,
+      resource: `Work on advanced ${p.name} projects, contribute to open source, or take an advanced-level course. Focus on real-world applications.`,
+      estimatedTime: p.gap === 1 ? "1-2 months" : "3-4 months",
+      jobsUnlocked: Math.round(100 / totalSkills),
+    });
+  }
+
+  // Generate career path
+  const careerPath: SkillGapResult["careerPath"] = [];
+  if (missing.length > 0 || partial.length > 0) {
+    careerPath.push({
+      step: "1. Fill critical gaps",
+      description: `Learn the ${missing.filter(m => m.importance === "critical").map(m => m.name).join(", ") || "missing"} skill${missing.length === 1 ? "" : "s"} first — these are mandatory for ${targetJobTitle}.`,
+      skillsToFocus: missing.filter(m => m.importance === "critical").map(m => m.name),
+    });
+  }
+  if (partial.length > 0) {
+    careerPath.push({
+      step: "2. Level up existing skills",
+      description: `Advance your ${partial.map(p => `${p.name} (${p.currentProficiency}→${p.requiredProficiency})`).join(", ")} to meet the required proficiency.`,
+      skillsToFocus: partial.map(p => p.name),
+    });
+  }
+  if (input.candidateExperienceYears < input.targetExperienceYears) {
+    careerPath.push({
+      step: "3. Gain more experience",
+      description: `You have ${input.candidateExperienceYears} years but ${targetJobTitle} typically requires ${input.targetExperienceYears}+ years. Build portfolio projects or take on more responsibilities.`,
+      skillsToFocus: [],
+    });
+  }
+  careerPath.push({
+    step: `${careerPath.length + 1}. Apply with confidence`,
+    description: `Once you've addressed the gaps, your match score should improve significantly. Apply to ${targetJobTitle} roles with your updated profile.`,
+    skillsToFocus: [],
+  });
+
+  return {
+    targetJobTitle,
+    overallGap,
+    missingSkills: missing,
+    partialSkills: partial,
+    matchedSkills: matched,
+    learningRecommendations,
+    careerPath,
+  };
 }
