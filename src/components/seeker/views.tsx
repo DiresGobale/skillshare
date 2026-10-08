@@ -41,6 +41,7 @@ import {
   ErrorState,
   SuccessBanner,
   InfoCallout,
+  JobExpiryBadge,
 } from "@/components/shared/ui";
 import {
   recommendedJobs,
@@ -1836,7 +1837,7 @@ export function SeekerRecommended() {
                   <CompanyLogo initials={j.companyLogo || j.company?.slice(0, 2).toUpperCase() || "CO"} size="lg" />
                   <div className="min-w-0 flex-1">
                     <div className="flex items-start justify-between gap-2">
-                      <div>
+                      <div className="min-w-0 flex-1">
                         <button
                           onClick={() => go("job-detail", { jobId: j.id })}
                           className="text-left text-base font-semibold tracking-tight hover:text-primary"
@@ -1851,6 +1852,7 @@ export function SeekerRecommended() {
                           <span className="font-medium text-foreground">${j.salaryMin.toLocaleString()}–${j.salaryMax.toLocaleString()}/{j.salaryPeriod}</span>
                         </div>
                       </div>
+                      {j.expiresAt && <JobExpiryBadge expiresAt={j.expiresAt} status={j.status} />}
                     </div>
 
                     <p className="mt-2 line-clamp-2 text-xs text-muted-foreground">{j.description}</p>
@@ -1880,9 +1882,17 @@ export function SeekerRecommended() {
 export function SeekerJobDetail() {
   const { go, selectedJobId } = useApp();
   const { toast } = useToast();
-  const job = recommendedJobs.find((j) => j.id === selectedJobId) || recommendedJobs[0];
+  // Fetch the real job from the API (includes expiresAt + status)
+  const { data: jobData, loading } = useFetch<any>(selectedJobId ? `/api/jobs/${selectedJobId}` : null);
+  const apiJob = jobData?.job;
+  // Fall back to mock data if the API call fails or is loading
+  const mockJob = recommendedJobs.find((j) => j.id === selectedJobId) || recommendedJobs[0];
+  const job = apiJob ?? mockJob;
   const [applied, setApplied] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
+
+  // If the job is expired, show a prominent expired banner
+  const isExpired = apiJob?.status === "expired" || (apiJob?.expiresAt && new Date(apiJob.expiresAt).getTime() <= Date.now());
 
   return (
     <PageContainer>
@@ -1893,24 +1903,44 @@ export function SeekerJobDetail() {
         <ArrowLeft className="h-3.5 w-3.5" /> Back to recommendations
       </button>
 
+      {/* Expired job banner */}
+      {isExpired && (
+        <div className="mb-4 flex items-center gap-3 rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
+          <AlertCircle className="h-5 w-5 shrink-0" />
+          <div>
+            <p className="font-semibold">Job Expired</p>
+            <p className="text-xs">This job posting has expired and is no longer accepting applications.</p>
+          </div>
+        </div>
+      )}
+
       <div className="grid gap-4 lg:grid-cols-3">
         <div className="lg:col-span-2 space-y-4">
           <Card>
             <CardContent className="p-6">
               <div className="flex flex-col gap-4 sm:flex-row sm:items-start">
-                <CompanyLogo initials={job.companyLogo || "CO"} size="lg" />
+                <CompanyLogo initials={job.companyLogo || job.company?.slice(0, 2).toUpperCase() || "CO"} size="lg" />
                 <div className="min-w-0 flex-1">
-                  <h1 className="text-xl font-bold tracking-tight sm:text-2xl">{job.title}</h1>
-                  <p className="text-sm text-muted-foreground">{job.company}</p>
-                  <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground">
-                    <span className="flex items-center gap-1"><MapPin className="h-3 w-3" />{job.location}</span>
-                    <span className="flex items-center gap-1"><Briefcase className="h-3 w-3" />{job.type}</span>
-                    <span className="flex items-center gap-1"><Clock className="h-3 w-3" />{timeAgo(job.postedAt)}</span>
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <h1 className="text-xl font-bold tracking-tight sm:text-2xl">{job.title}</h1>
+                      <p className="text-sm text-muted-foreground">{job.company}</p>
+                      <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground">
+                        <span className="flex items-center gap-1"><MapPin className="h-3 w-3" />{job.location}</span>
+                        <span className="flex items-center gap-1"><Briefcase className="h-3 w-3" />{job.type}</span>
+                        <span className="flex items-center gap-1"><Clock className="h-3 w-3" />{timeAgo(job.postedAt)}</span>
+                      </div>
+                    </div>
+                    {apiJob?.expiresAt && <JobExpiryBadge expiresAt={apiJob.expiresAt} status={apiJob.status} />}
                   </div>
                   <div className="mt-3 flex flex-wrap gap-2 text-xs">
                     <Badge variant="outline" className="bg-violet-50 text-violet-700 border-violet-200">{job.category}</Badge>
                     <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200 capitalize">{job.remote}</Badge>
-                    <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-200">${job.salary.min.toLocaleString()}–${job.salary.max.toLocaleString()} / {job.salary.period}</Badge>
+                    {apiJob ? (
+                      <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-200">${Number(apiJob.salaryMin || 0).toLocaleString()}–${Number(apiJob.salaryMax || 0).toLocaleString()} / {apiJob.salaryPeriod || "month"}</Badge>
+                    ) : (
+                      <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-200">${job.salary.min.toLocaleString()}–${job.salary.max.toLocaleString()} / {job.salary.period}</Badge>
+                    )}
                   </div>
                 </div>
               </div>
@@ -1989,8 +2019,12 @@ export function SeekerJobDetail() {
               ) : (
                 <Dialog open={confirmOpen} onOpenChange={setConfirmOpen}>
                   <DialogTrigger asChild>
-                    <Button className="w-full h-10">
-                      <Send className="h-4 w-4" /> Apply now
+                    <Button className="w-full h-10" disabled={isExpired}>
+                      {isExpired ? (
+                        <><AlertCircle className="h-4 w-4" /> Job Expired</>
+                      ) : (
+                        <><Send className="h-4 w-4" /> Apply now</>
+                      )}
                     </Button>
                   </DialogTrigger>
                   <DialogContent>

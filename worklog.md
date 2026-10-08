@@ -468,3 +468,34 @@ Verification (all tested via curl):
 Stage Summary:
 - Form validation: every field has frontend + backend validation. Name fields accept letters only (seeker) or letters+punctuation (employer). Number fields accept digits only. Clear error messages displayed below each field. Required fields cannot be submitted empty.
 - Job post creation: saved to DB with expiresAt. Popup notification with sound (3-note chime via Web Audio API) shown to all seekers. Expiration duration required (1-365 days) with preset buttons. Remaining time displayed as "Expires in X days/hours/minutes" with color-coded urgency. Backend auto-expires jobs on every GET — expired jobs change to "expired" status and are excluded from public listings. JobExpiryBadge shows "Job Expired" when expired.
+
+---
+Task ID: 11
+Agent: main (Super Z)
+Task: Verify and complete the Job Post Creation and Expiration system — ensure all requirements are met: save to DB, popup notification with sound, expiration duration/date, remaining time display, auto-expire enforced by backend, "Job Expired" displayed, expired jobs not accessible as active.
+
+Work Log:
+- Verified the existing implementation from Task 10 is working correctly.
+- Added JobExpiryBadge to seeker's Recommended Jobs list — shows "Expires in X days/hours/minutes" next to each job card.
+- Updated SeekerJobDetail to fetch the real job from /api/jobs/[id] (was using mock data). Now shows:
+  * JobExpiryBadge with live countdown
+  * Prominent "Job Expired" banner (rose) when the job is expired
+  * Apply button disabled + shows "Job Expired" text when expired
+  * Salary badge adapts to API data format
+- Imported JobExpiryBadge into seeker/views.tsx.
+
+Comprehensive end-to-end test (all 7 steps passed):
+1. ✅ Employer creates job with 1-day expiration → saved to DB with expiresAt
+2. ✅ Seeker receives "New job posted" notification: "Full Stack Developer at Northwind Technologies — Accra, Ghana. Expires in 1 days."
+3. ✅ Job appears in seeker's public job list as active (published)
+4. ✅ Job detail endpoint returns full job with expiresAt
+5. ✅ Simulated expiration (set expiresAt to 1 hour ago)
+6. ✅ After hitting GET /api/jobs, the backend auto-expired the job — it's NOT in the public job list
+7. ✅ Job status in DB changed from "published" to "expired" (backend-enforced, not frontend)
+
+Stage Summary:
+- Job Status Flow verified: Create Job → Save to Database → Active (published) → Countdown (JobExpiryBadge) → Expiration Time Reached → Expired (backend auto-updates status)
+- Notification Flow verified: Job Posted → Save to Database → Identify Relevant Users (all active seekers) → Popup Notification + Sound (3-note chime) → User Opens Job
+- Expiration is backend-enforced: autoExpireJobs() runs on every GET /api/jobs and GET /api/jobs/[id], marking expired jobs and excluding them from public listings
+- "Job Expired" displayed via: JobExpiryBadge, prominent banner on job detail, disabled Apply button
+- Expired jobs cannot be accessed as active posts — they're filtered out of the public job list
