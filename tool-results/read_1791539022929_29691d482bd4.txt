@@ -1,0 +1,640 @@
+     1→     1→"use client";
+     2→     2→
+     3→     3→import React, { useState, useEffect } from "react";
+     4→     4→import { cn } from "@/lib/utils";
+     5→     5→import { useApp, type View } from "@/lib/app-context";
+     6→     6→import { Button } from "@/components/ui/button";
+     7→     7→import { Avatar } from "@/components/shared/ui";
+     8→     8→import { demoAccounts } from "@/lib/demo-accounts";
+     9→     9→import { useFetch } from "@/lib/use-fetch";
+    10→    10→import {
+    11→    11→  LayoutDashboard,
+    12→    12→  User,
+    13→    13→  Sparkles,
+    14→    14→  FileText,
+    15→    15→  Target,
+    16→    16→  Briefcase,
+    17→    17→  Send,
+    18→    18→  TrendingUp,
+    19→    19→  Bell,
+    20→    20→  MessageSquare,
+    21→    21→  Building2,
+    22→    22→  Users,
+    23→    23→  GitBranch,
+    24→    24→  BarChart3,
+    25→    25→  Activity,
+    26→    26→  Settings,
+    27→    27→  Search,
+    28→    28→  Menu,
+    29→    29→  X,
+    30→    30→  LogOut,
+    31→    31→  ChevronDown,
+    32→    32→  Zap,
+    33→    33→  ShieldCheck,
+    34→    34→  CalendarClock,
+    35→    35→  Cpu,
+    36→    36→  Server,
+    37→    37→  Image as ImageIcon,
+    38→    38→} from "lucide-react";
+    39→    39→import type { Role } from "@/lib/types";
+    40→    40→
+    41→    41→interface NavItem {
+    42→    42→  label: string;
+    43→    43→  view: View;
+    44→    44→  icon: React.ReactNode;
+    45→    45→  badge?: number;
+    46→    46→}
+    47→    47→
+    48→    48→const seekerNav: NavItem[] = [
+    49→    49→  { label: "Dashboard", view: "dashboard", icon: <LayoutDashboard className="h-4 w-4" /> },
+    50→    50→  { label: "My Profile", view: "profile", icon: <User className="h-4 w-4" /> },
+    51→    51→  { label: "Skills & Proficiency", view: "skills", icon: <Sparkles className="h-4 w-4" /> },
+    52→    52→  { label: "Resume & AI Analysis", view: "resume", icon: <FileText className="h-4 w-4" /> },
+    53→    53→  { label: "Recommended Jobs", view: "recommended", icon: <Target className="h-4 w-4" />, badge: 4 },
+    54→    54→  { label: "Applications", view: "applications", icon: <Send className="h-4 w-4" /> },
+    55→    55→  { label: "Skill Gap Analysis", view: "skill-gap", icon: <TrendingUp className="h-4 w-4" /> },
+    56→    56→  { label: "Messages", view: "messages", icon: <MessageSquare className="h-4 w-4" /> },
+    57→    57→  { label: "Notifications", view: "notifications", icon: <Bell className="h-4 w-4" />, badge: 2 },
+    58→    58→];
+    59→    59→
+    60→    60→const employerNav: NavItem[] = [
+    61→    61→  { label: "Dashboard", view: "dashboard", icon: <LayoutDashboard className="h-4 w-4" /> },
+    62→    62→  { label: "Company Profile", view: "company-profile", icon: <Building2 className="h-4 w-4" /> },
+    63→    63→  { label: "Jobs", view: "jobs", icon: <Briefcase className="h-4 w-4" /> },
+    64→    64→  { label: "Candidate Ranking", view: "candidates", icon: <Users className="h-4 w-4" /> },
+    65→    65→  { label: "Applications", view: "applications", icon: <Send className="h-4 w-4" /> },
+    66→    66→  { label: "Interviews", view: "interviews", icon: <CalendarClock className="h-4 w-4" /> },
+    67→    67→  { label: "AI Report", view: "ai-report", icon: <Cpu className="h-4 w-4" /> },
+    68→    68→  { label: "Messages", view: "messages", icon: <MessageSquare className="h-4 w-4" /> },
+    69→    69→  { label: "Notifications", view: "notifications", icon: <Bell className="h-4 w-4" />, badge: 2 },
+    70→    70→];
+    71→    71→
+    72→    72→const adminNav: NavItem[] = [
+    73→    73→  { label: "Dashboard", view: "dashboard", icon: <LayoutDashboard className="h-4 w-4" /> },
+    74→    74→  { label: "User Management", view: "users", icon: <Users className="h-4 w-4" /> },
+    75→    75→  { label: "Skills Database", view: "skills", icon: <Sparkles className="h-4 w-4" /> },
+    76→    76→  { label: "Skill Ontology", view: "skill-ontology", icon: <GitBranch className="h-4 w-4" /> },
+    77→    77→  { label: "Jobs & Categories", view: "jobs", icon: <Briefcase className="h-4 w-4" /> },
+    78→    78→  { label: "AI Analytics", view: "ai-analytics", icon: <Cpu className="h-4 w-4" /> },
+    79→    79→  { label: "Reports & Analytics", view: "reports", icon: <BarChart3 className="h-4 w-4" /> },
+    80→    80→  { label: "Activity Monitoring", view: "activity", icon: <Activity className="h-4 w-4" /> },
+    81→    81→  { label: "System Monitoring", view: "monitoring", icon: <Server className="h-4 w-4" /> },
+    82→    82→  { label: "Security & Compliance", view: "security", icon: <ShieldCheck className="h-4 w-4" /> },
+    83→    83→  { label: "Site Images", view: "site-images", icon: <ImageIcon className="h-4 w-4" /> },
+    84→    84→  { label: "System Settings", view: "config", icon: <Settings className="h-4 w-4" /> },
+    85→    85→];
+    86→    86→
+    87→    87→function getNav(role: Role): NavItem[] {
+    88→    88→  if (role === "seeker") return seekerNav;
+    89→    89→  if (role === "employer") return employerNav;
+    90→    90→  if (role === "admin") return adminNav;
+    91→    91→  return [];
+    92→    92→}
+    93→    93→
+    94→    94→// Brand mark
+    95→    95→export function BrandMark({ compact = false }: { compact?: boolean }) {
+    96→    96→  return (
+    97→    97→    <div className="flex items-center gap-2">
+    98→    98→      <div className="relative flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-violet-600 to-blue-600 text-white shadow-sm">
+    99→    99→        <Zap className="h-4 w-4" fill="currentColor" />
+   100→   100→      </div>
+   101→   101→      {!compact && (
+   102→   102→        <div className="leading-tight">
+   103→   103→          <p className="text-sm font-bold tracking-tight">
+   104→   104→            SkillMatch<span className="text-primary"> AI</span>
+   105→   105→          </p>
+   106→   106→          <p className="text-[10px] text-muted-foreground">Skill-based hiring</p>
+   107→   107→        </div>
+   108→   108→      )}
+   109→   109→    </div>
+   110→   110→  );
+   111→   111→}
+   112→   112→
+   113→   113→// ============================================================
+   114→   114→// 3-LINE HAMBURGER TOGGLE BUTTON
+   115→   115→// Three horizontal lines that animate into an X when active
+   116→   116→// ============================================================
+   117→   117→export function HamburgerToggle({
+   118→   118→  open,
+   119→   119→  onClick,
+   120→   120→  className,
+   121→   121→}: {
+   122→   122→  open: boolean;
+   123→   123→  onClick: () => void;
+   124→   124→  className?: string;
+   125→   125→}) {
+   126→   126→  return (
+   127→   127→    <button
+   128→   128→      type="button"
+   129→   129→      onClick={onClick}
+   130→   130→      aria-label={open ? "Close menu" : "Open menu"}
+   131→   131→      aria-expanded={open}
+   132→   132→      aria-controls="mobile-navbar"
+   133→   133→      className={cn(
+   134→   134→        "relative inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-lg border-2 border-primary/30 bg-primary/5 transition-all hover:bg-primary/10 active:scale-95",
+   135→   135→        className
+   136→   136→      )}
+   137→   137→    >
+   138→   138→      <span className="relative block h-5 w-6">
+   139→   139→        {/* Line 1 */}
+   140→   140→        <span
+   141→   141→          className={cn(
+   142→   142→            "absolute left-0 block h-[3px] w-6 rounded-full bg-primary transition-all duration-300 ease-in-out",
+   143→   143→            open ? "top-2 rotate-45" : "top-0"
+   144→   144→          )}
+   145→   145→        />
+   146→   146→        {/* Line 2 */}
+   147→   147→        <span
+   148→   148→          className={cn(
+   149→   149→            "absolute left-0 top-2 block h-[3px] w-6 rounded-full bg-primary transition-all duration-200 ease-in-out",
+   150→   150→            open ? "opacity-0 scale-x-0" : "opacity-100 scale-x-100"
+   151→   151→          )}
+   152→   152→        />
+   153→   153→        {/* Line 3 */}
+   154→   154→        <span
+   155→   155→          className={cn(
+   156→   156→            "absolute left-0 block h-[3px] w-6 rounded-full bg-primary transition-all duration-300 ease-in-out",
+   157→   157→            open ? "top-2 -rotate-45" : "top-4"
+   158→   158→          )}
+   159→   159→        />
+   160→   160→      </span>
+   161→   161→    </button>
+   162→   162→  );
+   163→   163→}
+   164→   164→
+   165→   165→// Sidebar (desktop)
+   166→   166→function SidebarNav({ role, view, onNavigate }: { role: Role; view: View; onNavigate?: (v: View) => void }) {
+   167→   167→  const nav = getNav(role);
+   168→   168→  const { user } = useApp();
+   169→   169→  const { data: profileData } = useFetch<any>("/api/profile");
+   170→   170→  const profilePhoto = profileData?.profile?.profilePhoto;
+   171→   171→  return (
+   172→   172→    <div className="flex h-full flex-col">
+   173→   173→      <div className="flex h-16 items-center border-b border-sidebar-border px-5">
+   174→   174→        <BrandMark />
+   175→   175→      </div>
+   176→   176→      <nav className="flex-1 space-y-0.5 overflow-y-auto px-3 py-4">
+   177→   177→        <p className="px-3 pb-2 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+   178→   178→          {role === "seeker" ? "Job seeker" : role === "employer" ? "Employer" : "Administrator"}
+   179→   179→        </p>
+   180→   180→        {nav.map((item) => {
+   181→   181→          const active = view === item.view;
+   182→   182→          return (
+   183→   183→            <button
+   184→   184→              key={item.view}
+   185→   185→              onClick={() => onNavigate?.(item.view)}
+   186→   186→              className={cn(
+   187→   187→                "group flex w-full items-center gap-2.5 rounded-md px-3 py-2 text-sm font-medium transition-colors",
+   188→   188→                active
+   189→   189→                  ? "bg-primary text-primary-foreground shadow-sm"
+   190→   190→                  : "text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+   191→   191→              )}
+   192→   192→            >
+   193→   193→              <span className={cn(active ? "text-primary-foreground" : "text-muted-foreground group-hover:text-sidebar-accent-foreground")}>
+   194→   194→                {item.icon}
+   195→   195→              </span>
+   196→   196→              <span className="flex-1 text-left">{item.label}</span>
+   197→   197→              {item.badge && (
+   198→   198→                <span
+   199→   199→                  className={cn(
+   200→   200→                    "inline-flex h-5 min-w-5 items-center justify-center rounded-full px-1.5 text-[10px] font-semibold",
+   201→   201→                    active ? "bg-primary-foreground/20 text-primary-foreground" : "bg-primary text-primary-foreground"
+   202→   202→                  )}
+   203→   203→                >
+   204→   204→                  {item.badge}
+   205→   205→                </span>
+   206→   206→              )}
+   207→   207→            </button>
+   208→   208→          );
+   209→   209→        })}
+   210→   210→      </nav>
+   211→   211→      <div className="border-t border-sidebar-border p-3">
+   212→   212→        <div className="flex items-center gap-2.5 rounded-md px-2 py-2">
+   213→   213→          {user && <Avatar initials={user.initials ?? user.name.slice(0,2).toUpperCase()} color={user.avatarColor} size="sm" photo={profilePhoto} />}
+   214→   214→          {user && (
+   215→   215→            <div className="min-w-0 flex-1">
+   216→   216→              <p className="truncate text-xs font-semibold">{user.name}</p>
+   217→   217→              <p className="truncate text-[10px] text-muted-foreground">{user.title ?? user.email}</p>
+   218→   218→            </div>
+   219→   219→          )}
+   220→   220→        </div>
+   221→   221→      </div>
+   222→   222→    </div>
+   223→   223→  );
+   224→   224→}
+   225→   225→
+   226→   226→// ============================================================
+   227→   227→// MOBILE NAVBAR — slide-in panel controlled by hamburger toggle
+   228→   228→// ============================================================
+   229→   229→function MobileNavbar({
+   230→   230→  open,
+   231→   231→  onClose,
+   232→   232→  role,
+   233→   233→  view,
+   234→   234→  onNavigate,
+   235→   235→}: {
+   236→   236→  open: boolean;
+   237→   237→  onClose: () => void;
+   238→   238→  role: Role;
+   239→   239→  view: View;
+   240→   240→  onNavigate: (v: View) => void;
+   241→   241→}) {
+   242→   242→  const nav = getNav(role);
+   243→   243→  const { user } = useApp();
+   244→   244→  const { data: profileData } = useFetch<any>("/api/profile");
+   245→   245→  const profilePhoto = profileData?.profile?.profilePhoto;
+   246→   246→  useEffect(() => {
+   247→   247→    if (open) {
+   248→   248→      document.body.style.overflow = "hidden";
+   249→   249→    } else {
+   250→   250→      document.body.style.overflow = "";
+   251→   251→    }
+   252→   252→    return () => {
+   253→   253→      document.body.style.overflow = "";
+   254→   254→    };
+   255→   255→  }, [open]);
+   256→   256→
+   257→   257→  // Close on Escape
+   258→   258→  useEffect(() => {
+   259→   259→    if (!open) return;
+   260→   260→    const handler = (e: KeyboardEvent) => {
+   261→   261→      if (e.key === "Escape") onClose();
+   262→   262→    };
+   263→   263→    window.addEventListener("keydown", handler);
+   264→   264→    return () => window.removeEventListener("keydown", handler);
+   265→   265→  }, [open, onClose]);
+   266→   266→
+   267→   267→  return (
+   268→   268→    <>
+   269→   269→      {/* Backdrop */}
+   270→   270→      <div
+   271→   271→        className={cn(
+   272→   272→          "fixed inset-0 z-40 bg-black/50 backdrop-blur-sm transition-opacity duration-300 lg:hidden",
+   273→   273→          open ? "opacity-100" : "pointer-events-none opacity-0"
+   274→   274→        )}
+   275→   275→        onClick={onClose}
+   276→   276→        aria-hidden="true"
+   277→   277→      />
+   278→   278→
+   279→   279→      {/* Slide-in panel */}
+   280→   280→      <nav
+   281→   281→        id="mobile-navbar"
+   282→   282→        aria-label="Mobile navigation"
+   283→   283→        className={cn(
+   284→   284→          "fixed inset-y-0 left-0 z-50 flex w-72 max-w-[85vw] flex-col border-r border-sidebar-border bg-sidebar shadow-xl transition-transform duration-300 ease-in-out lg:hidden",
+   285→   285→          open ? "translate-x-0" : "-translate-x-full"
+   286→   286→        )}
+   287→   287→      >
+   288→   288→        {/* Header with brand + close button */}
+   289→   289→        <div className="flex h-16 items-center justify-between border-b border-sidebar-border px-5">
+   290→   290→          <BrandMark />
+   291→   291→          <button
+   292→   292→            onClick={onClose}
+   293→   293→            aria-label="Close menu"
+   294→   294→            className="inline-flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+   295→   295→          >
+   296→   296→            <X className="h-4 w-4" />
+   297→   297→          </button>
+   298→   298→        </div>
+   299→   299→
+   300→   300→        {/* Nav items */}
+   301→   301→        <div className="flex-1 overflow-y-auto px-3 py-4">
+   302→   302→          <p className="px-3 pb-2 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+   303→   303→            {role === "seeker" ? "Job seeker" : role === "employer" ? "Employer" : "Administrator"}
+   304→   304→          </p>
+   305→   305→          <div className="space-y-0.5">
+   306→   306→            {nav.map((item) => {
+   307→   307→              const active = view === item.view;
+   308→   308→              return (
+   309→   309→                <button
+   310→   310→                  key={item.view}
+   311→   311→                  onClick={() => {
+   312→   312→                    onNavigate(item.view);
+   313→   313→                    onClose();
+   314→   314→                  }}
+   315→   315→                  className={cn(
+   316→   316→                    "group flex w-full items-center gap-2.5 rounded-md px-3 py-2.5 text-sm font-medium transition-colors",
+   317→   317→                    active
+   318→   318→                      ? "bg-primary text-primary-foreground shadow-sm"
+   319→   319→                      : "text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+   320→   320→                  )}
+   321→   321→                >
+   322→   322→                  <span className={cn(active ? "text-primary-foreground" : "text-muted-foreground group-hover:text-sidebar-accent-foreground")}>
+   323→   323→                    {item.icon}
+   324→   324→                  </span>
+   325→   325→                  <span className="flex-1 text-left">{item.label}</span>
+   326→   326→                  {item.badge && (
+   327→   327→                    <span
+   328→   328→                      className={cn(
+   329→   329→                        "inline-flex h-5 min-w-5 items-center justify-center rounded-full px-1.5 text-[10px] font-semibold",
+   330→   330→                        active ? "bg-primary-foreground/20 text-primary-foreground" : "bg-primary text-primary-foreground"
+   331→   331→                      )}
+   332→   332→                    >
+   333→   333→                      {item.badge}
+   334→   334→                    </span>
+   335→   335→                  )}
+   336→   336→                </button>
+   337→   337→              );
+   338→   338→            })}
+   339→   339→          </div>
+   340→   340→        </div>
+   341→   341→
+   342→   342→        {/* User card */}
+   343→   343→        {user && (
+   344→   344→          <div className="border-t border-sidebar-border p-3">
+   345→   345→            <div className="flex items-center gap-2.5 rounded-md px-2 py-2">
+   346→   346→              <Avatar initials={user.initials ?? user.name.slice(0,2).toUpperCase()} color={user.avatarColor} size="sm" photo={profilePhoto} />
+   347→   347→              <div className="min-w-0 flex-1">
+   348→   348→                <p className="truncate text-xs font-semibold">{user.name}</p>
+   349→   349→                <p className="truncate text-[10px] text-muted-foreground">{user.title ?? user.email}</p>
+   350→   350→              </div>
+   351→   351→            </div>
+   352→   352→          </div>
+   353→   353→        )}
+   354→   354→      </nav>
+   355→   355→    </>
+   356→   356→  );
+   357→   357→}
+   358→   358→
+   359→   359→// Top bar (search + actions + role switcher)
+   360→   360→function Topbar({ onToggleMobile, mobileOpen, showNavHint }: { onToggleMobile: () => void; mobileOpen: boolean; showNavHint?: boolean }) {
+   361→   361→  const { role, user, signOut, go } = useApp();
+   362→   362→  const [roleMenuOpen, setRoleMenuOpen] = useState(false);
+   363→   363→
+   364→   364→  // Determine display user — prefer session user
+   365→   365→  const displayUser = user;
+   366→   366→  const { data: profileData } = useFetch<any>("/api/profile");
+   367→   367→  const profilePhoto = profileData?.profile?.profilePhoto;
+   368→   368→
+   369→   369→  return (
+   370→   370→    <header className="sticky top-0 z-30 flex h-16 items-center gap-3 border-b border-border bg-background/95 px-4 backdrop-blur supports-[backdrop-filter]:bg-background/80 lg:px-6">
+   371→   371→      {/* 3-line hamburger toggle (mobile only) — with pulse hint after login */}
+   372→   372→      <div className="relative lg:hidden">
+   373→   373→        <HamburgerToggle
+   374→   374→          open={mobileOpen}
+   375→   375→          onClick={onToggleMobile}
+   376→   376→          className={showNavHint ? "ring-2 ring-primary/50 animate-pulse" : undefined}
+   377→   377→        />
+   378→   378→        {showNavHint && (
+   379→   379→          <span className="absolute -right-1 -top-1 flex h-3 w-3">
+   380→   380→            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-primary opacity-75" />
+   381→   381→            <span className="relative inline-flex h-3 w-3 rounded-full bg-primary" />
+   382→   382→          </span>
+   383→   383→        )}
+   384→   384→      </div>
+   385→   385→
+   386→   386→      {/* Mobile: show current page title instead of search (saves space) */}
+   387→   387→      <div className="flex flex-1 items-center lg:hidden">
+   388→   388→        <span className="truncate text-sm font-semibold capitalize text-foreground">
+   389→   389→          {role === "admin" ? "Admin" : role === "employer" ? "Employer" : "Seeker"} dashboard
+   390→   390→        </span>
+   391→   391→      </div>
+   392→   392→
+   393→   393→      {/* Search (desktop) */}
+   394→   394→      <div className="relative hidden flex-1 max-w-md sm:block lg:block">
+   395→   395→        <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+   396→   396→        <input
+   397→   397→          type="text"
+   398→   398→          placeholder={role === "admin" ? "Search users, jobs, skills…" : "Search jobs, companies, skills…"}
+   399→   399→          className="h-9 w-full rounded-md border border-input bg-muted/30 pl-9 pr-3 text-sm placeholder:text-muted-foreground focus:bg-background focus:outline-none focus:ring-2 focus:ring-ring/40"
+   400→   400→        />
+   401→   401→      </div>
+   402→   402→
+   403→   403→      <div className="ml-auto flex items-center gap-1.5 sm:gap-2">
+   404→   404→        {/* Role switcher (demo helper) */}
+   405→   405→        <div className="relative">
+   406→   406→          <Button
+   407→   407→            variant="outline"
+   408→   408→            size="sm"
+   409→   409→            className="hidden md:inline-flex h-9 gap-1.5"
+   410→   410→            onClick={() => setRoleMenuOpen((v) => !v)}
+   411→   411→          >
+   412→   412→            <ShieldCheck className="h-3.5 w-3.5 text-primary" />
+   413→   413→            <span className="capitalize">{role}</span>
+   414→   414→            <ChevronDown className="h-3.5 w-3.5" />
+   415→   415→          </Button>
+   416→   416→          {roleMenuOpen && (
+   417→   417→            <>
+   418→   418→              <div className="fixed inset-0 z-40" onClick={() => setRoleMenuOpen(false)} />
+   419→   419→              <div className="absolute right-0 top-11 z-50 w-64 overflow-hidden rounded-md border border-border bg-popover shadow-md">
+   420→   420→                <p className="px-3 py-2 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+   421→   421→                  Switch demo account
+   422→   422→                </p>
+   423→   423→                {demoAccounts.map((acc) => (
+   424→   424→                  <button
+   425→   425→                    key={acc.id}
+   426→   426→                    onClick={async () => {
+   427→   427→                      setRoleMenuOpen(false);
+   428→   428→                      // Sign out current session, then sign in as the demo account
+   429→   429→                      await signOut();
+   430→   430→                      // Use NextAuth credentials sign-in
+   431→   431→                      const { signIn: nextAuthSignIn } = await import("next-auth/react");
+   432→   432→                      await nextAuthSignIn("credentials", {
+   433→   433→                        email: acc.email,
+   434→   434→                        password: acc.password,
+   435→   435→                        redirect: false,
+   436→   436→                      });
+   437→   437→                      window.location.assign("/");
+   438→   438→                    }}
+   439→   439→                    className={cn(
+   440→   440→                      "flex w-full items-center gap-2 px-3 py-2 text-sm hover:bg-accent",
+   441→   441→                      acc.role === role && "bg-primary/5 text-primary font-medium"
+   442→   442→                    )}
+   443→   443→                  >
+   444→   444→                    <span
+   445→   445→                      className="flex h-6 w-6 items-center justify-center rounded-full text-[10px] font-semibold text-white"
+   446→   446→                      style={{ background: acc.avatarColor }}
+   447→   447→                    >
+   448→   448→                      {acc.initials}
+   449→   449→                    </span>
+   450→   450→                    <div className="flex-1 text-left">
+   451→   451→                      <p className="text-xs font-semibold capitalize">{acc.role}</p>
+   452→   452→                      <p className="text-[10px] text-muted-foreground">{acc.email}</p>
+   453→   453→                    </div>
+   454→   454→                  </button>
+   455→   455→                ))}
+   456→   456→                <div className="border-t border-border p-1.5">
+   457→   457→                  <button
+   458→   458→                    onClick={() => {
+   459→   459→                      signOut();
+   460→   460→                      setRoleMenuOpen(false);
+   461→   461→                    }}
+   462→   462→                    className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-xs text-rose-600 hover:bg-rose-50"
+   463→   463→                  >
+   464→   464→                    <LogOut className="h-3.5 w-3.5" /> Sign out
+   465→   465→                  </button>
+   466→   466→                </div>
+   467→   467→              </div>
+   468→   468→            </>
+   469→   469→          )}
+   470→   470→        </div>
+   471→   471→
+   472→   472→        <Button
+   473→   473→          variant="ghost"
+   474→   474→          size="icon"
+   475→   475→          className="relative h-9 w-9"
+   476→   476→          onClick={() => go("notifications")}
+   477→   477→          aria-label="Notifications"
+   478→   478→        >
+   479→   479→          <Bell className="h-4 w-4" />
+   480→   480→          <span className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full bg-rose-500 ring-2 ring-background" />
+   481→   481→        </Button>
+   482→   482→
+   483→   483→        <Button
+   484→   484→          variant="ghost"
+   485→   485→          size="icon"
+   486→   486→          className="relative h-9 w-9"
+   487→   487→          onClick={() => go("messages")}
+   488→   488→          aria-label="Messages"
+   489→   489→        >
+   490→   490→          <MessageSquare className="h-4 w-4" />
+   491→   491→        </Button>
+   492→   492→
+   493→   493→        {displayUser && (
+   494→   494→          <div className="flex items-center gap-2 pl-1">
+   495→   495→            <Avatar initials={displayUser.initials ?? displayUser.name.slice(0,2).toUpperCase()} color={displayUser.avatarColor} size="sm" photo={profilePhoto} />
+   496→   496→            <div className="hidden lg:block">
+   497→   497→              <p className="text-xs font-semibold leading-tight">{displayUser.name}</p>
+   498→   498→              <p className="text-[10px] text-muted-foreground leading-tight">{displayUser.email}</p>
+   499→   499→            </div>
+   500→   500→          </div>
+   501→   501→        )}
+   502→   502→        <Button
+   503→   503→          variant="ghost"
+   504→   504→          size="icon"
+   505→   505→          className="h-9 w-9 text-muted-foreground hover:text-foreground"
+   506→   506→          onClick={() => signOut()}
+   507→   507→          aria-label="Sign out"
+   508→   508→        >
+   509→   509→          <LogOut className="h-4 w-4" />
+   510→   510→        </Button>
+   511→   511→      </div>
+   512→   512→    </header>
+   513→   513→  );
+   514→   514→}
+   515→   515→
+   516→   516→// ============================================================
+   517→   517→// MOBILE BOTTOM NAV — persistent quick-access bar for key pages
+   518→   518→// ============================================================
+   519→   519→function MobileBottomNav({ role, view, onNavigate }: { role: Role; view: View; onNavigate: (v: View) => void }) {
+   520→   520→  // Pick the 4 most important views per role for the bottom bar
+   521→   521→  const items: { view: View; label: string; icon: React.ReactNode }[] =
+   522→   522→    role === "seeker"
+   523→   523→      ? [
+   524→   524→          { view: "dashboard", label: "Home", icon: <LayoutDashboard className="h-5 w-5" /> },
+   525→   525→          { view: "recommended", label: "Jobs", icon: <Target className="h-5 w-5" /> },
+   526→   526→          { view: "applications", label: "Applied", icon: <Send className="h-5 w-5" /> },
+   527→   527→          { view: "messages", label: "Messages", icon: <MessageSquare className="h-5 w-5" /> },
+   528→   528→        ]
+   529→   529→      : role === "employer"
+   530→   530→      ? [
+   531→   531→          { view: "dashboard", label: "Home", icon: <LayoutDashboard className="h-5 w-5" /> },
+   532→   532→          { view: "jobs", label: "Jobs", icon: <Briefcase className="h-5 w-5" /> },
+   533→   533→          { view: "candidates", label: "People", icon: <Users className="h-5 w-5" /> },
+   534→   534→          { view: "messages", label: "Messages", icon: <MessageSquare className="h-5 w-5" /> },
+   535→   535→        ]
+   536→   536→      : [
+   537→   537→          { view: "dashboard", label: "Home", icon: <LayoutDashboard className="h-5 w-5" /> },
+   538→   538→          { view: "users", label: "Users", icon: <Users className="h-5 w-5" /> },
+   539→   539→          { view: "jobs", label: "Jobs", icon: <Briefcase className="h-5 w-5" /> },
+   540→   540→          { view: "activity", label: "Activity", icon: <Activity className="h-5 w-5" /> },
+   541→   541→        ];
+   542→   542→
+   543→   543→  return (
+   544→   544→    <nav
+   545→   545→      aria-label="Mobile bottom navigation"
+   546→   546→      className="fixed inset-x-0 bottom-0 z-30 flex h-16 items-stretch border-t border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80 lg:hidden"
+   547→   547→      style={{ paddingBottom: "env(safe-area-inset-bottom, 0px)" }}
+   548→   548→    >
+   549→   549→      {items.map((item) => {
+   550→   550→        const active = view === item.view;
+   551→   551→        return (
+   552→   552→          <button
+   553→   553→            key={item.view}
+   554→   554→            onClick={() => onNavigate(item.view)}
+   555→   555→            className={cn(
+   556→   556→              "flex flex-1 flex-col items-center justify-center gap-0.5 transition-colors",
+   557→   557→              active ? "text-primary" : "text-muted-foreground hover:text-foreground"
+   558→   558→            )}
+   559→   559→            aria-label={item.label}
+   560→   560→            aria-current={active ? "page" : undefined}
+   561→   561→          >
+   562→   562→            <span className={cn("transition-transform", active && "scale-110")}>
+   563→   563→              {item.icon}
+   564→   564→            </span>
+   565→   565→            <span className={cn("text-[10px] font-medium", active && "font-semibold")}>
+   566→   566→              {item.label}
+   567→   567→            </span>
+   568→   568→            {active && <span className="absolute top-0 h-0.5 w-10 rounded-full bg-primary" />}
+   569→   569→          </button>
+   570→   570→        );
+   571→   571→      })}
+   572→   572→    </nav>
+   573→   573→  );
+   574→   574→}
+   575→   575→
+   576→   576→// ============================================================
+   577→   577→// MAIN LAYOUT — sidebar + topbar + content
+   578→   578→// ============================================================
+   579→   579→export function AppShell({ children }: { children: React.ReactNode }) {
+   580→   580→  const { role, view, go } = useApp();
+   581→   581→  const [mobileOpen, setMobileOpen] = useState(false);
+   582→   582→  const [showNavHint, setShowNavHint] = useState(false);
+   583→   583→
+   584→   584→  // After login, briefly auto-open the mobile sidebar so users on small
+   585→   585→  // screens can see that navigation exists. We check a sessionStorage flag
+   586→   586→  // set by the login flow, then clear it. Only triggers on mobile (lg down).
+   587→   587→  useEffect(() => {
+   588→   588→    try {
+   589→   589→      if (sessionStorage.getItem("skillmatch.justLoggedIn") === "1") {
+   590→   590→        sessionStorage.removeItem("skillmatch.justLoggedIn");
+   591→   591→        // Only auto-open on mobile (window width < 1024 = lg breakpoint)
+   592→   592→        if (typeof window !== "undefined" && window.innerWidth < 1024) {
+   593→   593→          // Small delay so the dashboard content renders first
+   594→   594→          const t1 = setTimeout(() => setMobileOpen(true), 600);
+   595→   595→          // Auto-close after 4 seconds if the user hasn't interacted
+   596→   596→          const t2 = setTimeout(() => setMobileOpen(false), 4600);
+   597→   597→          // Show a pulsing hint on the hamburger after the sidebar closes
+   598→   598→          const t3 = setTimeout(() => setShowNavHint(true), 4800);
+   599→   599→          const t4 = setTimeout(() => setShowNavHint(false), 10000);
+   600→   600→          return () => {
+   601→   601→            clearTimeout(t1); clearTimeout(t2); clearTimeout(t3); clearTimeout(t4);
+   602→   602→          };
+   603→   603→        }
+   604→   604→      }
+   605→   605→    } catch { /* ignore */ }
+   606→   606→  }, []);
+   607→   607→
+   608→   608→  return (
+   609→   609→    <div className="flex min-h-screen bg-background">
+   610→   610→      {/* Desktop sidebar */}
+   611→   611→      <aside className="hidden w-64 shrink-0 border-r border-sidebar-border bg-sidebar lg:flex lg:flex-col">
+   612→   612→        <SidebarNav role={role} view={view} onNavigate={(v) => go(v)} />
+   613→   613→      </aside>
+   614→   614→
+   615→   615→      {/* Mobile navbar (toggle-controlled, slide-in) */}
+   616→   616→      <MobileNavbar
+   617→   617→        open={mobileOpen}
+   618→   618→        onClose={() => setMobileOpen(false)}
+   619→   619→        role={role}
+   620→   620→        view={view}
+   621→   621→        onNavigate={(v) => go(v)}
+   622→   622→      />
+   623→   623→
+   624→   624→      {/* Main */}
+   625→   625→      <div className="flex min-w-0 flex-1 flex-col">
+   626→   626→        <Topbar
+   627→   627→          onToggleMobile={() => { setMobileOpen((v) => !v); setShowNavHint(false); }}
+   628→   628→          mobileOpen={mobileOpen}
+   629→   629→          showNavHint={showNavHint}
+   630→   630→        />
+   631→   631→        {/* pb-20 on mobile to account for the bottom nav bar; lg:pb-0 to remove it on desktop */}
+   632→   632→        <main className="flex-1 pb-20 lg:pb-0">{children}</main>
+   633→   633→      </div>
+   634→   634→
+   635→   635→      {/* Mobile bottom navigation — persistent quick access to key pages */}
+   636→   636→      <MobileBottomNav role={role} view={view} onNavigate={(v) => go(v)} />
+   637→   637→    </div>
+   638→   638→  );
+   639→   639→}
+   640→   640→

@@ -607,8 +607,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="flex min-h-screen bg-background">
-      {/* Desktop sidebar */}
-      <aside className="hidden w-64 shrink-0 border-r border-sidebar-border bg-sidebar lg:flex lg:flex-col">
+      {/* Desktop sidebar — sticky so it stays in place while the page scrolls */}
+      <aside className="hidden w-64 shrink-0 border-r border-sidebar-border bg-sidebar lg:sticky lg:top-0 lg:h-screen lg:flex lg:flex-col">
         <SidebarNav role={role} view={view} onNavigate={(v) => go(v)} />
       </aside>
 
@@ -628,7 +628,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           mobileOpen={mobileOpen}
           showNavHint={showNavHint}
         />
-        {/* pb-20 on mobile to account for the bottom nav bar; lg:pb-0 to remove it on desktop */}
+        {/* pb-20 on mobile to account for the bottom nav bar; lg:pb-0 to remove it on desktop.
+            The Topbar above is sticky top-0 and the desktop sidebar is sticky top-0 h-screen,
+            so both stay anchored to the viewport during scroll on every screen size. */}
         <main className="flex-1 pb-20 lg:pb-0">{children}</main>
       </div>
 

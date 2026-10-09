@@ -580,3 +580,25 @@ Stage Summary:
 - Semantic NLP matching handles skill synonyms and related skills (e.g., "React.js" = "React", "Redux" partially matches "React").
 - Candidate ranking uses 6-factor scoring with explainable results.
 - AI explainability provides full score breakdown, semantic insights, and actionable recommendations.
+
+---
+Task ID: 13
+Agent: main (Super Z)
+Task: Make the navigation bar remain fixed in place during scroll, on both large and small screens, regardless of which nav item is clicked.
+
+Work Log:
+- Inspected src/components/chrome/app-shell.tsx and identified the layout:
+  * Desktop sidebar (<aside>) — NOT sticky → scrolled away with the page (main bug)
+  * Topbar (header) — already sticky top-0 z-30 (works on all screens)
+  * Mobile slide-in navbar — already fixed inset-y-0 left-0 z-50 (works)
+  * Mobile bottom nav — already fixed inset-x-0 bottom-0 z-30 (works)
+- Confirmed parent containers have no overflow:hidden/auto that would break sticky.
+- Fix: Added lg:sticky lg:top-0 lg:h-screen to the desktop <aside>. Now the sidebar pins to the top of the viewport and spans the full viewport height; its internal nav list keeps overflow-y-auto so long admin nav lists still scroll internally if needed, while the brand header (h-16) and user card footer remain pinned at top/bottom.
+- The Topbar's existing sticky top-0 z-30 already handles mobile+desktop top-stickiness correctly; left unchanged.
+- The MobileBottomNav's existing fixed bottom-0 z-30 already handles mobile bottom-stickiness; left unchanged.
+- Verified TypeScript compiles cleanly (no new errors introduced by the edit).
+
+Stage Summary:
+- Desktop large screens: Left sidebar + top Topbar both stay anchored to the viewport during scroll.
+- Mobile/small screens: Top Topbar (with hamburger) + bottom MobileBottomNav both stay anchored to the viewport during scroll; slide-in navbar opens as overlay when needed.
+- Clicking any nav item triggers go() which calls window.scrollTo({top:0}), and now the nav itself never moves out of view during the subsequent scroll.
