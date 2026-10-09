@@ -158,7 +158,14 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     if (opts?.conversationId !== undefined) setSelectedConversationId(opts.conversationId);
     setView(v);
     if (typeof window !== "undefined") {
-      window.scrollTo({ top: 0, behavior: "smooth" });
+      // The authenticated app shell scrolls inside #app-main-scroll (not the window).
+      // Guest pages (login, register, FAQ, etc.) still scroll the window, so we try both.
+      const main = document.getElementById("app-main-scroll");
+      if (main) {
+        main.scrollTo({ top: 0, behavior: "smooth" });
+      } else {
+        window.scrollTo({ top: 0, behavior: "smooth" });
+      }
     }
   }, []);
 

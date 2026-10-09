@@ -1,0 +1,2002 @@
+     1→"use client";
+     2→
+     3→import React, { useState, useEffect } from "react";
+     4→import { cn } from "@/lib/utils";
+     5→import { useApp } from "@/lib/app-context";
+     6→import { useToast } from "@/hooks/use-toast";
+     7→import { Button } from "@/components/ui/button";
+     8→import { Input } from "@/components/ui/input";
+     9→import { Label } from "@/components/ui/label";
+    10→import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+    11→import { Badge } from "@/components/ui/badge";
+    12→import { Progress } from "@/components/ui/progress";
+    13→import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+    14→import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+    15→import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+    16→import { Switch } from "@/components/ui/switch";
+    17→import { Textarea } from "@/components/ui/textarea";
+    18→import {
+    19→  Avatar,
+    20→  SectionHeader,
+    21→  StatCard,
+    22→  EmptyState,
+    23→  LoadingState,
+    24→  SuccessBanner,
+    25→  InfoCallout,
+    26→  TableToolbar,
+    27→  SkillChip,
+    28→} from "@/components/shared/ui";
+    29→import { ProfilePhotoUpload } from "@/components/shared/profile-photo-upload";
+    30→import {
+    31→  adminUsers,
+    32→  skillOntology,
+    33→  activityLogs,
+    34→  adminDashboardStats,
+    35→} from "@/lib/mock-data";
+    36→import { useFetch } from "@/lib/use-fetch";
+    37→import type { AdminUser, ActivityLog, SkillOntologyItem } from "@/lib/types";
+    38→import {
+    39→  Users,
+    40→  Briefcase,
+    41→  Send,
+    42→  TrendingUp,
+    43→  Sparkles,
+    44→  GitBranch,
+    45→  BarChart3,
+    46→  Activity,
+    47→  Settings,
+    48→  Search,
+    49→  Filter,
+    50→  ShieldCheck,
+    51→  MoreHorizontal,
+    52→  CheckCircle2,
+    53→  AlertCircle,
+    54→  Clock,
+    55→  Cpu,
+    56→  Server,
+    57→  Globe,
+    58→  Lock,
+    59→  Database,
+    60→  Plus,
+    61→  ArrowRight,
+    62→  ArrowUpRight,
+    63→  ArrowDownRight,
+    64→  Target,
+    65→  Building2,
+    66→  UserCheck,
+    67→  UserX,
+    68→  Pause,
+    69→  Play,
+    70→  Edit,
+    71→  Trash2,
+    72→  AlertTriangle,
+    73→  Mail,
+    74→  X,
+    75→  Calendar,
+    76→  Image as ImageIcon,
+    77→  Eye,
+    78→  EyeOff,
+    79→  ArrowUp,
+    80→  ArrowDown,
+    81→} from "lucide-react";
+    82→
+    83→function PageContainer({ children, className }: { children: React.ReactNode; className?: string }) {
+    84→  return (
+    85→    <div className={cn("mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8 lg:py-8", className)}>
+    86→      {children}
+    87→    </div>
+    88→  );
+    89→}
+    90→
+    91→// ============================================================
+    92→// ADMIN DASHBOARD
+    93→// ============================================================
+    94→export function AdminDashboard() {
+    95→  const { go } = useApp();
+    96→  const { data, loading } = useFetch<any>("/api/admin/stats");
+    97→  const stats = data?.stats;
+    98→  const topSkills = data?.topSkills ?? [];
+    99→  const recentActivity = data?.recentActivity ?? [];
+   100→
+   101→  return (
+   102→    <PageContainer>
+   103→      <SectionHeader
+   104→        title="Platform overview"
+   105→        description="Health, usage, and key metrics for the SkillMatch AI platform."
+   106→      />
+   107→
+   108→      {loading ? (
+   109→        <LoadingState label="Loading platform stats…" rows={4} />
+   110→      ) : (
+   111→        <>
+   112→          <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+   113→            <StatCard label="Total users" value={(stats?.totalUsers ?? 0).toLocaleString()} icon={<Users className="h-4 w-4" />} />
+   114→            <StatCard label="Active jobs" value={(stats?.activeJobs ?? 0).toLocaleString()} icon={<Briefcase className="h-4 w-4" />} />
+   115→            <StatCard label="Applications" value={(stats?.totalApplications ?? 0).toLocaleString()} icon={<Send className="h-4 w-4" />} />
+   116→            <StatCard label="Verified skills" value={(stats?.verifiedSkills ?? 0).toLocaleString()} icon={<ShieldCheck className="h-4 w-4" />} hint="Across all users" />
+   117→          </div>
+   118→
+   119→          <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+   120→            <StatCard label="Job seekers" value={(stats?.jobSeekers ?? 0).toLocaleString()} icon={<Users className="h-4 w-4" />} />
+   121→            <StatCard label="Employers" value={(stats?.employers ?? 0).toLocaleString()} icon={<Building2 className="h-4 w-4" />} hint={`${stats?.pendingEmployers ?? 0} pending`} />
+   122→            <StatCard label="Audit events" value={(stats?.auditCount ?? 0).toLocaleString()} icon={<Activity className="h-4 w-4" />} hint="Total logged" />
+   123→            <StatCard label="System status" value="Healthy" icon={<Server className="h-4 w-4" />} hint="All services operational" />
+   124→          </div>
+   125→
+   126→          <div className="mt-6 grid gap-4 lg:grid-cols-3">
+   127→            {/* Recent activity */}
+   128→            <Card className="lg:col-span-2">
+   129→              <CardHeader className="pb-3 flex flex-row items-center justify-between space-y-0">
+   130→                <CardTitle className="text-sm">Recent activity</CardTitle>
+   131→                <Button variant="ghost" size="sm" onClick={() => go("activity")}>
+   132→                  View all <ArrowRight className="h-3.5 w-3.5" />
+   133→                </Button>
+   134→              </CardHeader>
+   135→              <CardContent className="space-y-2">
+   136→                {recentActivity.length === 0 ? (
+   137→                  <EmptyState icon={<Activity className="h-5 w-5" />} title="No activity yet" />
+   138→                ) : (
+   139→                  recentActivity.map((log: any) => (
+   140→                    <div key={log.id} className="flex items-center gap-3 rounded-md border border-border bg-card p-2.5 text-xs">
+   141→                      <div className={cn(
+   142→                        "h-2 w-2 shrink-0 rounded-full",
+   143→                        log.status === "success" ? "bg-emerald-500" : log.status === "warning" ? "bg-amber-500" : "bg-rose-500"
+   144→                      )} />
+   145→                      <div className="min-w-0 flex-1">
+   146→                        <p className="truncate">
+   147→                          <span className="font-semibold">{log.user}</span>
+   148→                          <span className="text-muted-foreground"> · {log.action} · </span>
+   149→                          <span>{log.target}</span>
+   150→                        </p>
+   151→                        <p className="text-[10px] text-muted-foreground">{log.time}</p>
+   152→                      </div>
+   153→                    </div>
+   154→                  ))
+   155→                )}
+   156→              </CardContent>
+   157→            </Card>
+   158→
+   159→            {/* Top skills */}
+   160→            <Card>
+   161→              <CardHeader className="pb-3 flex flex-row items-center justify-between space-y-0">
+   162→                <CardTitle className="text-sm">Top skills</CardTitle>
+   163→                <Button variant="ghost" size="sm" onClick={() => go("skills")}>
+   164→                  All <ArrowRight className="h-3.5 w-3.5" />
+   165→                </Button>
+   166→              </CardHeader>
+   167→              <CardContent className="space-y-2">
+   168→                {topSkills.length === 0 ? (
+   169→                  <EmptyState icon={<Sparkles className="h-5 w-5" />} title="No skills yet" />
+   170→                ) : (
+   171→                  topSkills.map((s: any) => (
+   172→                    <div key={s.name} className="flex items-center justify-between text-xs">
+   173→                      <span className="font-medium">{s.name}</span>
+   174→                      <div className="flex items-center gap-2">
+   175→                        <div className="h-1.5 w-20 overflow-hidden rounded-full bg-muted">
+   176→                          <div className="h-full bg-primary" style={{ width: `${Math.min(100, (s.count / 10) * 100)}%` }} />
+   177→                        </div>
+   178→                        <span className="w-8 text-right tabular-nums text-muted-foreground">{s.count}</span>
+   179→                      </div>
+   180→                    </div>
+   181→                  ))
+   182→                )}
+   183→              </CardContent>
+   184→            </Card>
+   185→          </div>
+   186→        </>
+   187→      )}
+   188→    </PageContainer>
+   189→  );
+   190→}
+   191→
+   192→// Mock bar chart
+   193→function MockBarChart({ data, color }: { data: { label: string; value: number }[]; color: string }) {
+   194→  const max = Math.max(...data.map((d) => d.value));
+   195→  return (
+   196→    <div className="flex h-44 items-end justify-between gap-2">
+   197→      {data.map((d) => (
+   198→        <div key={d.label} className="flex flex-1 flex-col items-center gap-1.5">
+   199→          <div className="flex w-full flex-1 items-end">
+   200→            <div
+   201→              className="w-full rounded-t-md transition-all hover:opacity-80"
+   202→              style={{ height: `${(d.value / max) * 100}%`, background: color, minHeight: 4 }}
+   203→              title={`${d.value.toLocaleString()} users`}
+   204→            />
+   205→          </div>
+   206→          <span className="text-[10px] text-muted-foreground">{d.label}</span>
+   207→        </div>
+   208→      ))}
+   209→    </div>
+   210→  );
+   211→}
+   212→
+   213→// ============================================================
+   214→// USER MANAGEMENT
+   215→// ============================================================
+   216→export function AdminUsers() {
+   217→  const { toast } = useToast();
+   218→  const [filter, setFilter] = useState("all");
+   219→  const [roleFilter, setRoleFilter] = useState("all");
+   220→  const [query, setQuery] = useState("");
+   221→  const [debouncedQuery, setDebouncedQuery] = useState("");
+   222→  const [selected, setSelected] = useState<any | null>(null);
+   223→  const [confirmDelete, setConfirmDelete] = useState<any | null>(null);
+   224→  const [confirmSuspend, setConfirmSuspend] = useState<any | null>(null);
+   225→  const [page, setPage] = useState(1);
+   226→  const [actionLoading, setActionLoading] = useState<string | null>(null);
+   227→  const PAGE_SIZE = 8;
+   228→
+   229→  // Invite user dialog state
+   230→  const [inviteOpen, setInviteOpen] = useState(false);
+   231→  const [inviteEmail, setInviteEmail] = useState("");
+   232→  const [inviteName, setInviteName] = useState("");
+   233→  const [inviteRole, setInviteRole] = useState("seeker");
+   234→  const [inviting, setInviting] = useState(false);
+   235→
+   236→  // Build the API URL with filters
+   237→  const apiUrl = `/api/admin/users?role=${roleFilter}&status=${filter}&q=${encodeURIComponent(debouncedQuery)}`;
+   238→  const { data, loading, refetch } = useFetch<any>(apiUrl);
+   239→
+   240→  const allUsers: any[] = data?.users ?? [];
+   241→
+   242→  // Debounce search input for efficiency on large datasets
+   243→  useEffect(() => {
+   244→    const id = setTimeout(() => {
+   245→      setDebouncedQuery(query);
+   246→      setPage(1);
+   247→    }, 250);
+   248→    return () => clearTimeout(id);
+   249→  }, [query]);
+   250→
+   251→  // Paginate — only render the current page's slice
+   252→  const totalPages = Math.max(1, Math.ceil(allUsers.length / PAGE_SIZE));
+   253→  const currentPage = Math.min(page, totalPages);
+   254→  const paged = allUsers.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
+   255→
+   256→  const updateStatus = async (userId: string, status: string) => {
+   257→    setActionLoading(userId + status);
+   258→    try {
+   259→      await fetch(`/api/admin/users/${userId}`, {
+   260→        method: "PATCH",
+   261→        headers: { "Content-Type": "application/json" },
+   262→        body: JSON.stringify({ status }),
+   263→      });
+   264→      refetch();
+   265→    } finally {
+   266→      setActionLoading(null);
+   267→      setConfirmSuspend(null);
+   268→    }
+   269→  };
+   270→
+   271→  const deleteUser = async (userId: string) => {
+   272→    setActionLoading(userId + "delete");
+   273→    try {
+   274→      await fetch(`/api/admin/users/${userId}`, { method: "DELETE" });
+   275→      refetch();
+   276→    } finally {
+   277→      setActionLoading(null);
+   278→      setConfirmDelete(null);
+   279→    }
+   280→  };
+   281→
+   282→  const sendInvite = async () => {
+   283→    if (!inviteEmail.trim() || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(inviteEmail)) {
+   284→      toast({ title: "Invalid email", description: "Please enter a valid email address." });
+   285→      return;
+   286→    }
+   287→    setInviting(true);
+   288→    try {
+   289→      // Create an audit log entry for the invitation
+   290→      await fetch("/api/admin/audit", {
+   291→        method: "POST",
+   292→        headers: { "Content-Type": "application/json" },
+   293→        body: JSON.stringify({
+   294→          action: `Invited ${inviteRole}: ${inviteEmail}`,
+   295→          target: inviteEmail,
+   296→          type: "admin",
+   297→          status: "success",
+   298→        }),
+   299→      }).catch(() => { /* audit failure is non-blocking */ });
+   300→
+   301→      toast({
+   302→        title: "Invitation sent",
+   303→        description: `${inviteName || inviteEmail} has been invited as ${inviteRole}. They'll receive an email with signup instructions.`,
+   304→      });
+   305→      setInviteOpen(false);
+   306→      setInviteEmail("");
+   307→      setInviteName("");
+   308→      setInviteRole("seeker");
+   309→    } catch {
+   310→      toast({ title: "Failed to send invite", description: "Please try again." });
+   311→    } finally {
+   312→      setInviting(false);
+   313→    }
+   314→  };
+   315→
+   316→  return (
+   317→    <PageContainer>
+   318→      <SectionHeader
+   319→        title="User Management"
+   320→        description="Manage job seekers, employers, and platform access."
+   321→        actions={
+   322→          <Dialog open={inviteOpen} onOpenChange={(o) => { setInviteOpen(o); if (!o) { setInviteEmail(""); setInviteName(""); setInviteRole("seeker"); } }}>
+   323→            <DialogTrigger asChild>
+   324→              <Button className="btn-rainbow"><Plus className="h-4 w-4" /> Invite user</Button>
+   325→            </DialogTrigger>
+   326→            <DialogContent>
+   327→              <DialogHeader>
+   328→                <DialogTitle>Invite a new user</DialogTitle>
+   329→                <DialogDescription>
+   330→                  Send an invitation to join the platform. They'll receive an email with a signup link pre-filled with their role.
+   331→                </DialogDescription>
+   332→              </DialogHeader>
+   333→              <div className="space-y-3 py-2">
+   334→                <div className="space-y-1.5">
+   335→                  <Label htmlFor="invite-email">Email address *</Label>
+   336→                  <Input
+   337→                    id="invite-email"
+   338→                    type="email"
+   339→                    placeholder="user@example.com"
+   340→                    value={inviteEmail}
+   341→                    onChange={(e) => setInviteEmail(e.target.value)}
+   342→                  />
+   343→                </div>
+   344→                <div className="space-y-1.5">
+   345→                  <Label htmlFor="invite-name">Display name (optional)</Label>
+   346→                  <Input
+   347→                    id="invite-name"
+   348→                    placeholder="Their full name"
+   349→                    value={inviteName}
+   350→                    onChange={(e) => setInviteName(e.target.value)}
+   351→                  />
+   352→                </div>
+   353→                <div className="space-y-1.5">
+   354→                  <Label>Role *</Label>
+   355→                  <Select value={inviteRole} onValueChange={setInviteRole}>
+   356→                    <SelectTrigger><SelectValue /></SelectTrigger>
+   357→                    <SelectContent>
+   358→                      <SelectItem value="seeker">Job seeker</SelectItem>
+   359→                      <SelectItem value="employer">Employer</SelectItem>
+   360→                      <SelectItem value="admin">Administrator</SelectItem>
+   361→                    </SelectContent>
+   362→                  </Select>
+   363→                </div>
+   364→                <div className="rounded-md border border-blue-200 bg-blue-50 px-3 py-2 text-[11px] text-blue-700">
+   365→                  <Mail className="inline h-3 w-3 mr-1" />
+   366→                  In production, an email with a signup link would be sent to <strong>{inviteEmail || "this address"}</strong>.
+   367→                </div>
+   368→              </div>
+   369→              <DialogFooter>
+   370→                <Button variant="outline" onClick={() => setInviteOpen(false)}>Cancel</Button>
+   371→                <Button className="btn-blue" onClick={sendInvite} disabled={inviting || !inviteEmail.trim()}>
+   372→                  {inviting ? (
+   373→                    <>
+   374→                      <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-primary-foreground border-t-transparent" />
+   375→                      Sending…
+   376→                    </>
+   377→                  ) : (
+   378→                    <>
+   379→                      <Mail className="h-3.5 w-3.5" /> Send invitation
+   380→                    </>
+   381→                  )}
+   382→                </Button>
+   383→              </DialogFooter>
+   384→            </DialogContent>
+   385→          </Dialog>
+   386→        }
+   387→      />
+   388→
+   389→      <div className="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+   390→        <StatCard label="Total users" value={(data?.total ?? allUsers.length).toLocaleString()} icon={<Users className="h-4 w-4" />} />
+   391→        <StatCard label="Active" value={allUsers.filter(u => u.status === "active").length} icon={<UserCheck className="h-4 w-4" />} hint="of filtered" />
+   392→        <StatCard label="Pending" value={allUsers.filter(u => u.status === "pending").length} icon={<Clock className="h-4 w-4" />} />
+   393→        <StatCard label="Suspended" value={allUsers.filter(u => u.status === "suspended").length} icon={<UserX className="h-4 w-4" />} />
+   394→      </div>
+   395→
+   396→      <Card className="mt-6">
+   397→        <CardContent className="p-4">
+   398→          <TableToolbar>
+   399→            <div className="flex flex-1 flex-col gap-2 sm:flex-row">
+   400→              <div className="relative flex-1 max-w-md">
+   401→                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+   402→                <Input
+   403→                  placeholder="Search by name or email… (debounced)"
+   404→                  className="pl-9"
+   405→                  value={query}
+   406→                  onChange={(e) => setQuery(e.target.value)}
+   407→                />
+   408→              </div>
+   409→              <Select value={roleFilter} onValueChange={(v) => { setRoleFilter(v); setPage(1); }}>
+   410→                <SelectTrigger className="w-40"><SelectValue placeholder="Role" /></SelectTrigger>
+   411→                <SelectContent>
+   412→                  <SelectItem value="all">All roles</SelectItem>
+   413→                  <SelectItem value="seeker">Job seekers</SelectItem>
+   414→                  <SelectItem value="employer">Employers</SelectItem>
+   415→                  <SelectItem value="admin">Admins</SelectItem>
+   416→                </SelectContent>
+   417→              </Select>
+   418→              <Select value={filter} onValueChange={(v) => { setFilter(v); setPage(1); }}>
+   419→                <SelectTrigger className="w-40"><SelectValue placeholder="Status" /></SelectTrigger>
+   420→                <SelectContent>
+   421→                  <SelectItem value="all">All statuses</SelectItem>
+   422→                  <SelectItem value="active">Active</SelectItem>
+   423→                  <SelectItem value="pending">Pending</SelectItem>
+   424→                  <SelectItem value="suspended">Suspended</SelectItem>
+   425→                </SelectContent>
+   426→              </Select>
+   427→            </div>
+   428→          </TableToolbar>
+   429→
+   430→          {loading ? (
+   431→            <LoadingState label="Loading users…" rows={4} />
+   432→          ) : paged.length === 0 ? (
+   433→            <EmptyState
+   434→              className="mt-4"
+   435→              icon={<Users className="h-5 w-5" />}
+   436→              title="No users match your filters"
+   437→              description="Try adjusting search or filters."
+   438→            />
+   439→          ) : (
+   440→            <div className="mt-4 overflow-x-auto rounded-lg border border-border">
+   441→              <table className="w-full text-sm">
+   442→                <thead className="bg-muted/50 text-[11px] uppercase tracking-wide text-muted-foreground">
+   443→                  <tr>
+   444→                    <th className="px-4 py-2.5 text-left font-medium">User</th>
+   445→                    <th className="hidden px-4 py-2.5 text-left font-medium sm:table-cell">Role</th>
+   446→                    <th className="hidden px-4 py-2.5 text-left font-medium md:table-cell">Joined</th>
+   447→                    <th className="hidden px-4 py-2.5 text-left font-medium lg:table-cell">Last active</th>
+   448→                    <th className="px-4 py-2.5 text-left font-medium">Status</th>
+   449→                    <th className="px-4 py-2.5 text-right font-medium">Actions</th>
+   450→                  </tr>
+   451→                </thead>
+   452→                <tbody className="divide-y divide-border bg-card">
+   453→                  {paged.map((u) => (
+   454→                    <tr key={u.id} className="hover:bg-accent/30">
+   455→                      <td className="px-4 py-3">
+   456→                        <div className="flex items-center gap-2.5">
+   457→                          <Avatar initials={u.initials ?? u.name.slice(0,2).toUpperCase()} color={u.avatarColor} size="sm" />
+   458→                          <div className="min-w-0">
+   459→                            <p className="truncate text-sm font-semibold">{u.name}</p>
+   460→                            <p className="truncate text-xs text-muted-foreground">{u.email}</p>
+   461→                          </div>
+   462→                        </div>
+   463→                      </td>
+   464→                      <td className="hidden px-4 py-3 sm:table-cell">
+   465→                        <Badge variant="outline" className={cn(
+   466→                          "capitalize text-[10px]",
+   467→                          u.role === "employer" ? "bg-blue-50 text-blue-700 border-blue-200" :
+   468→                          u.role === "seeker" ? "bg-violet-50 text-violet-700 border-violet-200" :
+   469→                          "bg-amber-50 text-amber-700 border-amber-200"
+   470→                        )}>
+   471→                          {u.role}
+   472→                        </Badge>
+   473→                      </td>
+   474→                      <td className="hidden px-4 py-3 text-xs text-muted-foreground md:table-cell">{u.joinedAt}</td>
+   475→                      <td className="hidden px-4 py-3 text-xs text-muted-foreground lg:table-cell">{u.lastActive}</td>
+   476→                      <td className="px-4 py-3">
+   477→                        <Badge variant="outline" className={cn(
+   478→                          "text-[10px]",
+   479→                          u.status === "active" ? "bg-emerald-50 text-emerald-700 border-emerald-200" :
+   480→                          u.status === "pending" ? "bg-amber-50 text-amber-700 border-amber-200" :
+   481→                          "bg-rose-50 text-rose-700 border-rose-200"
+   482→                        )}>
+   483→                          {u.status}
+   484→                        </Badge>
+   485→                      </td>
+   486→                      <td className="px-4 py-3 text-right">
+   487→                        <div className="flex justify-end gap-1">
+   488→                          <Button size="sm" variant="ghost" onClick={() => setSelected(u)} title="View / edit">
+   489→                            <Edit className="h-3.5 w-3.5" />
+   490→                          </Button>
+   491→                          {u.status === "active" ? (
+   492→                            <Button size="sm" variant="ghost" title="Suspend" onClick={() => setConfirmSuspend(u)}>
+   493→                              <Pause className="h-3.5 w-3.5" />
+   494→                            </Button>
+   495→                          ) : (
+   496→                            <Button size="sm" variant="ghost" title="Activate" onClick={() => setConfirmSuspend(u)}>
+   497→                              <Play className="h-3.5 w-3.5" />
+   498→                            </Button>
+   499→                          )}
+   500→                          <Button size="sm" variant="ghost" title="Delete" onClick={() => setConfirmDelete(u)}>
+   501→                            <Trash2 className="h-3.5 w-3.5 text-rose-600" />
+   502→                          </Button>
+   503→                        </div>
+   504→                      </td>
+   505→                    </tr>
+   506→                  ))}
+   507→                </tbody>
+   508→              </table>
+   509→            </div>
+   510→          )}
+   511→
+   512→          {/* Pagination footer */}
+   513→          {!loading && allUsers.length > 0 && (
+   514→            <div className="mt-4 flex flex-col gap-2 text-xs text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
+   515→              <span>
+   516→                Showing <span className="font-semibold text-foreground">{paged.length}</span> of{" "}
+   517→                <span className="font-semibold text-foreground">{allUsers.length}</span> filtered
+   518→                · page {currentPage}/{totalPages}
+   519→              </span>
+   520→              <div className="flex flex-wrap gap-1">
+   521→                <Button
+   522→                  variant="outline"
+   523→                  size="sm"
+   524→                  disabled={currentPage === 1}
+   525→                  onClick={() => setPage((p) => Math.max(1, p - 1))}
+   526→                >
+   527→                  Previous
+   528→                </Button>
+   529→                {Array.from({ length: totalPages }).map((_, i) => (
+   530→                  <Button
+   531→                    key={i}
+   532→                    variant={currentPage === i + 1 ? "default" : "outline"}
+   533→                    size="sm"
+   534→                    className="h-7 w-7 p-0"
+   535→                    onClick={() => setPage(i + 1)}
+   536→                  >
+   537→                    {i + 1}
+   538→                  </Button>
+   539→                ))}
+   540→                <Button
+   541→                  variant="outline"
+   542→                  size="sm"
+   543→                  disabled={currentPage === totalPages}
+   544→                  onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+   545→                >
+   546→                  Next
+   547→                </Button>
+   548→              </div>
+   549→            </div>
+   550→          )}
+   551→        </CardContent>
+   552→      </Card>
+   553→
+   554→      {/* User detail drawer (mock) */}
+   555→      {selected && (
+   556→        <Dialog open={!!selected} onOpenChange={(o) => !o && setSelected(null)}>
+   557→          <DialogContent>
+   558→            <DialogHeader>
+   559→              <DialogTitle>{selected.name}</DialogTitle>
+   560→              <DialogDescription>{selected.email}</DialogDescription>
+   561→            </DialogHeader>
+   562→            <div className="space-y-3 py-2">
+   563→              <div className="flex items-center gap-3">
+   564→                <Avatar initials={selected.name.slice(0,2).toUpperCase()} color={selected.avatarColor} size="lg" />
+   565→                <div>
+   566→                  <p className="text-sm font-semibold">{selected.name}</p>
+   567→                  <p className="text-xs text-muted-foreground capitalize">{selected.role} · {selected.status}</p>
+   568→                </div>
+   569→              </div>
+   570→              <div className="grid grid-cols-2 gap-2 text-xs">
+   571→                <div className="rounded-md border border-border p-2"><p className="text-muted-foreground">Joined</p><p className="font-semibold">{selected.joinedAt}</p></div>
+   572→                <div className="rounded-md border border-border p-2"><p className="text-muted-foreground">Last active</p><p className="font-semibold">{selected.lastActive}</p></div>
+   573→                {selected.company && <div className="rounded-md border border-border p-2"><p className="text-muted-foreground">Company</p><p className="font-semibold">{selected.company}</p></div>}
+   574→                {selected.title && <div className="rounded-md border border-border p-2"><p className="text-muted-foreground">Title</p><p className="font-semibold">{selected.title}</p></div>}
+   575→              </div>
+   576→              <div className="flex gap-2 pt-2">
+   577→                <Button
+   578→                  size="sm"
+   579→                  variant="outline"
+   580→                  className="flex-1"
+   581→                  onClick={() => { setConfirmSuspend(selected); setSelected(null); }}
+   582→                >
+   583→                  {selected.status === "active" ? (
+   584→                    <><Pause className="h-3.5 w-3.5" /> Suspend</>
+   585→                  ) : (
+   586→                    <><Play className="h-3.5 w-3.5" /> Activate</>
+   587→                  )}
+   588→                </Button>
+   589→                <Button
+   590→                  size="sm"
+   591→                  variant="outline"
+   592→                  className="flex-1 text-rose-600"
+   593→                  onClick={() => { setConfirmDelete(selected); setSelected(null); }}
+   594→                >
+   595→                  <Trash2 className="h-3.5 w-3.5" /> Delete
+   596→                </Button>
+   597→              </div>
+   598→            </div>
+   599→          </DialogContent>
+   600→        </Dialog>
+   601→      )}
+   602→
+   603→      {/* Confirm delete dialog */}
+   604→      <Dialog open={!!confirmDelete} onOpenChange={(o) => !o && setConfirmDelete(null)}>
+   605→        <DialogContent>
+   606→          <DialogHeader>
+   607→            <DialogTitle>Delete user account?</DialogTitle>
+   608→            <DialogDescription>
+   609→              You're about to permanently delete <span className="font-semibold text-foreground">{confirmDelete?.name}</span> ({confirmDelete?.email}).
+   610→              This action is logged in the audit trail and cannot be undone.
+   611→            </DialogDescription>
+   612→          </DialogHeader>
+   613→          <div className="flex justify-end gap-2 pt-2">
+   614→            <Button variant="outline" onClick={() => setConfirmDelete(null)}>Cancel</Button>
+   615→            <Button variant="destructive" onClick={() => deleteUser(confirmDelete?.id)} disabled={!!actionLoading}>
+   616→              {actionLoading?.endsWith("delete") ? (
+   617→                <>
+   618→                  <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-white border-t-transparent" />
+   619→                  Deleting…
+   620→                </>
+   621→              ) : (
+   622→                <>
+   623→                  <Trash2 className="h-3.5 w-3.5" /> Delete permanently
+   624→                </>
+   625→              )}
+   626→            </Button>
+   627→          </div>
+   628→        </DialogContent>
+   629→      </Dialog>
+   630→
+   631→      {/* Confirm suspend/activate dialog */}
+   632→      <Dialog open={!!confirmSuspend} onOpenChange={(o) => !o && setConfirmSuspend(null)}>
+   633→        <DialogContent>
+   634→          <DialogHeader>
+   635→            <DialogTitle>{confirmSuspend?.status === "active" ? "Suspend" : "Activate"} user account?</DialogTitle>
+   636→            <DialogDescription>
+   637→              {confirmSuspend?.status === "active" ? (
+   638→                <>Suspending <span className="font-semibold text-foreground">{confirmSuspend?.name}</span> will revoke their access immediately. They will not be able to log in until reactivated.</>
+   639→              ) : (
+   640→                <>Reactivating <span className="font-semibold text-foreground">{confirmSuspend?.name}</span> will restore their access.</>
+   641→              )}
+   642→            </DialogDescription>
+   643→          </DialogHeader>
+   644→          <div className="flex justify-end gap-2 pt-2">
+   645→            <Button variant="outline" onClick={() => setConfirmSuspend(null)}>Cancel</Button>
+   646→            <Button
+   647→              variant={confirmSuspend?.status === "active" ? "destructive" : "default"}
+   648→              onClick={() => updateStatus(confirmSuspend?.id, confirmSuspend?.status === "active" ? "suspended" : "active")}
+   649→              disabled={!!actionLoading}
+   650→            >
+   651→              {actionLoading ? (
+   652→                <>
+   653→                  <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-primary-foreground border-t-transparent" />
+   654→                  Updating…
+   655→                </>
+   656→              ) : confirmSuspend?.status === "active" ? (
+   657→                <><Pause className="h-3.5 w-3.5" /> Suspend</>
+   658→              ) : (
+   659→                <><Play className="h-3.5 w-3.5" /> Activate</>
+   660→              )}
+   661→            </Button>
+   662→          </div>
+   663→        </DialogContent>
+   664→      </Dialog>
+   665→    </PageContainer>
+   666→  );
+   667→}
+   668→
+   669→// ============================================================
+   670→// SKILLS DATABASE
+   671→// ============================================================
+   672→export function AdminSkills() {
+   673→  const { toast } = useToast();
+   674→  const [query, setQuery] = useState("");
+   675→  const [filter, setFilter] = useState("all");
+   676→  const [addOpen, setAddOpen] = useState(false);
+   677→  const [newSkillName, setNewSkillName] = useState("");
+   678→  const [newSkillCategory, setNewSkillCategory] = useState("");
+   679→  const [newSkillAliases, setNewSkillAliases] = useState("");
+   680→  const [adding, setAdding] = useState(false);
+   681→
+   682→  let skills = [...skillOntology];
+   683→  if (filter !== "all") skills = skills.filter((s) => s.category === filter);
+   684→  if (query) {
+   685→    const q = query.toLowerCase();
+   686→    skills = skills.filter((s) => s.name.toLowerCase().includes(q) || s.aliases.some(a => a.toLowerCase().includes(q)));
+   687→  }
+   688→
+   689→  const categories = Array.from(new Set(skillOntology.map((s) => s.category)));
+   690→
+   691→  const addSkill = async () => {
+   692→    if (!newSkillName.trim()) {
+   693→      toast({ title: "Skill name required", description: "Please enter a name for the new skill." });
+   694→      return;
+   695→    }
+   696→    if (!newSkillCategory.trim()) {
+   697→      toast({ title: "Category required", description: "Please enter or select a category." });
+   698→      return;
+   699→    }
+   700→    setAdding(true);
+   701→    try {
+   702→      // Log the addition to the audit trail
+   703→      await fetch("/api/admin/audit", {
+   704→        method: "POST",
+   705→        headers: { "Content-Type": "application/json" },
+   706→        body: JSON.stringify({
+   707→          action: `Added skill: ${newSkillName}`,
+   708→          target: `Category: ${newSkillCategory}`,
+   709→          type: "admin",
+   710→          status: "success",
+   711→        }),
+   712→      }).catch(() => { /* non-blocking */ });
+   713→
+   714→      toast({
+   715→        title: "Skill added",
+   716→        description: `"${newSkillName}" has been added to the ${newSkillCategory} category. Aliases: ${newSkillAliases || "none"}.`,
+   717→      });
+   718→      setAddOpen(false);
+   719→      setNewSkillName("");
+   720→      setNewSkillCategory("");
+   721→      setNewSkillAliases("");
+   722→    } catch {
+   723→      toast({ title: "Failed to add skill", description: "Please try again." });
+   724→    } finally {
+   725→      setAdding(false);
+   726→    }
+   727→  };
+   728→
+   729→  return (
+   730→    <PageContainer>
+   731→      <SectionHeader
+   732→        title="Skills Database"
+   733→        description="All skills in the platform, organized by category."
+   734→        actions={
+   735→          <Dialog open={addOpen} onOpenChange={(o) => { setAddOpen(o); if (!o) { setNewSkillName(""); setNewSkillCategory(""); setNewSkillAliases(""); } }}>
+   736→            <DialogTrigger asChild>
+   737→              <Button className="btn-rainbow"><Plus className="h-4 w-4" /> Add skill</Button>
+   738→            </DialogTrigger>
+   739→            <DialogContent>
+   740→              <DialogHeader>
+   741→                <DialogTitle>Add a new skill</DialogTitle>
+   742→                <DialogDescription>
+   743→                  Add a skill to the platform's global skill database. This will be available for selection by all users when building their profiles.
+   744→                </DialogDescription>
+   745→              </DialogHeader>
+   746→              <div className="space-y-3 py-2">
+   747→                <div className="space-y-1.5">
+   748→                  <Label htmlFor="skill-name">Skill name *</Label>
+   749→                  <Input
+   750→                    id="skill-name"
+   751→                    placeholder="e.g. Kubernetes"
+   752→                    value={newSkillName}
+   753→                    onChange={(e) => setNewSkillName(e.target.value)}
+   754→                  />
+   755→                </div>
+   756→                <div className="space-y-1.5">
+   757→                  <Label htmlFor="skill-category">Category *</Label>
+   758→                  <Input
+   759→                    id="skill-category"
+   760→                    placeholder="e.g. DevOps, Frontend, Database"
+   761→                    value={newSkillCategory}
+   762→                    onChange={(e) => setNewSkillCategory(e.target.value)}
+   763→                    list="existing-categories"
+   764→                  />
+   765→                  <datalist id="existing-categories">
+   766→                    {categories.map((c) => <option key={c} value={c} />)}
+   767→                  </datalist>
+   768→                  <p className="text-[11px] text-muted-foreground">Type a new category or pick an existing one from the dropdown.</p>
+   769→                </div>
+   770→                <div className="space-y-1.5">
+   771→                  <Label htmlFor="skill-aliases">Aliases (comma-separated)</Label>
+   772→                  <Input
+   773→                    id="skill-aliases"
+   774→                    placeholder="e.g. K8s, Kubernetes Engine"
+   775→                    value={newSkillAliases}
+   776→                    onChange={(e) => setNewSkillAliases(e.target.value)}
+   777→                  />
+   778→                  <p className="text-[11px] text-muted-foreground">The AI will normalize these aliases to the canonical skill name above.</p>
+   779→                </div>
+   780→              </div>
+   781→              <DialogFooter>
+   782→                <Button variant="outline" onClick={() => setAddOpen(false)}>Cancel</Button>
+   783→                <Button className="btn-green" onClick={addSkill} disabled={adding || !newSkillName.trim()}>
+   784→                  {adding ? (
+   785→                    <>
+   786→                      <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-primary-foreground border-t-transparent" />
+   787→                      Adding…
+   788→                    </>
+   789→                  ) : (
+   790→                    <>
+   791→                      <Plus className="h-3.5 w-3.5" /> Add skill
+   792→                    </>
+   793→                  )}
+   794→                </Button>
+   795→              </DialogFooter>
+   796→            </DialogContent>
+   797→          </Dialog>
+   798→        }
+   799→      />
+   800→
+   801→      <div className="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+   802→        <StatCard label="Total skills" value={skillOntology.length} icon={<Sparkles className="h-4 w-4" />} />
+   803→        <StatCard label="Categories" value={categories.length} icon={<GitBranch className="h-4 w-4" />} />
+   804→        <StatCard label="Total usage" value={skillOntology.reduce((a,s) => a+s.usageCount, 0).toLocaleString()} icon={<TrendingUp className="h-4 w-4" />} hint="across all profiles" />
+   805→        <StatCard label="Verified" value={skillOntology.reduce((a,s) => a+s.verifiedCount, 0).toLocaleString()} icon={<ShieldCheck className="h-4 w-4" />} />
+   806→      </div>
+   807→
+   808→      <Card className="mt-6">
+   809→        <CardContent className="p-4">
+   810→          <TableToolbar>
+   811→            <div className="flex flex-1 flex-col gap-2 sm:flex-row">
+   812→              <div className="relative flex-1 max-w-md">
+   813→                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+   814→                <Input placeholder="Search skills or aliases…" className="pl-9" value={query} onChange={(e) => setQuery(e.target.value)} />
+   815→              </div>
+   816→              <Select value={filter} onValueChange={setFilter}>
+   817→                <SelectTrigger className="w-40"><SelectValue placeholder="Category" /></SelectTrigger>
+   818→                <SelectContent>
+   819→                  <SelectItem value="all">All categories</SelectItem>
+   820→                  {categories.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+   821→                </SelectContent>
+   822→              </Select>
+   823→            </div>
+   824→          </TableToolbar>
+   825→
+   826→          <div className="mt-4 overflow-x-auto rounded-lg border border-border">
+   827→            <table className="w-full text-sm">
+   828→              <thead className="bg-muted/50 text-[11px] uppercase tracking-wide text-muted-foreground">
+   829→                <tr>
+   830→                  <th className="px-4 py-2.5 text-left font-medium">Skill</th>
+   831→                  <th className="hidden px-4 py-2.5 text-left font-medium sm:table-cell">Category</th>
+   832→                  <th className="hidden px-4 py-2.5 text-left font-medium md:table-cell">Aliases</th>
+   833→                  <th className="hidden px-4 py-2.5 text-left font-medium lg:table-cell">Proficiency distribution</th>
+   834→                  <th className="px-4 py-2.5 text-left font-medium">Usage</th>
+   835→                  <th className="px-4 py-2.5 text-right font-medium">Actions</th>
+   836→                </tr>
+   837→              </thead>
+   838→              <tbody className="divide-y divide-border bg-card">
+   839→                {skills.map((s) => (
+   840→                  <tr key={s.id} className="hover:bg-accent/30">
+   841→                    <td className="px-4 py-3">
+   842→                      <p className="text-sm font-semibold">{s.name}</p>
+   843→                      <p className="text-[11px] text-muted-foreground">{s.related.length} related</p>
+   844→                    </td>
+   845→                    <td className="hidden px-4 py-3 sm:table-cell">
+   846→                      <Badge variant="outline" className="text-[10px]">{s.category}</Badge>
+   847→                    </td>
+   848→                    <td className="hidden px-4 py-3 md:table-cell">
+   849→                      <div className="flex flex-wrap gap-1">
+   850→                        {s.aliases.length === 0 ? <span className="text-xs text-muted-foreground">—</span> :
+   851→                          s.aliases.map((a) => <span key={a} className="text-[11px] text-muted-foreground">{a}</span>)}
+   852→                      </div>
+   853→                    </td>
+   854→                    <td className="hidden px-4 py-3 lg:table-cell">
+   855→                      <div className="flex items-center gap-1">
+   856→                        {(["beginner", "intermediate", "advanced", "expert"] as const).map((lvl) => (
+   857→                          <div
+   858→                            key={lvl}
+   859→                            className="h-1.5 rounded-full"
+   860→                            style={{
+   861→                              width: `${s.proficiencyDistribution[lvl]}px`,
+   862→                              background:
+   863→                                lvl === "beginner" ? "oklch(0.7 0.18 75)" :
+   864→                                lvl === "intermediate" ? "oklch(0.65 0.16 200)" :
+   865→                                lvl === "advanced" ? "oklch(0.55 0.22 285)" :
+   866→                                "oklch(0.6 0.18 152)",
+   867→                            }}
+   868→                            title={`${lvl}: ${s.proficiencyDistribution[lvl]}%`}
+   869→                          />
+   870→                        ))}
+   871→                      </div>
+   872→                    </td>
+   873→                    <td className="px-4 py-3">
+   874→                      <p className="text-sm font-semibold">{s.usageCount.toLocaleString()}</p>
+   875→                      <p className="text-[10px] text-muted-foreground">{s.verifiedCount} verified</p>
+   876→                    </td>
+   877→                    <td className="px-4 py-3 text-right">
+   878→                      <Button size="sm" variant="ghost"><Edit className="h-3.5 w-3.5" /></Button>
+   879→                    </td>
+   880→                  </tr>
+   881→                ))}
+   882→              </tbody>
+   883→            </table>
+   884→          </div>
+   885→        </CardContent>
+   886→      </Card>
+   887→    </PageContainer>
+   888→  );
+   889→}
+   890→
+   891→// ============================================================
+   892→// SKILL ONTOLOGY
+   893→// ============================================================
+   894→export function AdminSkillOntology() {
+   895→  const { toast } = useToast();
+   896→  const [selected, setSelected] = useState<SkillOntologyItem>(skillOntology[0]);
+   897→  const [newNodeOpen, setNewNodeOpen] = useState(false);
+   898→  const [nodeName, setNodeName] = useState("");
+   899→  const [nodeCategory, setNodeCategory] = useState("");
+   900→  const [nodeAliases, setNodeAliases] = useState("");
+   901→  const [nodeRelated, setNodeRelated] = useState("");
+   902→  const [creating, setCreating] = useState(false);
+   903→
+   904→  const categories = Array.from(new Set(skillOntology.map((s) => s.category)));
+   905→
+   906→  const createNode = async () => {
+   907→    if (!nodeName.trim()) {
+   908→      toast({ title: "Node name required", description: "Please enter a name for the new skill node." });
+   909→      return;
+   910→    }
+   911→    setCreating(true);
+   912→    try {
+   913→      await fetch("/api/admin/audit", {
+   914→        method: "POST",
+   915→        headers: { "Content-Type": "application/json" },
+   916→        body: JSON.stringify({
+   917→          action: `Created skill node: ${nodeName}`,
+   918→          target: `Category: ${nodeCategory || "Uncategorized"}`,
+   919→          type: "admin",
+   920→          status: "success",
+   921→        }),
+   922→      }).catch(() => { /* non-blocking */ });
+   923→
+   924→      toast({
+   925→        title: "Skill node created",
+   926→        description: `"${nodeName}" has been added to the ontology graph. Related skills: ${nodeRelated || "none"}.`,
+   927→      });
+   928→      setNewNodeOpen(false);
+   929→      setNodeName("");
+   930→      setNodeCategory("");
+   931→      setNodeAliases("");
+   932→      setNodeRelated("");
+   933→    } catch {
+   934→      toast({ title: "Failed to create node", description: "Please try again." });
+   935→    } finally {
+   936→      setCreating(false);
+   937→    }
+   938→  };
+   939→
+   940→  return (
+   941→    <PageContainer>
+   942→      <SectionHeader
+   943→        title="Skill Ontology"
+   944→        description="Manage skill relationships, aliases, and category mapping."
+   945→        actions={
+   946→          <Dialog open={newNodeOpen} onOpenChange={(o) => { setNewNodeOpen(o); if (!o) { setNodeName(""); setNodeCategory(""); setNodeAliases(""); setNodeRelated(""); } }}>
+   947→            <DialogTrigger asChild>
+   948→              <Button className="btn-rainbow"><Plus className="h-4 w-4" /> New skill node</Button>
+   949→            </DialogTrigger>
+   950→            <DialogContent>
+   951→              <DialogHeader>
+   952→                <DialogTitle>Create a new skill node</DialogTitle>
+   953→                <DialogDescription>
+   954→                  Add a new node to the skill ontology graph. This defines how the AI normalizes extracted skills and maps relationships between them.
+   955→                </DialogDescription>
+   956→              </DialogHeader>
+   957→              <div className="space-y-3 py-2">
+   958→                <div className="space-y-1.5">
+   959→                  <Label htmlFor="node-name">Node name (canonical form) *</Label>
+   960→                  <Input
+   961→                    id="node-name"
+   962→                    placeholder="e.g. Container Orchestration"
+   963→                    value={nodeName}
+   964→                    onChange={(e) => setNodeName(e.target.value)}
+   965→                  />
+   966→                </div>
+   967→                <div className="space-y-1.5">
+   968→                  <Label htmlFor="node-category">Category *</Label>
+   969→                  <Input
+   970→                    id="node-category"
+   971→                    placeholder="e.g. DevOps"
+   972→                    value={nodeCategory}
+   973→                    onChange={(e) => setNodeCategory(e.target.value)}
+   974→                    list="ontology-categories"
+   975→                  />
+   976→                  <datalist id="ontology-categories">
+   977→                    {categories.map((c) => <option key={c} value={c} />)}
+   978→                  </datalist>
+   979→                </div>
+   980→                <div className="space-y-1.5">
+   981→                  <Label htmlFor="node-aliases">Aliases (comma-separated)</Label>
+   982→                  <Input
+   983→                    id="node-aliases"
+   984→                    placeholder="e.g. K8s, Kubernetes, Docker Swarm"
+   985→                    value={nodeAliases}
+   986→                    onChange={(e) => setNodeAliases(e.target.value)}
+   987→                  />
+   988→                  <p className="text-[11px] text-muted-foreground">All aliases will normalize to the canonical name above.</p>
+   989→                </div>
+   990→                <div className="space-y-1.5">
+   991→                  <Label htmlFor="node-related">Related skills (comma-separated)</Label>
+   992→                  <Input
+   993→                    id="node-related"
+   994→                    placeholder="e.g. Docker, Helm, Istio"
+   995→                    value={nodeRelated}
+   996→                    onChange={(e) => setNodeRelated(e.target.value)}
+   997→                  />
+   998→                  <p className="text-[11px] text-muted-foreground">These will appear as related skills in the ontology graph.</p>
+   999→                </div>
+  1000→              </div>
+  1001→              <DialogFooter>
+  1002→                <Button variant="outline" onClick={() => setNewNodeOpen(false)}>Cancel</Button>
+  1003→                <Button className="btn-blue" onClick={createNode} disabled={creating || !nodeName.trim()}>
+  1004→                  {creating ? (
+  1005→                    <>
+  1006→                      <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-primary-foreground border-t-transparent" />
+  1007→                      Creating…
+  1008→                    </>
+  1009→                  ) : (
+  1010→                    <>
+  1011→                      <GitBranch className="h-3.5 w-3.5" /> Create node
+  1012→                    </>
+  1013→                  )}
+  1014→                </Button>
+  1015→              </DialogFooter>
+  1016→            </DialogContent>
+  1017→          </Dialog>
+  1018→        }
+  1019→      />
+  1020→
+  1021→      <InfoCallout className="mt-6">
+  1022→        <span className="font-medium">What is the ontology?</span> It's the canonical graph that maps raw extracted skills to normalized forms. Every AI resume analysis hits this graph for normalization — keeping it clean directly improves match quality.
+  1023→      </InfoCallout>
+  1024→
+  1025→      <div className="mt-6 grid gap-4 lg:grid-cols-3">
+  1026→        {/* Skill list */}
+  1027→        <Card className="lg:col-span-1">
+  1028→          <CardHeader className="pb-3">
+  1029→            <CardTitle className="text-sm">Skill nodes ({skillOntology.length})</CardTitle>
+  1030→          </CardHeader>
+  1031→          <CardContent className="p-0">
+  1032→            <div className="max-h-[60vh] divide-y divide-border overflow-y-auto lg:max-h-[70vh]">
+  1033→              {skillOntology.map((s) => (
+  1034→                <button
+  1035→                  key={s.id}
+  1036→                  onClick={() => setSelected(s)}
+  1037→                  className={cn(
+  1038→                    "flex w-full items-center justify-between p-3 text-left transition-colors hover:bg-accent",
+  1039→                    selected.id === s.id && "bg-primary/5"
+  1040→                  )}
+  1041→                >
+  1042→                  <div>
+  1043→                    <p className="text-sm font-semibold">{s.name}</p>
+  1044→                    <p className="text-[11px] text-muted-foreground">{s.category} · {s.related.length} related</p>
+  1045→                  </div>
+  1046→                  <ArrowRight className="h-3.5 w-3.5 text-muted-foreground" />
+  1047→                </button>
+  1048→              ))}
+  1049→            </div>
+  1050→          </CardContent>
+  1051→        </Card>
+  1052→
+  1053→        {/* Skill detail */}
+  1054→        <Card className="lg:col-span-2">
+  1055→          <CardHeader className="pb-3 flex flex-row items-center justify-between space-y-0">
+  1056→            <div>
+  1057→              <CardTitle className="text-base">{selected.name}</CardTitle>
+  1058→              <CardDescription>{selected.category}</CardDescription>
+  1059→            </div>
+  1060→            <div className="flex gap-2">
+  1061→              <Button variant="outline" size="sm"><Edit className="h-3.5 w-3.5" /> Edit</Button>
+  1062→              <Button variant="outline" size="sm text-rose-600"><Trash2 className="h-3.5 w-3.5" /></Button>
+  1063→            </div>
+  1064→          </CardHeader>
+  1065→          <CardContent className="space-y-4">
+  1066→            <div>
+  1067→              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Aliases</p>
+  1068→              <div className="mt-1.5 flex flex-wrap gap-1.5">
+  1069→                {selected.aliases.length === 0 ? <span className="text-xs text-muted-foreground">No aliases</span> :
+  1070→                  selected.aliases.map((a) => <SkillChip key={a} name={a} size="sm" />)}
+  1071→              </div>
+  1072→            </div>
+  1073→            <div>
+  1074→              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Related skills</p>
+  1075→              <div className="mt-1.5 flex flex-wrap gap-1.5">
+  1076→                {selected.related.map((r) => <SkillChip key={r} name={r} size="sm" />)}
+  1077→              </div>
+  1078→            </div>
+  1079→            <div className="grid gap-3 sm:grid-cols-2">
+  1080→              <div className="rounded-lg border border-border p-3">
+  1081→                <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Usage</p>
+  1082→                <p className="mt-1 text-2xl font-bold">{selected.usageCount.toLocaleString()}</p>
+  1083→                <p className="text-[11px] text-muted-foreground">{selected.verifiedCount} verified ({Math.round((selected.verifiedCount / selected.usageCount) * 100)}%)</p>
+  1084→              </div>
+  1085→              <div className="rounded-lg border border-border p-3">
+  1086→                <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Proficiency distribution</p>
+  1087→                <div className="mt-2 space-y-1.5">
+  1088→                  {(["beginner", "intermediate", "advanced", "expert"] as const).map((lvl) => (
+  1089→                    <div key={lvl}>
+  1090→                      <div className="flex items-center justify-between text-[11px]">
+  1091→                        <span className="capitalize text-muted-foreground">{lvl}</span>
+  1092→                        <span className="font-semibold">{selected.proficiencyDistribution[lvl]}%</span>
+  1093→                      </div>
+  1094→                      <Progress value={selected.proficiencyDistribution[lvl]} className="h-1 mt-0.5" />
+  1095→                    </div>
+  1096→                  ))}
+  1097→                </div>
+  1098→              </div>
+  1099→            </div>
+  1100→          </CardContent>
+  1101→        </Card>
+  1102→      </div>
+  1103→    </PageContainer>
+  1104→  );
+  1105→}
+  1106→
+  1107→// ============================================================
+  1108→// JOBS & CATEGORIES
+  1109→// ============================================================
+  1110→export function AdminJobs() {
+  1111→  const { toast } = useToast();
+  1112→  const [newCatOpen, setNewCatOpen] = useState(false);
+  1113→  const [newCatName, setNewCatName] = useState("");
+  1114→  const [newCatColor, setNewCatColor] = useState("bg-violet-500");
+  1115→  const [newCatDesc, setNewCatDesc] = useState("");
+  1116→  const [creating, setCreating] = useState(false);
+  1117→  const [categories, setCategories] = useState([
+  1118→    { name: "Engineering", count: 412, color: "bg-violet-500" },
+  1119→    { name: "Design", count: 187, color: "bg-blue-500" },
+  1120→    { name: "Product", count: 142, color: "bg-emerald-500" },
+  1121→    { name: "Data", count: 98, color: "bg-amber-500" },
+  1122→    { name: "Marketing", count: 76, color: "bg-rose-500" },
+  1123→    { name: "Operations", count: 54, color: "bg-slate-500" },
+  1124→  ]);
+  1125→
+  1126→  const colorOptions = [
+  1127→    { label: "Violet", value: "bg-violet-500" },
+  1128→    { label: "Blue", value: "bg-blue-500" },
+  1129→    { label: "Emerald", value: "bg-emerald-500" },
+  1130→    { label: "Amber", value: "bg-amber-500" },
+  1131→    { label: "Rose", value: "bg-rose-500" },
+  1132→    { label: "Cyan", value: "bg-cyan-500" },
+  1133→    { label: "Fuchsia", value: "bg-fuchsia-500" },
+  1134→    { label: "Slate", value: "bg-slate-500" },
+  1135→  ];
+  1136→
+  1137→  const createCategory = async () => {
+  1138→    if (!newCatName.trim()) {
+  1139→      toast({ title: "Category name required", description: "Please enter a name for the new category." });
+  1140→      return;
+  1141→    }
+  1142→    if (categories.some((c) => c.name.toLowerCase() === newCatName.trim().toLowerCase())) {
+  1143→      toast({ title: "Category already exists", description: `A category named "${newCatName}" already exists.` });
+  1144→      return;
+  1145→    }
+  1146→    setCreating(true);
+  1147→    try {
+  1148→      await fetch("/api/admin/audit", {
+  1149→        method: "POST",
+  1150→        headers: { "Content-Type": "application/json" },
+  1151→        body: JSON.stringify({
+  1152→          action: `Created job category: ${newCatName}`,
+  1153→          target: `Color: ${newCatColor}`,
+  1154→          type: "admin",
+  1155→          status: "success",
+  1156→        }),
+  1157→      }).catch(() => { /* non-blocking */ });
+  1158→
+  1159→      setCategories([...categories, { name: newCatName.trim(), count: 0, color: newCatColor }]);
+  1160→      toast({
+  1161→        title: "Category created",
+  1162→        description: `"${newCatName}" has been added to job categories. Employers can now select it when posting jobs.`,
+  1163→      });
+  1164→      setNewCatOpen(false);
+  1165→      setNewCatName("");
+  1166→      setNewCatColor("bg-violet-500");
+  1167→      setNewCatDesc("");
+  1168→    } catch {
+  1169→      toast({ title: "Failed to create category", description: "Please try again." });
+  1170→    } finally {
+  1171→      setCreating(false);
+  1172→    }
+  1173→  };
+  1174→
+  1175→  return (
+  1176→    <PageContainer>
+  1177→      <SectionHeader
+  1178→        title="Jobs & Categories"
+  1179→        description="Manage job categories and monitor all posted jobs platform-wide."
+  1180→        actions={
+  1181→          <Dialog open={newCatOpen} onOpenChange={(o) => { setNewCatOpen(o); if (!o) { setNewCatName(""); setNewCatColor("bg-violet-500"); setNewCatDesc(""); } }}>
+  1182→            <DialogTrigger asChild>
+  1183→              <Button className="btn-rainbow"><Plus className="h-4 w-4" /> New category</Button>
+  1184→            </DialogTrigger>
+  1185→            <DialogContent>
+  1186→              <DialogHeader>
+  1187→                <DialogTitle>Create a new job category</DialogTitle>
+  1188→                <DialogDescription>
+  1189→                  Add a new category that employers can select when posting jobs. Categories help organize the job board and power filtering.
+  1190→                </DialogDescription>
+  1191→              </DialogHeader>
+  1192→              <div className="space-y-3 py-2">
+  1193→                <div className="space-y-1.5">
+  1194→                  <Label htmlFor="cat-name">Category name *</Label>
+  1195→                  <Input
+  1196→                    id="cat-name"
+  1197→                    placeholder="e.g. Security, DevOps, Customer Success"
+  1198→                    value={newCatName}
+  1199→                    onChange={(e) => setNewCatName(e.target.value)}
+  1200→                  />
+  1201→                </div>
+  1202→                <div className="space-y-1.5">
+  1203→                  <Label>Description (optional)</Label>
+  1204→                  <Textarea
+  1205→                    placeholder="Brief description of what this category covers"
+  1206→                    value={newCatDesc}
+  1207→                    onChange={(e) => setNewCatDesc(e.target.value)}
+  1208→                    rows={2}
+  1209→                    className="resize-none"
+  1210→                  />
+  1211→                </div>
+  1212→                <div className="space-y-1.5">
+  1213→                  <Label>Color label</Label>
+  1214→                  <div className="flex flex-wrap gap-2">
+  1215→                    {colorOptions.map((c) => (
+  1216→                      <button
+  1217→                        key={c.value}
+  1218→                        type="button"
+  1219→                        onClick={() => setNewCatColor(c.value)}
+  1220→                        className={cn(
+  1221→                          "flex items-center gap-1.5 rounded-md border px-2.5 py-1.5 text-xs font-medium transition-all",
+  1222→                          newCatColor === c.value ? "border-primary ring-2 ring-primary/30 bg-primary/5" : "border-border hover:bg-accent"
+  1223→                        )}
+  1224→                      >
+  1225→                        <span className={cn("h-3 w-3 rounded-full", c.value)} />
+  1226→                        {c.label}
+  1227→                      </button>
+  1228→                    ))}
+  1229→                  </div>
+  1230→                </div>
+  1231→              </div>
+  1232→              <DialogFooter>
+  1233→                <Button variant="outline" onClick={() => setNewCatOpen(false)}>Cancel</Button>
+  1234→                <Button className="btn-green" onClick={createCategory} disabled={creating || !newCatName.trim()}>
+  1235→                  {creating ? (
+  1236→                    <>
+  1237→                      <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-primary-foreground border-t-transparent" />
+  1238→                      Creating…
+  1239→                    </>
+  1240→                  ) : (
+  1241→                    <>
+  1242→                      <Plus className="h-3.5 w-3.5" /> Create category
+  1243→                    </>
+  1244→                  )}
+  1245→                </Button>
+  1246→              </DialogFooter>
+  1247→            </DialogContent>
+  1248→          </Dialog>
+  1249→        }
+  1250→      />
+  1251→
+  1252→      <div className="mt-6 grid gap-4 lg:grid-cols-3">
+  1253→        <div className="lg:col-span-2 space-y-4">
+  1254→          <Card>
+  1255→            <CardHeader className="pb-3">
+  1256→              <CardTitle className="text-sm">Recent jobs</CardTitle>
+  1257→            </CardHeader>
+  1258→            <CardContent className="space-y-2">
+  1259→              {[
+  1260→                { title: "Senior Frontend Engineer", company: "Northwind Technologies", category: "Engineering", status: "Published", applicants: 47 },
+  1261→                { title: "Backend Engineer (Go)", company: "Northwind Technologies", category: "Engineering", status: "Published", applicants: 34 },
+  1262→                { title: "Product Designer", company: "Yellow Card", category: "Design", status: "Published", applicants: 53 },
+  1263→                { title: "Product Manager, Growth", company: "Northwind Technologies", category: "Product", status: "Draft", applicants: 0 },
+  1264→                { title: "Data Engineer", company: "Northwind Technologies", category: "Data", status: "Closed", applicants: 41 },
+  1265→              ].map((j, i) => (
+  1266→                <div key={i} className="flex items-center gap-3 rounded-lg border border-border bg-card p-3">
+  1267→                  <div className="min-w-0 flex-1">
+  1268→                    <p className="truncate text-sm font-semibold">{j.title}</p>
+  1269→                    <p className="truncate text-xs text-muted-foreground">{j.company} · {j.category}</p>
+  1270→                  </div>
+  1271→                  <div className="text-right text-xs">
+  1272→                    <p className="font-semibold">{j.applicants}</p>
+  1273→                    <p className="text-muted-foreground">applicants</p>
+  1274→                  </div>
+  1275→                  <Badge variant="outline" className={cn(
+  1276→                    "text-[10px]",
+  1277→                    j.status === "Published" ? "bg-emerald-50 text-emerald-700 border-emerald-200" :
+  1278→                    j.status === "Draft" ? "bg-slate-100 text-slate-600 border-slate-200" :
+  1279→                    "bg-rose-50 text-rose-600 border-rose-200"
+  1280→                  )}>
+  1281→                    {j.status}
+  1282→                  </Badge>
+  1283→                </div>
+  1284→              ))}
+  1285→            </CardContent>
+  1286→          </Card>
+  1287→        </div>
+  1288→
+  1289→        <div className="space-y-4">
+  1290→          <Card>
+  1291→            <CardHeader className="pb-3">
+  1292→              <CardTitle className="text-sm">Job categories ({categories.length})</CardTitle>
+  1293→            </CardHeader>
+  1294→            <CardContent className="space-y-2">
+  1295→              {categories.map((c) => (
+  1296→                <div key={c.name} className="flex items-center justify-between text-sm">
+  1297→                  <div className="flex items-center gap-2">
+  1298→                    <span className={cn("h-2 w-2 rounded-full", c.color)} />
+  1299→                    <span className="font-medium">{c.name}</span>
+  1300→                  </div>
+  1301→                  <span className="text-xs text-muted-foreground">{c.count} jobs</span>
+  1302→                </div>
+  1303→              ))}
+  1304→            </CardContent>
+  1305→          </Card>
+  1306→        </div>
+  1307→      </div>
+  1308→    </PageContainer>
+  1309→  );
+  1310→}
+  1311→
+  1312→// ============================================================
+  1313→// REPORTS & ANALYTICS
+  1314→// ============================================================
+  1315→export function AdminReports() {
+  1316→  return (
+  1317→    <PageContainer>
+  1318→      <SectionHeader
+  1319→        title="Reports & Analytics"
+  1320→        description="Platform-wide insights into matching, applications, and engagement."
+  1321→      />
+  1322→
+  1323→      <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+  1324→        <StatCard label="Match computation success" value="98.4%" icon={<Cpu className="h-4 w-4" />} delta="+0.3%" deltaTone="up" />
+  1325→        <StatCard label="Avg. time to first match" value="3.2s" icon={<Clock className="h-4 w-4" />} delta="-0.4s" deltaTone="up" />
+  1326→        <StatCard label="Application → interview" value="14.8%" icon={<TrendingUp className="h-4 w-4" />} delta="+1.2%" deltaTone="up" />
+  1327→        <StatCard label="Hire success rate" value="6.3%" icon={<UserCheck className="h-4 w-4" />} delta="+0.5%" deltaTone="up" />
+  1328→      </div>
+  1329→
+  1330→      <div className="mt-6 grid gap-4 lg:grid-cols-2">
+  1331→        <Card>
+  1332→          <CardHeader className="pb-3">
+  1333→            <CardTitle className="text-sm">Applications over time</CardTitle>
+  1334→            <CardDescription>Last 8 weeks</CardDescription>
+  1335→          </CardHeader>
+  1336→          <CardContent>
+  1337→            <MockBarChart
+  1338→              data={[
+  1339→                { label: "W32", value: 1820 },
+  1340→                { label: "W33", value: 2010 },
+  1341→                { label: "W34", value: 2180 },
+  1342→                { label: "W35", value: 2320 },
+  1343→                { label: "W36", value: 2480 },
+  1344→                { label: "W37", value: 2590 },
+  1345→                { label: "W38", value: 2720 },
+  1346→                { label: "W39", value: 2872 },
+  1347→              ]}
+  1348→              color="oklch(0.6 0.18 240)"
+  1349→            />
+  1350→          </CardContent>
+  1351→        </Card>
+  1352→
+  1353→        <Card>
+  1354→          <CardHeader className="pb-3">
+  1355→            <CardTitle className="text-sm">Match score distribution</CardTitle>
+  1356→            <CardDescription>All applications last 30 days</CardDescription>
+  1357→          </CardHeader>
+  1358→          <CardContent>
+  1359→            <div className="space-y-2">
+  1360→              {[
+  1361→                { range: "90-100%", count: 1240, color: "oklch(0.6 0.18 152)" },
+  1362→                { range: "75-89%", count: 3820, color: "oklch(0.55 0.22 285)" },
+  1363→                { range: "60-74%", count: 5210, color: "oklch(0.65 0.16 200)" },
+  1364→                { range: "45-59%", count: 4180, color: "oklch(0.75 0.16 75)" },
+  1365→                { range: "0-44%", count: 2180, color: "oklch(0.65 0.22 25)" },
+  1366→              ].map((r) => (
+  1367→                <div key={r.range} className="space-y-1">
+  1368→                  <div className="flex items-center justify-between text-xs">
+  1369→                    <span className="text-muted-foreground">{r.range}</span>
+  1370→                    <span className="font-semibold">{r.count.toLocaleString()}</span>
+  1371→                  </div>
+  1372→                  <div className="h-2 overflow-hidden rounded-full bg-muted">
+  1373→                    <div className="h-full" style={{ width: `${(r.count / 5210) * 100}%`, background: r.color }} />
+  1374→                  </div>
+  1375→                </div>
+  1376→              ))}
+  1377→            </div>
+  1378→          </CardContent>
+  1379→        </Card>
+  1380→      </div>
+  1381→
+  1382→      <Card className="mt-4">
+  1383→        <CardHeader className="pb-3">
+  1384→          <CardTitle className="text-sm">Recommendation monitoring</CardTitle>
+  1385→          <CardDescription>AI fairness & quality metrics</CardDescription>
+  1386→        </CardHeader>
+  1387→        <CardContent className="grid gap-3 sm:grid-cols-3">
+  1388→          {[
+  1389→            { label: "Recommendation coverage", value: "94.2%", hint: "% seekers with ≥3 recommendations" },
+  1390→            { label: "Skill-verification rate", value: "62.1%", hint: "% matched skills that are verified" },
+  1391→            { label: "Bias audit (gender)", value: "Pass", hint: "Last run: 2026-10-01" },
+  1392→            { label: "Bias audit (region)", value: "Pass", hint: "Last run: 2026-10-01" },
+  1393→            { label: "False-positive rate", value: "3.8%", hint: "Recommendations rejected by seeker" },
+  1394→            { label: "Cold-start fallback", value: "Active", hint: "For seekers w/o resume" },
+  1395→          ].map((m) => (
+  1396→            <div key={m.label} className="rounded-lg border border-border p-3">
+  1397→              <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{m.label}</p>
+  1398→              <p className="mt-1 text-lg font-bold">{m.value}</p>
+  1399→              <p className="text-[11px] text-muted-foreground">{m.hint}</p>
+  1400→            </div>
+  1401→          ))}
+  1402→        </CardContent>
+  1403→      </Card>
+  1404→    </PageContainer>
+  1405→  );
+  1406→}
+  1407→
+  1408→// ============================================================
+  1409→// ACTIVITY MONITORING
+  1410→// ============================================================
+  1411→export function AdminActivity() {
+  1412→  const [filter, setFilter] = useState("all");
+  1413→  const [query, setQuery] = useState("");
+  1414→  const [debouncedQuery, setDebouncedQuery] = useState("");
+  1415→
+  1416→  useEffect(() => {
+  1417→    const id = setTimeout(() => setDebouncedQuery(query), 250);
+  1418→    return () => clearTimeout(id);
+  1419→  }, [query]);
+  1420→
+  1421→  const apiUrl = `/api/admin/audit?type=${filter}&q=${encodeURIComponent(debouncedQuery)}`;
+  1422→  const { data, loading } = useFetch<any>(apiUrl);
+  1423→  const logs: any[] = data?.logs ?? [];
+  1424→
+  1425→  return (
+  1426→    <PageContainer>
+  1427→      <SectionHeader
+  1428→        title="Activity Monitoring"
+  1429→        description="Audit trail of all key platform events."
+  1430→      />
+  1431→
+  1432→      <div className="mt-6 grid gap-3 sm:grid-cols-4">
+  1433→        <StatCard label="Total events" value={logs.length} icon={<Activity className="h-4 w-4" />} />
+  1434→        <StatCard label="Errors" value={logs.filter(l => l.status === "error").length} icon={<AlertCircle className="h-4 w-4" />} />
+  1435→        <StatCard label="Warnings" value={logs.filter(l => l.status === "warning").length} icon={<AlertTriangle className="h-4 w-4" />} />
+  1436→        <StatCard label="Success" value={logs.filter(l => l.status === "success").length} icon={<CheckCircle2 className="h-4 w-4" />} />
+  1437→      </div>
+  1438→
+  1439→      <Card className="mt-6">
+  1440→        <CardContent className="p-4">
+  1441→          <TableToolbar>
+  1442→            <div className="flex flex-1 flex-col gap-2 sm:flex-row">
+  1443→              <div className="relative flex-1 max-w-md">
+  1444→                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+  1445→                <Input placeholder="Search user, action, target…" className="pl-9" value={query} onChange={(e) => setQuery(e.target.value)} />
+  1446→              </div>
+  1447→              <Select value={filter} onValueChange={setFilter}>
+  1448→                <SelectTrigger className="w-40"><SelectValue placeholder="Type" /></SelectTrigger>
+  1449→                <SelectContent>
+  1450→                  <SelectItem value="all">All types</SelectItem>
+  1451→                  <SelectItem value="auth">Auth</SelectItem>
+  1452→                  <SelectItem value="job">Jobs</SelectItem>
+  1453→                  <SelectItem value="application">Applications</SelectItem>
+  1454→                  <SelectItem value="ai">AI</SelectItem>
+  1455→                  <SelectItem value="admin">Admin</SelectItem>
+  1456→                  <SelectItem value="message">Messages</SelectItem>
+  1457→                </SelectContent>
+  1458→              </Select>
+  1459→            </div>
+  1460→          </TableToolbar>
+  1461→
+  1462→          {loading ? (
+  1463→            <LoadingState label="Loading audit logs…" rows={4} />
+  1464→          ) : logs.length === 0 ? (
+  1465→            <EmptyState className="mt-4" icon={<Activity className="h-5 w-5" />} title="No events match your filters" />
+  1466→          ) : (
+  1467→            <div className="mt-4 overflow-x-auto rounded-lg border border-border">
+  1468→              <table className="w-full text-sm">
+  1469→                <thead className="bg-muted/50 text-[11px] uppercase tracking-wide text-muted-foreground">
+  1470→                  <tr>
+  1471→                    <th className="px-4 py-2.5 text-left font-medium">User</th>
+  1472→                    <th className="px-4 py-2.5 text-left font-medium">Action</th>
+  1473→                  <th className="hidden px-4 py-2.5 text-left font-medium sm:table-cell">Target</th>
+  1474→                  <th className="hidden px-4 py-2.5 text-left font-medium md:table-cell">Type</th>
+  1475→                  <th className="hidden px-4 py-2.5 text-left font-medium lg:table-cell">IP</th>
+  1476→                  <th className="px-4 py-2.5 text-left font-medium">Time</th>
+  1477→                  <th className="px-4 py-2.5 text-right font-medium">Status</th>
+  1478→                </tr>
+  1479→              </thead>
+  1480→              <tbody className="divide-y divide-border bg-card">
+  1481→                {logs.map((l) => (
+  1482→                  <tr key={l.id} className="hover:bg-accent/30">
+  1483→                    <td className="px-4 py-3 text-sm font-semibold">{l.user}</td>
+  1484→                    <td className="px-4 py-3 text-sm">{l.action}</td>
+  1485→                    <td className="hidden px-4 py-3 text-xs text-muted-foreground sm:table-cell">{l.target}</td>
+  1486→                    <td className="hidden px-4 py-3 md:table-cell">
+  1487→                      <Badge variant="outline" className="text-[10px] capitalize">{l.type}</Badge>
+  1488→                    </td>
+  1489→                    <td className="hidden px-4 py-3 text-xs text-muted-foreground font-mono lg:table-cell">{l.ip}</td>
+  1490→                    <td className="px-4 py-3 text-xs text-muted-foreground">{l.time}</td>
+  1491→                    <td className="px-4 py-3 text-right">
+  1492→                      <div className="flex items-center justify-end gap-1.5">
+  1493→                        <span className={cn(
+  1494→                          "h-1.5 w-1.5 rounded-full",
+  1495→                          l.status === "success" ? "bg-emerald-500" : l.status === "warning" ? "bg-amber-500" : "bg-rose-500"
+  1496→                        )} />
+  1497→                        <span className="text-[10px] capitalize text-muted-foreground">{l.status}</span>
+  1498→                      </div>
+  1499→                    </td>
+  1500→                  </tr>
+  1501→                ))}
+  1502→              </tbody>
+  1503→            </table>
+  1504→          </div>
+  1505→          )}
+  1506→        </CardContent>
+  1507→      </Card>
+  1508→    </PageContainer>
+  1509→  );
+  1510→}
+  1511→
+  1512→// ============================================================
+  1513→// SYSTEM CONFIG
+  1514→// ============================================================
+  1515→export function AdminConfig() {
+  1516→  const { user: sessionUser } = useApp();
+  1517→  const { data: profileData, refetch } = useFetch<any>("/api/profile");
+  1518→  const profile = profileData?.profile;
+  1519→  const [adminName, setAdminName] = useState("");
+  1520→  const [adminTitle, setAdminTitle] = useState("");
+  1521→  const [adminLocation, setAdminLocation] = useState("");
+  1522→  const [adminAbout, setAdminAbout] = useState("");
+  1523→  const [savingProfile, setSavingProfile] = useState(false);
+  1524→  const [profileMsg, setProfileMsg] = useState<{ ok: boolean; msg: string } | null>(null);
+  1525→  const [savedMsg, setSavedMsg] = useState<string | null>(null);
+  1526→
+  1527→  // Sync local form state whenever the profile loads
+  1528→  useEffect(() => {
+  1529→    if (profile) {
+  1530→      setAdminName(profile.name ?? "");
+  1531→      setAdminTitle(profile.title ?? "");
+  1532→      setAdminLocation(profile.location ?? "");
+  1533→      setAdminAbout(profile.about ?? "");
+  1534→    }
+  1535→  }, [profile]);
+  1536→
+  1537→  const saveAdminProfile = async () => {
+  1538→    setSavingProfile(true);
+  1539→    setProfileMsg(null);
+  1540→    try {
+  1541→      const res = await fetch("/api/profile", {
+  1542→        method: "PUT",
+  1543→        headers: { "Content-Type": "application/json" },
+  1544→        body: JSON.stringify({
+  1545→          name: adminName,
+  1546→          title: adminTitle,
+  1547→          location: adminLocation,
+  1548→          about: adminAbout,
+  1549→        }),
+  1550→      });
+  1551→      const json = await res.json();
+  1552→      if (json.ok) {
+  1553→        setProfileMsg({ ok: true, msg: "Admin profile updated successfully." });
+  1554→        refetch();
+  1555→      } else {
+  1556→        setProfileMsg({ ok: false, msg: json.error ?? "Save failed." });
+  1557→      }
+  1558→    } catch {
+  1559→      setProfileMsg({ ok: false, msg: "Network error." });
+  1560→    } finally {
+  1561→      setSavingProfile(false);
+  1562→    }
+  1563→  };
+  1564→
+  1565→  const handleSave = () => { setSavedMsg("Settings saved successfully."); setTimeout(() => setSavedMsg(null), 3000); };
+  1566→
+  1567→  return (
+  1568→    <PageContainer>
+  1569→      <SectionHeader
+  1570→        title="System Settings"
+  1571→        description="Manage your admin profile, user roles, AI matching weights, privacy rules, and system policies."
+  1572→        icon={<Settings className="h-4 w-4" />}
+  1573→      />
+  1574→
+  1575→      {/* ============ ADMIN PROFILE PHOTO + INFO ============ */}
+  1576→      <Card className="mt-6">
+  1577→        <CardHeader className="pb-3">
+  1578→          <CardTitle className="text-sm flex items-center gap-2">
+  1579→            <UserCheck className="h-4 w-4 text-primary" /> Admin Profile
+  1580→          </CardTitle>
+  1581→          <CardDescription>
+  1582→            Upload your own profile photo and update your admin display info. This photo appears in the sidebar, top bar, and admin audit logs.
+  1583→          </CardDescription>
+  1584→        </CardHeader>
+  1585→        <CardContent>
+  1586→          <div className="flex flex-col gap-6 sm:flex-row sm:items-start">
+  1587→            {/* Photo uploader */}
+  1588→            <div className="flex flex-col items-center gap-3 sm:w-48">
+  1589→              <ProfilePhotoUpload
+  1590→                photo={profile?.profilePhoto}
+  1591→                initials={profile?.initials ?? sessionUser?.initials ?? "AD"}
+  1592→                color={profile?.avatarColor ?? sessionUser?.avatarColor ?? "oklch(0.65 0.2 330)"}
+  1593→                onUploaded={() => refetch()}
+  1594→              />
+  1595→              <p className="text-center text-[11px] text-muted-foreground">
+  1596→                This is your personal admin avatar.
+  1597→              </p>
+  1598→            </div>
+  1599→
+  1600→            {/* Editable fields */}
+  1601→            <div className="flex-1 space-y-3">
+  1602→              <div className="grid gap-3 sm:grid-cols-2">
+  1603→                <div className="space-y-1.5">
+  1604→                  <Label htmlFor="admin-name">Display name</Label>
+  1605→                  <Input
+  1606→                    id="admin-name"
+  1607→                    value={adminName}
+  1608→                    onChange={(e) => setAdminName(e.target.value)}
+  1609→                    placeholder="e.g. Priya Sharma"
+  1610→                  />
+  1611→                </div>
+  1612→                <div className="space-y-1.5">
+  1613→                  <Label htmlFor="admin-title">Title</Label>
+  1614→                  <Input
+  1615→                    id="admin-title"
+  1616→                    value={adminTitle}
+  1617→                    onChange={(e) => setAdminTitle(e.target.value)}
+  1618→                    placeholder="e.g. Platform Administrator"
+  1619→                  />
+  1620→                </div>
+  1621→                <div className="space-y-1.5">
+  1622→                  <Label htmlFor="admin-location">Location</Label>
+  1623→                  <Input
+  1624→                    id="admin-location"
+  1625→                    value={adminLocation}
+  1626→                    onChange={(e) => setAdminLocation(e.target.value)}
+  1627→                    placeholder="e.g. Nairobi, Kenya"
+  1628→                  />
+  1629→                </div>
+  1630→                <div className="space-y-1.5">
+  1631→                  <Label htmlFor="admin-email">Email (read-only)</Label>
+  1632→                  <Input
+  1633→                    id="admin-email"
+  1634→                    value={sessionUser?.email ?? ""}
+  1635→                    readOnly
+  1636→                    disabled
+  1637→                    className="bg-muted/40 font-mono text-xs"
+  1638→                  />
+  1639→                </div>
+  1640→              </div>
+  1641→              <div className="space-y-1.5">
+  1642→                <Label htmlFor="admin-about">About</Label>
+  1643→                <Textarea
+  1644→                  id="admin-about"
+  1645→                  value={adminAbout}
+  1646→                  onChange={(e) => setAdminAbout(e.target.value)}
+  1647→                  rows={3}
+  1648→                  className="resize-none"
+  1649→                  placeholder="Brief bio for the admin profile."
+  1650→                />
+  1651→              </div>
+  1652→
+  1653→              {profileMsg && (
+  1654→                <div className={cn(
+  1655→                  "flex items-center gap-2 rounded-md border px-3 py-2 text-xs",
+  1656→                  profileMsg.ok
+  1657→                    ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+  1658→                    : "border-rose-200 bg-rose-50 text-rose-700"
+  1659→                )}>
+  1660→                  {profileMsg.ok ? <CheckCircle2 className="h-3.5 w-3.5" /> : <AlertCircle className="h-3.5 w-3.5" />}
+  1661→                  {profileMsg.msg}
+  1662→                </div>
+  1663→              )}
+  1664→
+  1665→              <div className="flex justify-end gap-2">
+  1666→                <Button variant="ghost" size="sm" onClick={() => refetch()} disabled={savingProfile}>
+  1667→                  Reset
+  1668→                </Button>
+  1669→                <Button size="sm" className="btn-blue" onClick={saveAdminProfile} disabled={savingProfile}>
+  1670→                  {savingProfile ? (
+  1671→                    <>
+  1672→                      <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-primary-foreground border-t-transparent" />
+  1673→                      Saving…
+  1674→                    </>
+  1675→                  ) : "Save admin profile"}
+  1676→                </Button>
+  1677→              </div>
+  1678→            </div>
+  1679→          </div>
+  1680→        </CardContent>
+  1681→      </Card>
+  1682→
+  1683→      {savedMsg && (
+  1684→        <div className="mt-4 flex items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
+  1685→          <CheckCircle2 className="h-4 w-4" /> {savedMsg}
+  1686→        </div>
+  1687→      )}
+  1688→      <div className="mt-6 grid gap-4 lg:grid-cols-3">
+  1689→        <Card className="lg:col-span-2">
+  1690→          <CardHeader className="pb-3">
+  1691→            <CardTitle className="text-sm flex items-center gap-2"><Cpu className="h-4 w-4 text-primary" /> AI Matching Weights</CardTitle>
+  1692→            <CardDescription>Control how match scores are computed platform-wide. Total should equal 100%.</CardDescription>
+  1693→          </CardHeader>
+  1694→          <CardContent className="space-y-4">
+  1695→            {[
+  1696→              { label: "Skill match", value: 25, hint: "Overall skill overlap" },
+  1697→              { label: "Required skill match", value: 30, hint: "Mandatory skill coverage" },
+  1698→              { label: "Proficiency match", value: 15, hint: "Proficiency threshold compliance" },
+  1699→              { label: "Experience match", value: 15, hint: "Years + seniority alignment" },
+  1700→              { label: "Education match", value: 10, hint: "Degree threshold" },
+  1701→              { label: "Verified skills", value: 5, hint: "Verification bonus" },
+  1702→            ].map((w) => (
+  1703→              <div key={w.label}>
+  1704→                <div className="flex items-center justify-between text-xs">
+  1705→                  <div><p className="font-semibold">{w.label}</p><p className="text-muted-foreground">{w.hint}</p></div>
+  1706→                  <span className="font-semibold tabular-nums">{w.value}%</span>
+  1707→                </div>
+  1708→                <input type="range" min="0" max="50" defaultValue={w.value} className="mt-2 w-full accent-[var(--primary)]" />
+  1709→              </div>
+  1710→            ))}
+  1711→            <div className="flex justify-end gap-2 border-t border-border pt-3">
+  1712→              <Button variant="outline" size="sm">Reset to defaults</Button>
+  1713→              <Button size="sm" className="btn-blue" onClick={handleSave}>Save weights</Button>
+  1714→            </div>
+  1715→          </CardContent>
+  1716→        </Card>
+  1717→        <div className="space-y-4">
+  1718→          <Card>
+  1719→            <CardHeader className="pb-3"><CardTitle className="text-sm flex items-center gap-2"><Users className="h-4 w-4 text-primary" /> Role Management</CardTitle><CardDescription>Default permissions for each role</CardDescription></CardHeader>
+  1720→            <CardContent className="space-y-3 text-xs">
+  1721→              <div className="rounded-md border border-border bg-card p-2.5">
+  1722→                <Badge variant="outline" className="bg-violet-50 text-violet-700 border-violet-200 text-[10px] mb-1">Job Seeker</Badge>
+  1723→                <p className="text-muted-foreground">Can: create profile, upload resume, apply to jobs, track applications, message employers</p>
+  1724→              </div>
+  1725→              <div className="rounded-md border border-border bg-card p-2.5">
+  1726→                <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200 text-[10px] mb-1">Employer</Badge>
+  1727→                <p className="text-muted-foreground">Can: post jobs, review candidates, shortlist, schedule interviews, message seekers</p>
+  1728→              </div>
+  1729→              <div className="rounded-md border border-border bg-card p-2.5">
+  1730→                <div className="flex items-center gap-2 mb-1">
+  1731→                  <Badge variant="outline" className="bg-amber-50 text-amber-700 border-amber-200 text-[10px]">Admin</Badge>
+  1732→                  <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-200 text-[9px] gap-1"><ShieldCheck className="h-2.5 w-2.5" /> 2FA</Badge>
+  1733→                </div>
+  1734→                <p className="text-muted-foreground">Full platform access: users, skills, jobs, analytics, security, settings</p>
+  1735→              </div>
+  1736→              <Button variant="outline" size="sm" className="w-full">Configure role permissions</Button>
+  1737→            </CardContent>
+  1738→          </Card>
+  1739→          <Card>
+  1740→            <CardHeader className="pb-3"><CardTitle className="text-sm flex items-center gap-2"><ShieldCheck className="h-4 w-4 text-primary" /> Privacy Rules</CardTitle><CardDescription>Compliance with privacy policies</CardDescription></CardHeader>
+  1741→            <CardContent className="space-y-3 text-xs">
+  1742→              {[
+  1743→                { label: "Lock employer contact until interview accepted", enabled: true },
+  1744→                { label: "Hide candidate name in ranking until applied", enabled: false },
+  1745→                { label: "Allow seekers to export their data (GDPR)", enabled: true },
+  1746→                { label: "Auto-expire applications after 60 days", enabled: true },
+  1747→                { label: "Require 2FA for all admin accounts", enabled: true },
+  1748→                { label: "Encrypt PII at rest (AES-256)", enabled: true },
+  1749→              ].map((r) => (
+  1750→                <div key={r.label} className="flex items-center justify-between">
+  1751→                  <span className="text-muted-foreground">{r.label}</span>
+  1752→                  <Switch defaultChecked={r.enabled} />
+  1753→                </div>
+  1754→              ))}
+  1755→              <Button size="sm" className="w-full btn-green" onClick={handleSave}>Save privacy settings</Button>
+  1756→            </CardContent>
+  1757→          </Card>
+  1758→          <Card>
+  1759→            <CardHeader className="pb-3"><CardTitle className="text-sm">System Status</CardTitle></CardHeader>
+  1760→            <CardContent className="space-y-2 text-xs">
+  1761→              {[
+  1762→                { label: "API Server", status: "Operational", tone: "good" },
+  1763→                { label: "Database", status: "Operational", tone: "good" },
+  1764→                { label: "AI Service", status: "Operational", tone: "good" },
+  1765→                { label: "Notifications", status: "Degraded", tone: "warning" },
+  1766→                { label: "WebSocket", status: "Operational", tone: "good" },
+  1767→              ].map((s) => (
+  1768→                <div key={s.label} className="flex items-center justify-between">
+  1769→                  <span className="text-muted-foreground">{s.label}</span>
+  1770→                  <Badge variant="outline" className={cn("text-[10px]", s.tone === "good" ? "bg-emerald-50 text-emerald-700 border-emerald-200" : "bg-amber-50 text-amber-700 border-amber-200")}>
+  1771→                    {s.tone === "good" && <CheckCircle2 className="h-2.5 w-2.5 mr-1" />}
+  1772→                    {s.tone === "warning" && <AlertTriangle className="h-2.5 w-2.5 mr-1" />}
+  1773→                    {s.status}
+  1774→                  </Badge>
+  1775→                </div>
+  1776→              ))}
+  1777→              <div className="border-t border-border pt-2 text-[11px] text-muted-foreground">
+  1778→                <p>Version: v2.4.1 · Region: af-east-1</p>
+  1779→                <p>Last deploy: 2026-10-04 09:12 EAT</p>
+  1780→              </div>
+  1781→            </CardContent>
+  1782→          </Card>
+  1783→        </div>
+  1784→      </div>
+  1785→    </PageContainer>
+  1786→  );
+  1787→}
+  1788→
+  1789→// ============================================================
+  1790→// SYSTEM MONITORING — performance, uptime, data integrity
+  1791→// ============================================================
+  1792→export function AdminMonitoring() {
+  1793→  const { data, loading } = useFetch<any>("/api/admin/monitoring");
+  1794→  const m = data?.metrics;
+  1795→  const integrity = data?.integrity;
+  1796→  const services = data?.services ?? [];
+  1797→  const counts = data?.counts;
+  1798→
+  1799→  return (
+  1800→    <PageContainer>
+  1801→      <SectionHeader
+  1802→        title="System Monitoring"
+  1803→        description="Real-time system performance, uptime, and data integrity monitoring."
+  1804→        icon={<Server className="h-4 w-4" />}
+  1805→      />
+  1806→
+  1807→      {loading ? (
+  1808→        <LoadingState label="Loading system metrics…" rows={4} />
+  1809→      ) : (
+  1810→        <>
+  1811→          {/* System Metrics */}
+  1812→          <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+  1813→            <StatCard label="API Uptime" value={`${m?.api?.uptime ?? 0}%`} icon={<Server className="h-4 w-4" />} hint="30-day rolling" delta="Healthy" deltaTone="up" />
+  1814→            <StatCard label="Avg Response" value={`${m?.api?.avgResponseTime ?? 0}ms`} icon={<Activity className="h-4 w-4" />} hint={`${m?.api?.requestsPerMinute ?? 0} req/min`} />
+  1815→            <StatCard label="DB Latency" value={`${m?.database?.queryLatency ?? 0}ms`} icon={<Database className="h-4 w-4" />} hint={`${m?.database?.connections ?? 0}/${m?.database?.maxConnections ?? 0} connections`} />
+  1816→            <StatCard label="AI Success Rate" value={`${m?.ai?.successRate ?? 0}%`} icon={<Cpu className="h-4 w-4" />} hint={`${m?.ai?.queueBacklog ?? 0} in queue`} />
+  1817→          </div>
+  1818→
+  1819→          {/* Service Health */}
+  1820→          <Card className="mt-4">
+  1821→            <CardHeader className="pb-3">
+  1822→              <CardTitle className="text-sm">Service Health</CardTitle>
+  1823→              <CardDescription>Real-time status of all platform services</CardDescription>
+  1824→            </CardHeader>
+  1825→            <CardContent className="space-y-2">
+  1826→              {services.map((s: any) => (
+  1827→                <div key={s.name} className="flex items-center gap-3 rounded-lg border border-border bg-card p-3">
+  1828→                  <div className={cn(
+  1829→                    "h-2.5 w-2.5 shrink-0 rounded-full",
+  1830→                    s.status === "operational" ? "bg-emerald-500" : "bg-amber-500"
+  1831→                  )} />
+  1832→                  <div className="min-w-0 flex-1">
+  1833→                    <p className="text-sm font-semibold">{s.name}</p>
+  1834→                    <p className="text-xs text-muted-foreground capitalize">{s.status} · {s.latency}ms latency · {s.uptime}% uptime</p>
+  1835→                  </div>
+  1836→                  <Badge variant="outline" className={cn(
+  1837→                    "text-[10px] capitalize",
+  1838→                    s.status === "operational" ? "bg-emerald-50 text-emerald-700 border-emerald-200" : "bg-amber-50 text-amber-700 border-amber-200"
+  1839→                  )}>
+  1840→                    {s.status}
+  1841→                  </Badge>
+  1842→                </div>
+  1843→              ))}
+  1844→            </CardContent>
+  1845→          </Card>
+  1846→
+  1847→          {/* Data Integrity */}
+  1848→          <div className="mt-4 grid gap-4 lg:grid-cols-2">
+  1849→            <Card>
+  1850→              <CardHeader className="pb-3">
+  1851→                <CardTitle className="text-sm">Data Integrity</CardTitle>
+  1852→                <CardDescription>Database consistency and health checks</CardDescription>
+  1853→              </CardHeader>
+  1854→              <CardContent className="space-y-3">
+  1855→                {[
+  1856→                  { label: "Total records", value: integrity?.totalRecords ?? 0, ok: true },
+  1857→                  { label: "Orphaned records", value: integrity?.orphanedRecords ?? 0, ok: (integrity?.orphanedRecords ?? 0) === 0 },
+  1858→                  { label: "Duplicate detections", value: integrity?.duplicatesDetected ?? 0, ok: (integrity?.duplicatesDetected ?? 0) === 0 },
+  1859→                  { label: "Integrity score", value: `${integrity?.integrityScore ?? 0}%`, ok: true },
+  1860→                  { label: "Last backup", value: integrity?.lastBackup ? new Date(integrity.lastBackup).toLocaleString() : "—", ok: true },
+  1861→                ].map((item) => (
+  1862→                  <div key={item.label} className="flex items-center justify-between text-sm">
+  1863→                    <span className="text-muted-foreground">{item.label}</span>
+  1864→                    <div className="flex items-center gap-2">
+  1865→                      <span className="font-semibold">{item.value}</span>
+  1866→                      {item.ok ? (
+  1867→                        <CheckCircle2 className="h-4 w-4 text-emerald-600" />
+  1868→                      ) : (
+  1869→                        <AlertCircle className="h-4 w-4 text-rose-600" />
+  1870→                      )}
+  1871→                    </div>
+  1872→                  </div>
+  1873→                ))}
+  1874→              </CardContent>
+  1875→            </Card>
+  1876→
+  1877→            <Card>
+  1878→              <CardHeader className="pb-3">
+  1879→                <CardTitle className="text-sm">Cache & AI Performance</CardTitle>
+  1880→                <CardDescription>System resource utilization</CardDescription>
+  1881→              </CardHeader>
+  1882→              <CardContent className="space-y-3">
+  1883→                <div>
+  1884→                  <div className="flex items-center justify-between text-xs">
+  1885→                    <span className="text-muted-foreground">Cache hit rate</span>
+  1886→                    <span className="font-semibold">{m?.cache?.hitRate ?? 0}%</span>
+  1887→                  </div>
+  1888→                  <Progress value={m?.cache?.hitRate ?? 0} className="mt-1 h-1.5" />
+  1889→                </div>
+  1890→                <div>
+  1891→                  <div className="flex items-center justify-between text-xs">
+  1892→                    <span className="text-muted-foreground">API error rate</span>
+  1893→                    <span className="font-semibold">{m?.api?.errorRate ?? 0}%</span>
+  1894→                  </div>
+  1895→                  <Progress value={100 - (m?.api?.errorRate ?? 0)} className="mt-1 h-1.5" />
+  1896→                </div>
+  1897→                <div>
+  1898→                  <div className="flex items-center justify-between text-xs">
+  1899→                    <span className="text-muted-foreground">DB connection usage</span>
+  1900→                    <span className="font-semibold">{m?.database?.connections ?? 0}/{m?.database?.maxConnections ?? 0}</span>
+  1901→                  </div>
+  1902→                  <Progress value={((m?.database?.connections ?? 0) / (m?.database?.maxConnections ?? 1)) * 100} className="mt-1 h-1.5" />
+  1903→                </div>
+  1904→                <div className="border-t border-border pt-2 text-xs text-muted-foreground">
+  1905→                  DB size: {m?.database?.size ?? "—"} · Cache size: {m?.cache?.size ?? "—"}
+  1906→                </div>
+  1907→              </CardContent>
+  1908→            </Card>
+  1909→          </div>
+  1910→        </>
+  1911→      )}
+  1912→    </PageContainer>
+  1913→  );
+  1914→}
+  1915→
+  1916→// ============================================================
+  1917→// AI ANALYTICS — employment trends and AI performance
+  1918→// ============================================================
+  1919→export function AdminAIAnalytics() {
+  1920→  const { data, loading } = useFetch<any>("/api/admin/ai-analytics");
+  1921→  const ai = data?.aiMetrics;
+  1922→  const insights = data?.insights ?? [];
+  1923→  const jobsByCategory = data?.jobsByCategory ?? [];
+  1924→  const topSkills = data?.topSkills ?? [];
+  1925→
+  1926→  return (
+  1927→    <PageContainer>
+  1928→      <SectionHeader
+  1929→        title="AI Analytics & Employment Trends"
+  1930→        description="AI-powered insights into employment trends, platform performance, and matching quality."
+  1931→        icon={<Cpu className="h-4 w-4" />}
+  1932→      />
+  1933→
+  1934→      {loading ? (
+  1935→        <LoadingState label="Loading AI analytics…" rows={4} />
+  1936→      ) : (
+  1937→        <>
+  1938→          {/* AI Performance Metrics */}
+  1939→          <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+  1940→            <StatCard label="AI Computations" value={(ai?.totalComputations ?? 0).toLocaleString()} icon={<Cpu className="h-4 w-4" />} hint="Total match scores computed" />
+  1941→            <StatCard label="Avg Match Score" value={`${ai?.avgMatchScore ?? 0}%`} icon={<Target className="h-4 w-4" />} hint="Across all applications" />
+  1942→            <StatCard label="High Match Rate" value={`${ai?.highMatchRate ?? 0}%`} icon={<TrendingUp className="h-4 w-4" />} hint="Applications scoring > 80%" delta="+5%" deltaTone="up" />
+  1943→            <StatCard label="AI Success Rate" value={`${ai?.successRate ?? 0}%`} icon={<CheckCircle2 className="h-4 w-4" />} hint={`Avg: ${ai?.avgProcessingTime ?? 0}s · ${ai?.modelVersion ?? ""}`} />
+  1944→          </div>
+  1945→
+  1946→          {/* AI Insights */}
+  1947→          <Card className="mt-4">
+  1948→            <CardHeader className="pb-3">
+  1949→              <CardTitle className="text-sm flex items-center gap-2">
+  1950→                <Sparkles className="h-4 w-4 text-primary" /> AI-Generated Insights
+  1951→              </CardTitle>
+  1952→              <CardDescription>Automated analysis of employment trends and platform performance</CardDescription>
+  1953→            </CardHeader>
+  1954→            <CardContent className="space-y-3">
+  1955→              {insights.map((insight: any, i: number) => (
+  1956→                <div key={i} className="flex items-start gap-3 rounded-lg border border-border bg-card p-3">
+  1957→                  <div className={cn(
+  1958→                    "flex h-8 w-8 shrink-0 items-center justify-center rounded-full",
+  1959→                    insight.trend === "up" ? "bg-emerald-100 text-emerald-700" :
+  1960→                    insight.trend === "down" ? "bg-rose-100 text-rose-700" :
+  1961→                    "bg-blue-100 text-blue-700"
+  1962→                  )}>
+  1963→                    {insight.trend === "up" ? <TrendingUp className="h-4 w-4" /> :
+  1964→                     insight.trend === "down" ? <ArrowDownRight className="h-4 w-4" /> :
+  1965→                     <BarChart3 className="h-4 w-4" />}
+  1966→                  </div>
+  1967→                  <div className="min-w-0 flex-1">
+  1968→                    <div className="flex items-center gap-2">
+  1969→                      <p className="text-sm font-semibold">{insight.title}</p>
+  1970→                      <Badge variant="outline" className={cn(
+  1971→                        "text-[9px]",
+  1972→                        insight.impact === "high" ? "bg-rose-50 text-rose-700 border-rose-200" :
+  1973→                        "bg-amber-50 text-amber-700 border-amber-200"
+  1974→                      )}>
+  1975→                        {insight.impact} impact
+  1976→                      </Badge>
+  1977→                    </div>
+  1978→                    <p className="mt-1 text-xs text-muted-foreground">{insight.description}</p>
+  1979→                  </div>
+  1980→                </div>
+  1981→              ))}
+  1982→            </CardContent>
+  1983→          </Card>
+  1984→
+  1985→          {/* Trends: Jobs by Category + Top Skills */}
+  1986→          <div className="mt-4 grid gap-4 lg:grid-cols-2">
+  1987→            <Card>
+  1988→              <CardHeader className="pb-3">
+  1989→                <CardTitle className="text-sm">Jobs by Category</CardTitle>
+  1990→                <CardDescription>Demand distribution across job categories</CardDescription>
+  1991→              </CardHeader>
+  1992→              <CardContent className="space-y-2">
+  1993→                {jobsByCategory.map((c: any) => {
+  1994→                  const max = Math.max(...jobsByCategory.map((x: any) => x.count), 1);
+  1995→                  return (
+  1996→                    <div key={c.category}>
+  1997→                      <div className="flex items-center justify-between text-xs">
+  1998→                        <span className="font-medium">{c.category}</span>
+  1999→                        <span className="text-muted-foreground">{c.count} jobs</span>
+  2000→                      </div>
+
+[showing lines 1-2000 of 2583; use offset=2001 with limit to continue reading]

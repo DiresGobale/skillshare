@@ -367,7 +367,7 @@ function Topbar({ onToggleMobile, mobileOpen, showNavHint }: { onToggleMobile: (
   const profilePhoto = profileData?.profile?.profilePhoto;
 
   return (
-    <header className="sticky top-0 z-30 flex h-16 items-center gap-3 border-b border-border bg-background/95 px-4 backdrop-blur supports-[backdrop-filter]:bg-background/80 lg:px-6">
+    <header className="z-30 flex h-16 shrink-0 items-center gap-3 border-b border-border bg-background/95 px-4 backdrop-blur supports-[backdrop-filter]:bg-background/80 lg:px-6">
       {/* 3-line hamburger toggle (mobile only) — with pulse hint after login */}
       <div className="relative lg:hidden">
         <HamburgerToggle
@@ -606,9 +606,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   }, []);
 
   return (
-    <div className="flex min-h-screen bg-background">
-      {/* Desktop sidebar — sticky so it stays in place while the page scrolls */}
-      <aside className="hidden w-64 shrink-0 border-r border-sidebar-border bg-sidebar lg:sticky lg:top-0 lg:h-screen lg:flex lg:flex-col">
+    <div className="flex h-screen overflow-hidden bg-background">
+      {/* Desktop sidebar — outside the scroll container, so it stays fixed naturally */}
+      <aside className="hidden w-64 shrink-0 border-r border-sidebar-border bg-sidebar lg:flex lg:flex-col">
         <SidebarNav role={role} view={view} onNavigate={(v) => go(v)} />
       </aside>
 
@@ -621,20 +621,20 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         onNavigate={(v) => go(v)}
       />
 
-      {/* Main */}
-      <div className="flex min-w-0 flex-1 flex-col">
+      {/* Main column — the only element that scrolls */}
+      <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
+        {/* Topbar — outside the inner scroll container, so it stays fixed naturally */}
         <Topbar
           onToggleMobile={() => { setMobileOpen((v) => !v); setShowNavHint(false); }}
           mobileOpen={mobileOpen}
           showNavHint={showNavHint}
         />
-        {/* pb-20 on mobile to account for the bottom nav bar; lg:pb-0 to remove it on desktop.
-            The Topbar above is sticky top-0 and the desktop sidebar is sticky top-0 h-screen,
-            so both stay anchored to the viewport during scroll on every screen size. */}
-        <main className="flex-1 pb-20 lg:pb-0">{children}</main>
+        {/* Only this <main> scrolls; the sidebar (lg) and topbar (all sizes) stay put.
+            pb-20 on mobile to clear the bottom nav bar; lg:pb-0 to remove it on desktop. */}
+        <main id="app-main-scroll" className="flex-1 overflow-y-auto overflow-x-hidden pb-20 lg:pb-0">{children}</main>
       </div>
 
-      {/* Mobile bottom navigation — persistent quick access to key pages */}
+      {/* Mobile bottom navigation — fixed, persistent quick access to key pages */}
       <MobileBottomNav role={role} view={view} onNavigate={(v) => go(v)} />
     </div>
   );

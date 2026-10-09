@@ -1,0 +1,1964 @@
+     1→"use client";
+     2→
+     3→import React, { useState, useEffect } from "react";
+     4→import { cn } from "@/lib/utils";
+     5→import { useApp } from "@/lib/app-context";
+     6→import { Button } from "@/components/ui/button";
+     7→import { Input } from "@/components/ui/input";
+     8→import { Label } from "@/components/ui/label";
+     9→import { Textarea } from "@/components/ui/textarea";
+    10→import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+    11→import { Badge } from "@/components/ui/badge";
+    12→import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+    13→import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+    14→import {
+    15→  Dialog,
+    16→  DialogContent,
+    17→  DialogDescription,
+    18→  DialogFooter,
+    19→  DialogHeader,
+    20→  DialogTitle,
+    21→  DialogTrigger,
+    22→} from "@/components/ui/dialog";
+    23→import { Switch } from "@/components/ui/switch";
+    24→import {
+    25→  MatchScore,
+    26→  SkillChip,
+    27→  ApplicationStatusBadge,
+    28→  JobStatusBadge,
+    29→  JobExpiryBadge,
+    30→  Avatar,
+    31→  CompanyLogo,
+    32→  SectionHeader,
+    33→  StatCard,
+    34→  EmptyState,
+    35→  LoadingState,
+    36→  ErrorState,
+    37→  SuccessBanner,
+    38→  InfoCallout,
+    39→  PrivacyLock,
+    40→  TableToolbar,
+    41→} from "@/components/shared/ui";
+    42→import {
+    43→  employerJobs,
+    44→  candidates,
+    45→  employerNotifications,
+    46→  employerConversations,
+    47→  employerDashboardStats,
+    48→  currentUser,
+    49→} from "@/lib/mock-data";
+    50→import { useFetch } from "@/lib/use-fetch";
+    51→import { useToast } from "@/hooks/use-toast";
+    52→import { ProfilePhotoUpload } from "@/components/shared/profile-photo-upload";
+    53→import {
+    54→  validateJobTitle,
+    55→  validateLocation,
+    56→  validateNumber,
+    57→  validateRequired,
+    58→  validateExpirationDuration,
+    59→  sanitizeNumber,
+    60→} from "@/lib/validation";
+    61→import type { Job, Candidate, ApplicationStatus, Conversation, ProficiencyLevel } from "@/lib/types";
+    62→import {
+    63→  Building2,
+    64→  Briefcase,
+    65→  Users,
+    66→  Send,
+    67→  Bell,
+    68→  MessageSquare,
+    69→  Plus,
+    70→  ArrowRight,
+    71→  ArrowLeft,
+    72→  CheckCircle2,
+    73→  Clock,
+    74→  AlertCircle,
+    75→  MapPin,
+    76→  Calendar,
+    77→  Target,
+    78→  Star,
+    79→  Eye,
+    80→  Check,
+    81→  Search,
+    82→  Filter,
+    83→  Sparkles,
+    84→  Cpu,
+    85→  ShieldCheck,
+    86→  Lock,
+    87→  Mail,
+    88→  Phone,
+    89→  GraduationCap,
+    90→  TrendingUp,
+    91→  ChevronRight,
+    92→  UserCheck,
+    93→  X,
+    94→  Trash2,
+    95→  Save,
+    96→  Send as SendIcon,
+    97→  CalendarClock,
+    98→} from "lucide-react";
+    99→
+   100→function PageContainer({ children, className }: { children: React.ReactNode; className?: string }) {
+   101→  return (
+   102→    <div className={cn("mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8 lg:py-8", className)}>
+   103→      {children}
+   104→    </div>
+   105→  );
+   106→}
+   107→
+   108→function timeAgo(date: string) {
+   109→  const d = new Date(date);
+   110→  const days = Math.floor((Date.now() - d.getTime()) / (1000 * 60 * 60 * 24));
+   111→  if (days === 0) return "today";
+   112→  if (days === 1) return "1d ago";
+   113→  if (days < 7) return `${days}d ago`;
+   114→  if (days < 30) return `${Math.floor(days / 7)}w ago`;
+   115→  return `${Math.floor(days / 30)}mo ago`;
+   116→}
+   117→
+   118→// ============================================================
+   119→// EMPLOYER DASHBOARD
+   120→// ============================================================
+   121→export function EmployerDashboard() {
+   122→  const { go } = useApp();
+   123→  const { data: jobsData, loading: jobsLoading } = useFetch<any>("/api/jobs");
+   124→  const { data: candidatesData } = useFetch<any>("/api/candidates");
+   125→  const { data: notifData } = useFetch<any>("/api/notifications");
+   126→
+   127→  const jobs: any[] = jobsData?.jobs ?? [];
+   128→  const candidates: any[] = candidatesData?.candidates ?? [];
+   129→  const notifications: any[] = notifData?.notifications ?? [];
+   130→
+   131→  const publishedJobs = jobs.filter((j) => j.status === "published");
+   132→  const draftJobs = jobs.filter((j) => j.status === "draft");
+   133→  const totalApplicants = candidates.length;
+   134→  const shortlisted = candidates.filter((c) => c.applicationStatus === "shortlisted").length;
+   135→  const interviews = candidates.filter((c) => c.applicationStatus === "interview").length;
+   136→
+   137→  return (
+   138→    <PageContainer>
+   139→      <SectionHeader
+   140→        title="Hiring overview"
+   141→        description="Track your active jobs, applicants, and interviews."
+   142→        actions={
+   143→          <Button className="btn-rainbow" onClick={() => go("job-edit", { jobId: "new" })}>
+   144→            <Plus className="h-4 w-4" /> Post a job
+   145→          </Button>
+   146→        }
+   147→      />
+   148→
+   149→      <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+   150→        <StatCard label="Active jobs" value={publishedJobs.length} icon={<Briefcase className="h-4 w-4" />} hint={`${draftJobs.length} draft${draftJobs.length === 1 ? "" : "s"}`} onClick={() => go("jobs")} />
+   151→        <StatCard label="Total applicants" value={totalApplicants} icon={<Users className="h-4 w-4" />} hint="Across all jobs" onClick={() => go("candidates")} />
+   152→        <StatCard label="Shortlisted" value={shortlisted} icon={<Star className="h-4 w-4" />} hint="Awaiting next step" onClick={() => go("candidates")} />
+   153→        <StatCard label="In interview" value={interviews} icon={<CalendarClock className="h-4 w-4" />} hint="Active interview stage" onClick={() => go("interviews")} />
+   154→      </div>
+   155→
+   156→      <div className="mt-6 grid gap-4 lg:grid-cols-3">
+   157→        {/* Active jobs */}
+   158→        <Card className="lg:col-span-2">
+   159→          <CardHeader className="pb-3 flex flex-row items-center justify-between space-y-0">
+   160→            <CardTitle className="text-sm">Your jobs</CardTitle>
+   161→            <Button variant="ghost" size="sm" onClick={() => go("jobs")}>
+   162→              View all <ArrowRight className="h-3.5 w-3.5" />
+   163→            </Button>
+   164→          </CardHeader>
+   165→          <CardContent className="space-y-2.5">
+   166→            {jobsLoading ? (
+   167→              <LoadingState label="Loading jobs…" rows={2} />
+   168→            ) : jobs.length === 0 ? (
+   169→              <EmptyState
+   170→                icon={<Briefcase className="h-5 w-5" />}
+   171→                title="No jobs yet"
+   172→                description="Post your first job to start receiving applicants."
+   173→                action={<Button size="sm" onClick={() => go("job-edit", { jobId: "new" })}><Plus className="h-3.5 w-3.5" /> Post a job</Button>}
+   174→              />
+   175→            ) : (
+   176→              jobs.map((j) => (
+   177→                <button
+   178→                  key={j.id}
+   179→                  onClick={() => go("candidates", { jobId: j.id })}
+   180→                  className="group flex w-full items-center gap-3 rounded-lg border border-border bg-card p-3 text-left transition-colors hover:bg-accent"
+   181→                >
+   182→                  <CompanyLogo initials={j.companyLogo || "CO"} size="md" />
+   183→                  <div className="min-w-0 flex-1">
+   184→                    <p className="truncate text-sm font-semibold group-hover:text-primary">{j.title}</p>
+   185→                    <p className="text-xs text-muted-foreground">{j.location} · posted {timeAgo(j.postedAt)}</p>
+   186→                  </div>
+   187→                  <div className="flex flex-col items-end gap-1">
+   188→                    <JobStatusBadge status={j.status} />
+   189→                    {j.status === "published" && j.expiresAt && <JobExpiryBadge expiresAt={j.expiresAt} status={j.status} />}
+   190→                  </div>
+   191→                  <ChevronRight className="h-4 w-4 text-muted-foreground" />
+   192→                </button>
+   193→              ))
+   194→            )}
+   195→          </CardContent>
+   196→        </Card>
+   197→
+   198→        {/* Top candidates */}
+   199→        <Card>
+   200→          <CardHeader className="pb-3 flex flex-row items-center justify-between space-y-0">
+   201→            <CardTitle className="text-sm">Recent candidates</CardTitle>
+   202→            <Button variant="ghost" size="sm" onClick={() => go("candidates")}>
+   203→              All <ArrowRight className="h-3.5 w-3.5" />
+   204→            </Button>
+   205→          </CardHeader>
+   206→          <CardContent className="space-y-2">
+   207→            {candidates.length === 0 ? (
+   208→              <EmptyState icon={<Users className="h-5 w-5" />} title="No candidates yet" description="Applicants will appear here." />
+   209→            ) : (
+   210→              candidates.slice(0, 4).map((c) => (
+   211→                <button
+   212→                  key={c.id}
+   213→                  onClick={() => go("candidate-detail", { candidateId: c.id })}
+   214→                  className="group flex w-full items-center gap-2.5 rounded-lg border border-border bg-card p-2.5 text-left transition-colors hover:bg-accent"
+   215→                >
+   216→                  <Avatar initials={c.initials} color={c.avatarColor} size="sm" />
+   217→                  <div className="min-w-0 flex-1">
+   218→                    <p className="truncate text-xs font-semibold group-hover:text-primary">{c.name}</p>
+   219→                    <p className="truncate text-[10px] text-muted-foreground">{c.title}</p>
+   220→                  </div>
+   221→                  {c.matchScore > 0 && <MatchScore score={c.matchScore} size="sm" showLabel={false} />}
+   222→                </button>
+   223→              ))
+   224→            )}
+   225→          </CardContent>
+   226→        </Card>
+   227→      </div>
+   228→
+   229→      {/* Recent notifications */}
+   230→      <Card className="mt-4">
+   231→        <CardHeader className="pb-3 flex flex-row items-center justify-between space-y-0">
+   232→          <CardTitle className="text-sm">Recent notifications</CardTitle>
+   233→          <Button variant="ghost" size="sm" onClick={() => go("notifications")}>
+   234→            View all <ArrowRight className="h-3.5 w-3.5" />
+   235→          </Button>
+   236→        </CardHeader>
+   237→        <CardContent className="space-y-2">
+   238→          {notifications.length === 0 ? (
+   239→            <EmptyState icon={<Bell className="h-5 w-5" />} title="No notifications" />
+   240→          ) : (
+   241→            notifications.slice(0, 3).map((n) => (
+   242→              <div
+   243→                key={n.id}
+   244→                className={cn(
+   245→                  "rounded-lg border border-border bg-card p-3",
+   246→                  !n.read && "border-primary/30 bg-primary/5"
+   247→                )}
+   248→              >
+   249→                <div className="flex items-start gap-2">
+   250→                  {!n.read && <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-primary" />}
+   251→                  <div className="min-w-0 flex-1">
+   252→                    <p className="text-xs font-semibold">{n.title}</p>
+   253→                    <p className="mt-0.5 line-clamp-2 text-xs text-muted-foreground">{n.message}</p>
+   254→                    <p className="mt-1 text-[10px] text-muted-foreground">{timeAgo(n.createdAt)}</p>
+   255→                  </div>
+   256→                </div>
+   257→              </div>
+   258→            ))
+   259→          )}
+   260→        </CardContent>
+   261→      </Card>
+   262→    </PageContainer>
+   263→  );
+   264→}
+   265→
+   266→// ============================================================
+   267→// COMPANY PROFILE
+   268→// ============================================================
+   269→export function EmployerCompanyProfile() {
+   270→  const { user: sessionUser } = useApp();
+   271→  const { data, loading, refetch } = useFetch<any>("/api/profile");
+   272→  const profile = data?.profile;
+   273→
+   274→  const [name, setName] = useState("");
+   275→  const [company, setCompany] = useState("");
+   276→  const [title, setTitle] = useState("");
+   277→  const [location, setLocation] = useState("");
+   278→  const [about, setAbout] = useState("");
+   279→  const [saving, setSaving] = useState(false);
+   280→  const [saveMsg, setSaveMsg] = useState<{ ok: boolean; msg: string } | null>(null);
+   281→
+   282→  useEffect(() => {
+   283→    if (profile) {
+   284→      setName(profile.name ?? "");
+   285→      setCompany(profile.company ?? "");
+   286→      setTitle(profile.title ?? "");
+   287→      setLocation(profile.location ?? "");
+   288→      setAbout(profile.about ?? "");
+   289→    }
+   290→  }, [profile]);
+   291→
+   292→  const save = async () => {
+   293→    setSaving(true);
+   294→    setSaveMsg(null);
+   295→    try {
+   296→      const res = await fetch("/api/profile", {
+   297→        method: "PUT",
+   298→        headers: { "Content-Type": "application/json" },
+   299→        body: JSON.stringify({ name, title, location, about, company }),
+   300→      });
+   301→      const json = await res.json();
+   302→      if (json.ok) {
+   303→        setSaveMsg({ ok: true, msg: "Company profile updated successfully." });
+   304→        refetch();
+   305→      } else {
+   306→        setSaveMsg({ ok: false, msg: json.error ?? "Save failed." });
+   307→      }
+   308→    } catch {
+   309→      setSaveMsg({ ok: false, msg: "Network error." });
+   310→    } finally {
+   311→      setSaving(false);
+   312→    }
+   313→  };
+   314→
+   315→  if (loading) return <PageContainer><LoadingState label="Loading company profile…" rows={3} /></PageContainer>;
+   316→
+   317→  return (
+   318→    <PageContainer>
+   319→      <SectionHeader
+   320→        title="Company Profile"
+   321→        description="This information appears on every job you post."
+   322→        actions={
+   323→          <ProfilePhotoUpload
+   324→            photo={profile?.profilePhoto}
+   325→            initials={profile?.initials ?? sessionUser?.initials ?? "CO"}
+   326→            color={profile?.avatarColor ?? sessionUser?.avatarColor ?? "oklch(0.6 0.18 240)"}
+   327→            onUploaded={() => refetch()}
+   328→          />
+   329→        }
+   330→      />
+   331→
+   332→      {saveMsg && (
+   333→        <div className={cn(
+   334→          "mt-4 flex items-center gap-2 rounded-lg border px-4 py-3 text-sm",
+   335→          saveMsg.ok ? "border-emerald-200 bg-emerald-50 text-emerald-700" : "border-rose-200 bg-rose-50 text-rose-700"
+   336→        )}>
+   337→          {saveMsg.ok ? <CheckCircle2 className="h-4 w-4" /> : <AlertCircle className="h-4 w-4" />}
+   338→          {saveMsg.msg}
+   339→        </div>
+   340→      )}
+   341→
+   342→      <div className="mt-6 grid gap-4 lg:grid-cols-3">
+   343→        {/* Company card */}
+   344→        <Card className="lg:col-span-1">
+   345→          <CardContent className="p-6">
+   346→            <div className="flex flex-col items-center text-center">
+   347→              {profile?.profilePhoto ? (
+   348→                <img src={profile.profilePhoto} alt="Company logo" className="h-20 w-20 rounded-xl object-cover shadow-md" />
+   349→              ) : (
+   350→                <CompanyLogo initials={company?.slice(0, 2).toUpperCase() || "CO"} size="lg" className="!h-20 !w-20 !text-2xl" />
+   351→              )}
+   352→              <h2 className="mt-3 text-base font-semibold">{company || "Your Company"}</h2>
+   353→              <p className="text-xs text-muted-foreground">{location || "—"}</p>
+   354→              <div className="mt-3 flex flex-wrap justify-center gap-1.5">
+   355→                <Badge variant="outline" className="bg-violet-50 text-violet-700 border-violet-200">Technology</Badge>
+   356→                <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200">Employer</Badge>
+   357→                <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-200 gap-1">
+   358→                  <ShieldCheck className="h-2.5 w-2.5" /> Verified
+   359→                </Badge>
+   360→              </div>
+   361→              <div className="mt-4 w-full space-y-1 border-t border-border pt-3 text-xs">
+   362→                <div className="flex items-center gap-2 text-muted-foreground">
+   363→                  <Mail className="h-3.5 w-3.5" /> {sessionUser?.email}
+   364→                </div>
+   365→              </div>
+   366→            </div>
+   367→          </CardContent>
+   368→        </Card>
+   369→
+   370→        {/* Editable fields */}
+   371→        <div className="lg:col-span-2 space-y-4">
+   372→          <Card>
+   373→            <CardHeader className="pb-3">
+   374→              <CardTitle className="text-sm">Company information</CardTitle>
+   375→              <CardDescription>Edit your company name, contact info, and description.</CardDescription>
+   376→            </CardHeader>
+   377→            <CardContent className="space-y-3">
+   378→              <div className="grid gap-3 sm:grid-cols-2">
+   379→                <div className="space-y-1.5">
+   380→                  <Label htmlFor="company-name">Company name *</Label>
+   381→                  <Input id="company-name" value={company} onChange={(e) => setCompany(e.target.value)} placeholder="e.g. Northwind Technologies" />
+   382→                </div>
+   383→                <div className="space-y-1.5">
+   384→                  <Label htmlFor="contact-name">Contact person</Label>
+   385→                  <Input id="contact-name" value={name} onChange={(e) => setName(e.target.value)} placeholder="Your name" />
+   386→                </div>
+   387→                <div className="space-y-1.5">
+   388→                  <Label htmlFor="contact-title">Your title</Label>
+   389→                  <Input id="contact-title" value={title} onChange={(e) => setTitle(e.target.value)} placeholder="e.g. Talent Acquisition Lead" />
+   390→                </div>
+   391→                <div className="space-y-1.5">
+   392→                  <Label htmlFor="company-location">Location *</Label>
+   393→                  <Input id="company-location" value={location} onChange={(e) => setLocation(e.target.value)} placeholder="e.g. Lagos, Nigeria" />
+   394→                </div>
+   395→              </div>
+   396→              <div className="space-y-1.5">
+   397→                <Label htmlFor="company-about">About the company</Label>
+   398→                <Textarea
+   399→                  id="company-about"
+   400→                  value={about}
+   401→                  onChange={(e) => setAbout(e.target.value)}
+   402→                  rows={4}
+   403→                  className="resize-none"
+   404→                  placeholder="Describe your company, mission, and what you do."
+   405→                />
+   406→              </div>
+   407→              <div className="flex justify-end gap-2">
+   408→                <Button variant="ghost" size="sm" onClick={() => refetch()} disabled={saving}>Cancel</Button>
+   409→                <Button size="sm" className="btn-blue" onClick={save} disabled={saving}>
+   410→                  {saving ? (
+   411→                    <>
+   412→                      <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-primary-foreground border-t-transparent" />
+   413→                      Saving…
+   414→                    </>
+   415→                  ) : "Save changes"}
+   416→                </Button>
+   417→              </div>
+   418→            </CardContent>
+   419→          </Card>
+   420→
+   421→          <Card>
+   422→            <CardHeader className="pb-3">
+   423→              <CardTitle className="text-sm">Hiring contact</CardTitle>
+   424→              <CardDescription>This email receives application notifications.</CardDescription>
+   425→            </CardHeader>
+   426→            <CardContent className="space-y-2 text-xs">
+   427→              <div className="flex items-center gap-2">
+   428→                <Mail className="h-3.5 w-3.5 text-muted-foreground" />
+   429→                <span className="font-medium">{sessionUser?.email}</span>
+   430→              </div>
+   431→              <p className="text-muted-foreground">To change the hiring contact email, contact your platform administrator.</p>
+   432→            </CardContent>
+   433→          </Card>
+   434→        </div>
+   435→      </div>
+   436→    </PageContainer>
+   437→  );
+   438→}
+   439→
+   440→// ============================================================
+   441→// EMPLOYER JOBS LIST
+   442→// ============================================================
+   443→export function EmployerJobs() {
+   444→  const { go } = useApp();
+   445→  const { data, loading, refetch } = useFetch<any>("/api/jobs");
+   446→  const [filter, setFilter] = useState("all");
+   447→  const [deleteId, setDeleteId] = useState<string | null>(null);
+   448→
+   449→  const allJobs: any[] = data?.jobs ?? [];
+   450→  let jobs = [...allJobs];
+   451→  if (filter !== "all") jobs = jobs.filter((j) => j.status === filter);
+   452→
+   453→  const closeJob = async (id: string) => {
+   454→    await fetch(`/api/jobs/${id}`, {
+   455→      method: "PATCH",
+   456→      headers: { "Content-Type": "application/json" },
+   457→      body: JSON.stringify({ status: "closed" }),
+   458→    });
+   459→    refetch();
+   460→  };
+   461→
+   462→  const deleteJob = async (id: string) => {
+   463→    setDeleteId(id);
+   464→    try {
+   465→      await fetch(`/api/jobs/${id}`, { method: "DELETE" });
+   466→      refetch();
+   467→    } finally {
+   468→      setDeleteId(null);
+   469→    }
+   470→  };
+   471→
+   472→  return (
+   473→    <PageContainer>
+   474→      <SectionHeader
+   475→        title="Jobs"
+   476→        description="Create, publish, and manage your job postings."
+   477→        actions={
+   478→          <Button onClick={() => go("job-edit", { jobId: "new" })}>
+   479→            <Plus className="h-4 w-4" /> Post a job
+   480→          </Button>
+   481→        }
+   482→      />
+   483→
+   484→      <Tabs value={filter} onValueChange={setFilter} className="mt-6">
+   485→        <TabsList className="overflow-x-auto">
+   486→          <TabsTrigger value="all">All ({allJobs.length})</TabsTrigger>
+   487→          <TabsTrigger value="published">Published ({allJobs.filter(j => j.status === "published").length})</TabsTrigger>
+   488→          <TabsTrigger value="draft">Drafts ({allJobs.filter(j => j.status === "draft").length})</TabsTrigger>
+   489→          <TabsTrigger value="closed">Closed ({allJobs.filter(j => j.status === "closed").length})</TabsTrigger>
+   490→        </TabsList>
+   491→      </Tabs>
+   492→
+   493→      {loading ? (
+   494→        <LoadingState label="Loading jobs…" rows={3} />
+   495→      ) : jobs.length === 0 ? (
+   496→        <EmptyState
+   497→          className="mt-4"
+   498→          icon={<Briefcase className="h-5 w-5" />}
+   499→          title="No jobs in this category"
+   500→          description="Create a new job posting to start receiving applicants."
+   501→          action={<Button size="sm" onClick={() => go("job-edit", { jobId: "new" })}>Post a job</Button>}
+   502→        />
+   503→      ) : (
+   504→        <div className="mt-4 overflow-hidden rounded-lg border border-border">
+   505→          <table className="w-full text-sm">
+   506→            <thead className="bg-muted/50 text-[11px] uppercase tracking-wide text-muted-foreground">
+   507→              <tr>
+   508→                <th className="px-4 py-2.5 text-left font-medium">Job</th>
+   509→                <th className="hidden px-4 py-2.5 text-left font-medium sm:table-cell">Status</th>
+   510→                <th className="hidden px-4 py-2.5 text-left font-medium lg:table-cell">Posted</th>
+   511→                <th className="px-4 py-2.5 text-right font-medium">Actions</th>
+   512→              </tr>
+   513→            </thead>
+   514→            <tbody className="divide-y divide-border bg-card">
+   515→              {jobs.map((j) => (
+   516→                <tr key={j.id} className="hover:bg-accent/30">
+   517→                  <td className="px-4 py-3">
+   518→                    <div className="flex items-center gap-2.5">
+   519→                      <CompanyLogo initials={j.companyLogo || "CO"} size="sm" />
+   520→                      <div className="min-w-0">
+   521→                        <button
+   522→                          onClick={() => go("candidates", { jobId: j.id })}
+   523→                          className="block truncate text-sm font-semibold hover:text-primary text-left"
+   524→                        >
+   525→                          {j.title}
+   526→                        </button>
+   527→                        <p className="text-xs text-muted-foreground">{j.location}</p>
+   528→                      </div>
+   529→                    </div>
+   530→                  </td>
+   531→                  <td className="hidden px-4 py-3 sm:table-cell">
+   532→                    <div className="flex flex-col gap-1">
+   533→                      <JobStatusBadge status={j.status} />
+   534→                      {j.status === "published" && j.expiresAt && <JobExpiryBadge expiresAt={j.expiresAt} status={j.status} />}
+   535→                    </div>
+   536→                  </td>
+   537→                  <td className="hidden px-4 py-3 text-xs text-muted-foreground lg:table-cell">{timeAgo(j.postedAt)}</td>
+   538→                  <td className="px-4 py-3 text-right">
+   539→                    <div className="flex justify-end gap-1">
+   540→                      <Button size="sm" variant="ghost" onClick={() => go("candidates", { jobId: j.id })} title="View candidates">
+   541→                        <Eye className="h-3.5 w-3.5" />
+   542→                      </Button>
+   543→                      <Button size="sm" variant="ghost" onClick={() => go("job-edit", { jobId: j.id })} title="Edit">
+   544→                        Edit
+   545→                      </Button>
+   546→                      {j.status === "published" && (
+   547→                        <Button size="sm" variant="ghost" onClick={() => closeJob(j.id)} title="Close job">
+   548→                          Close
+   549→                        </Button>
+   550→                      )}
+   551→                      <Button
+   552→                        size="sm"
+   553→                        variant="ghost"
+   554→                        onClick={() => deleteJob(j.id)}
+   555→                        disabled={deleteId === j.id}
+   556→                        title="Delete job"
+   557→                      >
+   558→                        {deleteId === j.id ? (
+   559→                          <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-rose-500 border-t-transparent" />
+   560→                        ) : (
+   561→                          <Trash2 className="h-3.5 w-3.5 text-rose-600" />
+   562→                        )}
+   563→                      </Button>
+   564→                    </div>
+   565→                  </td>
+   566→                </tr>
+   567→              ))}
+   568→            </tbody>
+   569→          </table>
+   570→        </div>
+   571→      )}
+   572→    </PageContainer>
+   573→  );
+   574→}
+   575→
+   576→// ============================================================
+   577→// JOB CREATE/EDIT
+   578→// ============================================================
+   579→export function EmployerJobEdit() {
+   580→  const { go, selectedJobId } = useApp();
+   581→  const isNew = selectedJobId === "new";
+   582→  const { data: existingData } = useFetch<any>(selectedJobId && selectedJobId !== "new" ? `/api/jobs/${selectedJobId}` : null);
+   583→  const existing = existingData?.job;
+   584→
+   585→  const [step, setStep] = useState(1);
+   586→  const [published, setPublished] = useState(false);
+   587→  const [savedDraft, setSavedDraft] = useState(false);
+   588→  const [saving, setSaving] = useState(false);
+   589→  const [error, setError] = useState<string | null>(null);
+   590→
+   591→  // Form state
+   592→  const [title, setTitle] = useState("");
+   593→  const [category, setCategory] = useState("Engineering");
+   594→  const [jobType, setJobType] = useState("full-time");
+   595→  const [location, setLocation] = useState("");
+   596→  const [remote, setRemote] = useState("hybrid");
+   597→  const [salaryMin, setSalaryMin] = useState("5000");
+   598→  const [salaryMax, setSalaryMax] = useState("8000");
+   599→  const [description, setDescription] = useState("");
+   600→  const [expirationDays, setExpirationDays] = useState("30"); // default 30 days
+   601→  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+   602→  const [skills, setSkills] = useState<
+   603→    { id: string; name: string; category: string; proficiency: ProficiencyLevel; mandatory: boolean; weight: number }[]
+   604→  >([]);
+   605→  const [newSkill, setNewSkill] = useState("");
+   606→  const [newProficiency, setNewProficiency] = useState<ProficiencyLevel>("intermediate");
+   607→  const [newMandatory, setNewMandatory] = useState(true);
+   608→
+   609→  // Sync form when existing job loads
+   610→  useEffect(() => {
+   611→    if (existing) {
+   612→      setTitle(existing.title ?? "");
+   613→      setCategory(existing.category ?? "Engineering");
+   614→      setJobType(existing.type ?? "full-time");
+   615→      setLocation(existing.location ?? "");
+   616→      setRemote(existing.remote ?? "hybrid");
+   617→      setSalaryMin(String(existing.salaryMin ?? 5000));
+   618→      setSalaryMax(String(existing.salaryMax ?? 8000));
+   619→      setDescription(existing.description ?? "");
+   620→      // If the job has an expiresAt, calculate remaining days for display
+   621→      if (existing.expiresAt) {
+   622→        const remaining = Math.ceil((new Date(existing.expiresAt).getTime() - Date.now()) / (1000 * 60 * 60 * 24));
+   623→        setExpirationDays(String(Math.max(1, remaining)));
+   624→      }
+   625→    }
+   626→  }, [existing]);
+   627→
+   628→  const addSkill = () => {
+   629→    if (!newSkill.trim()) return;
+   630→    setSkills([
+   631→      ...skills,
+   632→      { id: `n${Date.now()}`, name: newSkill.trim(), category: "Custom", proficiency: newProficiency, mandatory: newMandatory, weight: newMandatory ? 0.8 : 0.4 },
+   633→    ]);
+   634→    setNewSkill("");
+   635→  };
+   636→
+   637→  const removeSkill = (id: string) => setSkills(skills.filter((s) => s.id !== id));
+   638→
+   639→  const saveJob = async (status: "draft" | "published") => {
+   640→    setError(null);
+   641→    setFieldErrors({});
+   642→
+   643→    // ---------- FRONTEND VALIDATION ----------
+   644→    const errs: Record<string, string> = {};
+   645→    const titleCheck = validateJobTitle(title);
+   646→    if (!titleCheck.ok) errs.title = titleCheck.error!;
+   647→    const locCheck = validateLocation(location);
+   648→    if (!locCheck.ok) errs.location = locCheck.error!;
+   649→    const descCheck = validateRequired(description, "Job description", { minLength: 10, maxLength: 5000 });
+   650→    if (!descCheck.ok) errs.description = descCheck.error!;
+   651→    const minCheck = validateNumber(salaryMin, "Salary minimum", { min: 0, max: 1000000 });
+   652→    if (!minCheck.ok) errs.salaryMin = minCheck.error!;
+   653→    const maxCheck = validateNumber(salaryMax, "Salary maximum", { min: 0, max: 1000000 });
+   654→    if (!maxCheck.ok) errs.salaryMax = maxCheck.error!;
+   655→    if (Number(salaryMin) >= Number(salaryMax)) errs.salaryMax = "Salary maximum must be greater than the minimum.";
+   656→    if (status === "published") {
+   657→      const expCheck = validateExpirationDuration(expirationDays);
+   658→      if (!expCheck.ok) errs.expirationDays = expCheck.error!;
+   659→    }
+   660→
+   661→    if (Object.keys(errs).length > 0) {
+   662→      setFieldErrors(errs);
+   663→      setError("Please fix the errors highlighted below before continuing.");
+   664→      setStep(1);
+   665→      return;
+   666→    }
+   667→
+   668→    setSaving(true);
+   669→    try {
+   670→      const payload = {
+   671→        title: title.trim(),
+   672→        category,
+   673→        type: jobType,
+   674→        location: location.trim(),
+   675→        remote,
+   676→        salaryMin: Number(salaryMin),
+   677→        salaryMax: Number(salaryMax),
+   678→        description: description.trim(),
+   679→        status,
+   680→        expirationDays: status === "published" ? Number(expirationDays) : undefined,
+   681→        skills: skills.map((s) => ({ name: s.name, proficiency: s.proficiency, mandatory: s.mandatory })),
+   682→      };
+   683→      let res;
+   684→      if (isNew) {
+   685→        res = await fetch("/api/jobs", {
+   686→          method: "POST",
+   687→          headers: { "Content-Type": "application/json" },
+   688→          body: JSON.stringify(payload),
+   689→        });
+   690→      } else {
+   691→        res = await fetch(`/api/jobs/${selectedJobId}`, {
+   692→          method: "PATCH",
+   693→          headers: { "Content-Type": "application/json" },
+   694→          body: JSON.stringify(payload),
+   695→        });
+   696→      }
+   697→      const json = await res.json();
+   698→      if (!json.ok) {
+   699→        setError(json.error ?? "Failed to save job.");
+   700→        return;
+   701→      }
+   702→      if (status === "draft") {
+   703→        setSavedDraft(true);
+   704→      } else {
+   705→        setPublished(true);
+   706→        // Trigger the notification popup + sound on the client
+   707→        try {
+   708→          sessionStorage.setItem("skillmatch.jobPosted", JSON.stringify({
+   709→            title: title.trim(),
+   710→            company: existing?.company ?? "Your company",
+   711→            timestamp: Date.now(),
+   712→          }));
+   713→        } catch { /* ignore */ }
+   714→        setTimeout(() => go("jobs"), 1500);
+   715→      }
+   716→    } catch {
+   717→      setError("Network error. Please try again.");
+   718→    } finally {
+   719→      setSaving(false);
+   720→    }
+   721→  };
+   722→
+   723→  return (
+   724→    <PageContainer>
+   725→      <button
+   726→        onClick={() => go("jobs")}
+   727→        className="mb-4 inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
+   728→      >
+   729→        <ArrowLeft className="h-3.5 w-3.5" /> Back to jobs
+   730→      </button>
+   731→
+   732→      <SectionHeader
+   733→        title={isNew ? "Post a new job" : `Edit: ${existing?.title}`}
+   734→        description="Define job details and required skills. The AI uses these to score every applicant."
+   735→      />
+   736→
+   737→      {savedDraft && (
+   738→        <div className="mt-4">
+   739→          <SuccessBanner title="Draft saved" description="You can continue editing and publish when ready." onClose={() => setSavedDraft(false)} />
+   740→        </div>
+   741→      )}
+   742→      {published && (
+   743→        <div className="mt-4">
+   744→          <SuccessBanner title="Job published!" description="It's now live and visible to candidates. We'll notify you when applications arrive." onClose={() => setPublished(false)} />
+   745→        </div>
+   746→      )}
+   747→
+   748→      {/* Stepper */}
+   749→      <div className="mt-6 flex items-center gap-2">
+   750→        {[
+   751→          { n: 1, label: "Job details" },
+   752→          { n: 2, label: "Skills & proficiency" },
+   753→          { n: 3, label: "Review & publish" },
+   754→        ].map((s, i) => (
+   755→          <React.Fragment key={s.n}>
+   756→            <button
+   757→              onClick={() => setStep(s.n)}
+   758→              className={cn(
+   759→                "flex items-center gap-2 rounded-full px-3 py-1.5 text-xs font-medium",
+   760→                step === s.n ? "bg-primary text-primary-foreground" : step > s.n ? "bg-primary/10 text-primary" : "bg-muted text-muted-foreground"
+   761→              )}
+   762→            >
+   763→              {step > s.n ? <Check className="h-3 w-3" /> : <span className="font-bold">{s.n}</span>}
+   764→              <span className="hidden sm:inline">{s.label}</span>
+   765→            </button>
+   766→            {i < 2 && <div className="h-px flex-1 bg-border" />}
+   767→          </React.Fragment>
+   768→        ))}
+   769→      </div>
+   770→
+   771→      <Card className="mt-4">
+   772→        <CardContent className="p-6">
+   773→          {step === 1 && (
+   774→            <div className="space-y-4">
+   775→              <div className="space-y-1.5">
+   776→                <Label>Job title *</Label>
+   777→                <Input
+   778→                  value={title}
+   779→                  onChange={(e) => setTitle(e.target.value)}
+   780→                  placeholder="e.g. Senior Frontend Engineer"
+   781→                  className={cn(fieldErrors.title && "border-rose-400 focus-visible:ring-rose-200")}
+   782→                />
+   783→                {fieldErrors.title && <p className="text-xs text-rose-600">{fieldErrors.title}</p>}
+   784→              </div>
+   785→              <div className="grid gap-4 sm:grid-cols-2">
+   786→                <div className="space-y-1.5">
+   787→                  <Label>Category</Label>
+   788→                  <Select value={category} onValueChange={setCategory}>
+   789→                    <SelectTrigger><SelectValue /></SelectTrigger>
+   790→                    <SelectContent>
+   791→                      <SelectItem value="Engineering">Engineering</SelectItem>
+   792→                      <SelectItem value="Design">Design</SelectItem>
+   793→                      <SelectItem value="Product">Product</SelectItem>
+   794→                      <SelectItem value="Data">Data</SelectItem>
+   795→                      <SelectItem value="Marketing">Marketing</SelectItem>
+   796→                    </SelectContent>
+   797→                  </Select>
+   798→                </div>
+   799→                <div className="space-y-1.5">
+   800→                  <Label>Type</Label>
+   801→                  <Select value={jobType} onValueChange={setJobType}>
+   802→                    <SelectTrigger><SelectValue /></SelectTrigger>
+   803→                    <SelectContent>
+   804→                      <SelectItem value="full-time">Full-time</SelectItem>
+   805→                      <SelectItem value="part-time">Part-time</SelectItem>
+   806→                      <SelectItem value="contract">Contract</SelectItem>
+   807→                      <SelectItem value="internship">Internship</SelectItem>
+   808→                    </SelectContent>
+   809→                  </Select>
+   810→                </div>
+   811→                <div className="space-y-1.5">
+   812→                  <Label>Location *</Label>
+   813→                  <Input
+   814→                    value={location}
+   815→                    onChange={(e) => setLocation(e.target.value)}
+   816→                    placeholder="e.g. Lagos, Nigeria"
+   817→                    className={cn(fieldErrors.location && "border-rose-400 focus-visible:ring-rose-200")}
+   818→                  />
+   819→                  {fieldErrors.location && <p className="text-xs text-rose-600">{fieldErrors.location}</p>}
+   820→                </div>
+   821→                <div className="space-y-1.5">
+   822→                  <Label>Workplace</Label>
+   823→                  <Select value={remote} onValueChange={setRemote}>
+   824→                    <SelectTrigger><SelectValue /></SelectTrigger>
+   825→                    <SelectContent>
+   826→                      <SelectItem value="onsite">On-site</SelectItem>
+   827→                      <SelectItem value="hybrid">Hybrid</SelectItem>
+   828→                      <SelectItem value="remote">Remote</SelectItem>
+   829→                    </SelectContent>
+   830→                  </Select>
+   831→                </div>
+   832→                <div className="space-y-1.5">
+   833→                  <Label>Salary min (USD / month) *</Label>
+   834→                  <Input
+   835→                    type="number"
+   836→                    min="0"
+   837→                    value={salaryMin}
+   838→                    onChange={(e) => setSalaryMin(sanitizeNumber(e.target.value))}
+   839→                    className={cn(fieldErrors.salaryMin && "border-rose-400 focus-visible:ring-rose-200")}
+   840→                  />
+   841→                  {fieldErrors.salaryMin && <p className="text-xs text-rose-600">{fieldErrors.salaryMin}</p>}
+   842→                </div>
+   843→                <div className="space-y-1.5">
+   844→                  <Label>Salary max (USD / month) *</Label>
+   845→                  <Input
+   846→                    type="number"
+   847→                    min="0"
+   848→                    value={salaryMax}
+   849→                    onChange={(e) => setSalaryMax(sanitizeNumber(e.target.value))}
+   850→                    className={cn(fieldErrors.salaryMax && "border-rose-400 focus-visible:ring-rose-200")}
+   851→                  />
+   852→                  {fieldErrors.salaryMax && <p className="text-xs text-rose-600">{fieldErrors.salaryMax}</p>}
+   853→                </div>
+   854→              </div>
+   855→              {/* Expiration duration — required when publishing */}
+   856→              <div className="space-y-1.5">
+   857→                <Label>Expiration duration (days) *</Label>
+   858→                <div className="flex flex-wrap items-center gap-2">
+   859→                  <Input
+   860→                    type="number"
+   861→                    min="1"
+   862→                    max="365"
+   863→                    value={expirationDays}
+   864→                    onChange={(e) => setExpirationDays(sanitizeNumber(e.target.value))}
+   865→                    placeholder="30"
+   866→                    className={cn("w-32", fieldErrors.expirationDays && "border-rose-400 focus-visible:ring-rose-200")}
+   867→                  />
+   868→                  <div className="flex gap-1.5">
+   869→                    {[
+   870→                      { label: "7 days", val: "7" },
+   871→                      { label: "14 days", val: "14" },
+   872→                      { label: "30 days", val: "30" },
+   873→                      { label: "60 days", val: "60" },
+   874→                      { label: "90 days", val: "90" },
+   875→                    ].map((preset) => (
+   876→                      <button
+   877→                        key={preset.val}
+   878→                        type="button"
+   879→                        onClick={() => setExpirationDays(preset.val)}
+   880→                        className={cn(
+   881→                          "rounded-md border px-2 py-1 text-xs font-medium transition-all",
+   882→                          expirationDays === preset.val
+   883→                            ? "border-primary bg-primary/10 text-primary"
+   884→                            : "border-border text-muted-foreground hover:bg-accent"
+   885→                        )}
+   886→                      >
+   887→                        {preset.label}
+   888→                      </button>
+   889→                    ))}
+   890→                  </div>
+   891→                </div>
+   892→                {fieldErrors.expirationDays ? (
+   893→                  <p className="text-xs text-rose-600">{fieldErrors.expirationDays}</p>
+   894→                ) : (
+   895→                  <p className="text-[11px] text-muted-foreground">
+   896→                    The job will automatically expire and change to "Expired" status after this many days.
+   897→                    {expirationDays && Number(expirationDays) > 0 && (
+   898→                      <> Expires on <strong>{new Date(Date.now() + Number(expirationDays) * 86400000).toLocaleDateString()}</strong>.</>
+   899→                    )}
+   900→                  </p>
+   901→                )}
+   902→              </div>
+   903→              <div className="space-y-1.5">
+   904→                <Label>Job description *</Label>
+   905→                <Textarea
+   906→                  rows={5}
+   907→                  value={description}
+   908→                  onChange={(e) => setDescription(e.target.value)}
+   909→                  placeholder="Describe the role, team, and what success looks like…"
+   910→                  className={cn(fieldErrors.description && "border-rose-400 focus-visible:ring-rose-200")}
+   911→                />
+   912→                {fieldErrors.description && <p className="text-xs text-rose-600">{fieldErrors.description}</p>}
+   913→              </div>
+   914→              {error && (
+   915→                <div className="flex items-center gap-2 rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-700">
+   916→                  <AlertCircle className="h-3.5 w-3.5 shrink-0" />
+   917→                  {error}
+   918→                </div>
+   919→              )}
+   920→              <div className="flex justify-end">
+   921→                <Button onClick={() => { setError(null); setStep(2); }}>Continue <ArrowRight className="h-3.5 w-3.5" /></Button>
+   922→              </div>
+   923→            </div>
+   924→          )}
+   925→
+   926→          {step === 2 && (
+   927→            <div className="space-y-4">
+   928→              <div>
+   929→                <h3 className="text-sm font-semibold">Required skills</h3>
+   930→                <p className="text-xs text-muted-foreground">Mark skills as mandatory or preferred and set proficiency thresholds. The AI uses these to score every applicant.</p>
+   931→              </div>
+   932→
+   933→              <InfoCallout>
+   934→                <span className="font-medium">Tip:</span> Set the proficiency threshold to the minimum acceptable level. Setting it higher narrows your funnel; setting it lower widens it.
+   935→              </InfoCallout>
+   936→
+   937→              {/* Existing skills */}
+   938→              <div className="space-y-2">
+   939→                {skills.map((s) => (
+   940→                  <div key={s.id} className="flex items-center gap-2 rounded-lg border border-border bg-card p-2.5">
+   941→                    <SkillChip name={s.name} size="sm" />
+   942→                    <div className="ml-2 flex items-center gap-2 text-xs">
+   943→                      <span className="text-muted-foreground">Proficiency:</span>
+   944→                      <Badge variant="outline" className="capitalize text-[10px]">{s.proficiency}</Badge>
+   945→                    </div>
+   946→                    <div className="ml-auto flex items-center gap-2">
+   947→                      <Label className="text-xs flex items-center gap-1.5 cursor-pointer">
+   948→                        <Switch
+   949→                          checked={s.mandatory}
+   950→                          onCheckedChange={(v) => setSkills(skills.map(x => x.id === s.id ? { ...x, mandatory: v } : x))}
+   951→                        />
+   952→                        Mandatory
+   953→                      </Label>
+   954→                      <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => removeSkill(s.id)}>
+   955→                        <X className="h-3.5 w-3.5" />
+   956→                      </Button>
+   957→                    </div>
+   958→                  </div>
+   959→                ))}
+   960→              </div>
+   961→
+   962→              {/* Add skill */}
+   963→              <div className="rounded-lg border border-dashed border-border bg-muted/30 p-3">
+   964→                <p className="mb-2 text-xs font-semibold">Add a skill</p>
+   965→                <div className="flex flex-wrap items-center gap-2">
+   966→                  <Input
+   967→                    placeholder="Skill name (e.g. AWS)"
+   968→                    value={newSkill}
+   969→                    onChange={(e) => setNewSkill(e.target.value)}
+   970→                    className="h-8 flex-1 min-w-[140px]"
+   971→                  />
+   972→                  <Select value={newProficiency} onValueChange={(v) => setNewProficiency(v as ProficiencyLevel)}>
+   973→                    <SelectTrigger className="h-8 w-40"><SelectValue /></SelectTrigger>
+   974→                    <SelectContent>
+   975→                      <SelectItem value="beginner">Beginner</SelectItem>
+   976→                      <SelectItem value="intermediate">Intermediate</SelectItem>
+   977→                      <SelectItem value="advanced">Advanced</SelectItem>
+   978→                      <SelectItem value="expert">Expert</SelectItem>
+   979→                    </SelectContent>
+   980→                  </Select>
+   981→                  <Label className="text-xs flex items-center gap-1.5">
+   982→                    <Switch checked={newMandatory} onCheckedChange={setNewMandatory} />
+   983→                    Mandatory
+   984→                  </Label>
+   985→                  <Button size="sm" onClick={addSkill}>
+   986→                    <Plus className="h-3.5 w-3.5" /> Add
+   987→                  </Button>
+   988→                </div>
+   989→              </div>
+   990→
+   991→              <div className="flex justify-between">
+   992→                <Button variant="ghost" onClick={() => setStep(1)}>Back</Button>
+   993→                <Button onClick={() => setStep(3)}>Continue <ArrowRight className="h-3.5 w-3.5" /></Button>
+   994→              </div>
+   995→            </div>
+   996→          )}
+   997→
+   998→          {step === 3 && (
+   999→            <div className="space-y-4">
+  1000→              <div>
+  1001→                <h3 className="text-sm font-semibold">Review & publish</h3>
+  1002→                <p className="text-xs text-muted-foreground">Check everything looks right, then publish to make this job visible to candidates.</p>
+  1003→              </div>
+  1004→
+  1005→              <div className="rounded-lg border border-border bg-muted/30 p-4">
+  1006→                <div className="grid gap-3 sm:grid-cols-2">
+  1007→                  <div><p className="text-[10px] uppercase text-muted-foreground">Title</p><p className="text-sm font-semibold">{title || "—"}</p></div>
+  1008→                  <div><p className="text-[10px] uppercase text-muted-foreground">Category</p><p className="text-sm">{category}</p></div>
+  1009→                  <div><p className="text-[10px] uppercase text-muted-foreground">Location</p><p className="text-sm">{location || "—"}</p></div>
+  1010→                  <div><p className="text-[10px] uppercase text-muted-foreground">Workplace</p><p className="text-sm capitalize">{remote}</p></div>
+  1011→                  <div><p className="text-[10px] uppercase text-muted-foreground">Salary</p><p className="text-sm">${Number(salaryMin || 0).toLocaleString()}–${Number(salaryMax || 0).toLocaleString()} / month</p></div>
+  1012→                  <div><p className="text-[10px] uppercase text-muted-foreground">Skills</p><p className="text-sm">{skills.length} required ({skills.filter(s=>s.mandatory).length} mandatory)</p></div>
+  1013→                  <div className="sm:col-span-2">
+  1014→                    <p className="text-[10px] uppercase text-muted-foreground">Expiration</p>
+  1015→                    <p className="text-sm font-semibold">
+  1016→                      {expirationDays && Number(expirationDays) > 0 ? (
+  1017→                        <>
+  1018→                          Expires in {expirationDays} day{Number(expirationDays) === 1 ? "" : "s"}
+  1019→                          {" "}(<strong>{new Date(Date.now() + Number(expirationDays) * 86400000).toLocaleDateString()}</strong>)
+  1020→                        </>
+  1021→                      ) : "—"}
+  1022→                    </p>
+  1023→                  </div>
+  1024→                </div>
+  1025→              </div>
+  1026→
+  1027→              <div className="rounded-lg border border-border p-3">
+  1028→                <p className="text-xs font-semibold mb-2">Skills</p>
+  1029→                <div className="flex flex-wrap gap-1.5">
+  1030→                  {skills.map((s) => (
+  1031→                    <SkillChip key={s.id} name={s.name} proficiency={s.proficiency} mandatory={s.mandatory} size="sm" />
+  1032→                  ))}
+  1033→                </div>
+  1034→              </div>
+  1035→
+  1036→              <InfoCallout>
+  1037→                <span className="font-medium">Privacy commitment:</span> Candidates' contact information remains hidden until they apply or accept your interview request. This protects candidate privacy and improves funnel quality.
+  1038→              </InfoCallout>
+  1039→
+  1040→              <div className="flex justify-between">
+  1041→                <Button variant="ghost" onClick={() => setStep(2)}>Back</Button>
+  1042→                <div className="flex gap-2">
+  1043→                  <Button variant="outline" onClick={() => saveJob("draft")} disabled={saving}>
+  1044→                    <Save className="h-3.5 w-3.5" /> Save draft
+  1045→                  </Button>
+  1046→                  <Button onClick={() => saveJob("published")} disabled={saving}>
+  1047→                    {saving ? (
+  1048→                      <>
+  1049→                        <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-primary-foreground border-t-transparent" />
+  1050→                        Publishing…
+  1051→                      </>
+  1052→                    ) : (
+  1053→                      <>
+  1054→                        <SendIcon className="h-3.5 w-3.5" /> Publish job
+  1055→                      </>
+  1056→                    )}
+  1057→                  </Button>
+  1058→                </div>
+  1059→              </div>
+  1060→            </div>
+  1061→          )}
+  1062→        </CardContent>
+  1063→      </Card>
+  1064→    </PageContainer>
+  1065→  );
+  1066→}
+  1067→
+  1068→// ============================================================
+  1069→// CANDIDATE RANKING
+  1070→// ============================================================
+  1071→export function EmployerCandidates() {
+  1072→  const { go, selectedJobId } = useApp();
+  1073→  const { toast } = useToast();
+  1074→  const url = selectedJobId ? `/api/candidates?jobId=${selectedJobId}` : "/api/candidates";
+  1075→  const { data, loading, refetch } = useFetch<any>(url);
+  1076→  const [sortBy, setSortBy] = useState("match");
+  1077→  const [filter, setFilter] = useState("all");
+  1078→  const [query, setQuery] = useState("");
+  1079→
+  1080→  const allCandidates: any[] = data?.candidates ?? [];
+  1081→  let list = [...allCandidates];
+  1082→  if (filter !== "all") list = list.filter((c) => c.applicationStatus === filter);
+  1083→  if (query) {
+  1084→    const q = query.toLowerCase();
+  1085→    list = list.filter((c) => c.name.toLowerCase().includes(q) || (c.title ?? "").toLowerCase().includes(q));
+  1086→  }
+  1087→  list.sort((a, b) => (b.matchScore || 0) - (a.matchScore || 0));
+  1088→
+  1089→  const targetJobTitle = allCandidates[0]?.job?.title ?? "all your jobs";
+  1090→
+  1091→  const updateStatus = async (applicationId: string, status: string, candidateName: string) => {
+  1092→    try {
+  1093→      const res = await fetch("/api/applications", {
+  1094→        method: "PATCH",
+  1095→        headers: { "Content-Type": "application/json" },
+  1096→        body: JSON.stringify({ applicationId, status }),
+  1097→      });
+  1098→      const json = await res.json();
+  1099→      if (json.ok) {
+  1100→        const statusLabels: Record<string, string> = {
+  1101→          shortlisted: "Shortlisted",
+  1102→          interview: "Moved to interview",
+  1103→          screening: "Moved to screening",
+  1104→          rejected: "Rejected",
+  1105→        };
+  1106→        toast({
+  1107→          title: statusLabels[status] ?? `Status: ${status}`,
+  1108→          description: `${candidateName} has been notified.`,
+  1109→        });
+  1110→        refetch();
+  1111→      } else {
+  1112→        toast({ title: "Action failed", description: json.error ?? "Please try again." });
+  1113→      }
+  1114→    } catch {
+  1115→      toast({ title: "Network error", description: "Please try again." });
+  1116→    }
+  1117→  };
+  1118→
+  1119→  return (
+  1120→    <PageContainer>
+  1121→      <SectionHeader
+  1122→        title="Candidate Ranking"
+  1123→        description={`Applicants for ${targetJobTitle}`}
+  1124→        actions={
+  1125→          <Badge variant="outline" className="bg-primary/5 text-primary border-primary/20">
+  1126→            {allCandidates.length} candidate{allCandidates.length === 1 ? "" : "s"}
+  1127→          </Badge>
+  1128→        }
+  1129→      />
+  1130→
+  1131→      <div className="mt-6 grid gap-3 sm:grid-cols-[1fr_180px_180px]">
+  1132→        <div className="relative">
+  1133→          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+  1134→          <Input
+  1135→            placeholder="Search candidates…"
+  1136→            className="pl-9"
+  1137→            value={query}
+  1138→            onChange={(e) => setQuery(e.target.value)}
+  1139→          />
+  1140→        </div>
+  1141→        <Select value={filter} onValueChange={setFilter}>
+  1142→          <SelectTrigger><SelectValue /></SelectTrigger>
+  1143→          <SelectContent>
+  1144→            <SelectItem value="all">All statuses</SelectItem>
+  1145→            <SelectItem value="submitted">Submitted</SelectItem>
+  1146→            <SelectItem value="screening">Screening</SelectItem>
+  1147→            <SelectItem value="shortlisted">Shortlisted</SelectItem>
+  1148→            <SelectItem value="interview">Interview</SelectItem>
+  1149→          </SelectContent>
+  1150→        </Select>
+  1151→        <Select value={sortBy} onValueChange={setSortBy}>
+  1152→          <SelectTrigger><SelectValue /></SelectTrigger>
+  1153→          <SelectContent>
+  1154→            <SelectItem value="match">Sort: Match score</SelectItem>
+  1155→            <SelectItem value="recent">Sort: Most recent</SelectItem>
+  1156→          </SelectContent>
+  1157→        </Select>
+  1158→      </div>
+  1159→
+  1160→      {loading ? (
+  1161→        <LoadingState label="Loading candidates…" rows={3} />
+  1162→      ) : list.length === 0 ? (
+  1163→        <EmptyState
+  1164→          className="mt-6"
+  1165→          icon={<Users className="h-5 w-5" />}
+  1166→          title="No candidates match your filters"
+  1167→          description="Try clearing filters or wait for new applications to arrive."
+  1168→        />
+  1169→      ) : (
+  1170→        <div className="mt-4 space-y-3">
+  1171→          {list.map((c) => (
+  1172→            <Card key={c.id}>
+  1173→              <CardContent className="p-4">
+  1174→                <div className="flex flex-col gap-3 sm:flex-row sm:items-start">
+  1175→                  <Avatar initials={c.initials} color={c.avatarColor} size="md" />
+  1176→                  <div className="min-w-0 flex-1">
+  1177→                    <div className="flex items-start justify-between gap-2">
+  1178→                      <div>
+  1179→                        <button
+  1180→                          onClick={() => go("candidate-detail", { candidateId: c.id })}
+  1181→                          className="text-left text-sm font-semibold hover:text-primary"
+  1182→                        >
+  1183→                          {c.name}
+  1184→                        </button>
+  1185→                        <p className="text-xs text-muted-foreground">{c.title} · {c.location}</p>
+  1186→                        <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[11px] text-muted-foreground">
+  1187→                          <span>Applied {timeAgo(c.appliedAt)}</span>
+  1188→                        </div>
+  1189→                      </div>
+  1190→                      <div className="flex items-center gap-2">
+  1191→                        <ApplicationStatusBadge status={c.applicationStatus} />
+  1192→                        {c.matchScore > 0 && <MatchScore score={c.matchScore} size="md" />}
+  1193→                      </div>
+  1194→                    </div>
+  1195→
+  1196→                    {c.skills && c.skills.length > 0 && (
+  1197→                      <div className="mt-3">
+  1198→                        <p className="text-[10px] font-semibold uppercase text-emerald-700">Candidate skills</p>
+  1199→                        <div className="mt-1 flex flex-wrap gap-1">
+  1200→                          {c.skills.slice(0, 6).map((s: any) => (
+  1201→                            <SkillChip key={s.id} name={s.name} proficiency={s.proficiency} verified={s.verified} size="sm" />
+  1202→                          ))}
+  1203→                        </div>
+  1204→                      </div>
+  1205→                    )}
+  1206→
+  1207→                    <div className="mt-3 flex flex-wrap items-center gap-2">
+  1208→                      <Button size="sm" onClick={() => go("candidate-detail", { candidateId: c.id })}>
+  1209→                        <Eye className="h-3.5 w-3.5" /> View profile
+  1210→                      </Button>
+  1211→                      {c.applicationStatus !== "shortlisted" && c.applicationStatus !== "interview" && (
+  1212→                        <Button size="sm" variant="outline" onClick={() => updateStatus(c.applicationId, "shortlisted", c.name)}>
+  1213→                          <Star className="h-3.5 w-3.5" /> Shortlist
+  1214→                        </Button>
+  1215→                      )}
+  1216→                      <Button size="sm" variant="outline" onClick={() => updateStatus(c.applicationId, "interview", c.name)}>
+  1217→                        <CalendarClock className="h-3.5 w-3.5" /> Move to interview
+  1218→                      </Button>
+  1219→                      <Button size="sm" variant="ghost" onClick={() => updateStatus(c.applicationId, "rejected", c.name)}>
+  1220→                        <X className="h-3.5 w-3.5" /> Reject
+  1221→                      </Button>
+  1222→                      <PrivacyLock compact />
+  1223→                    </div>
+  1224→                  </div>
+  1225→                </div>
+  1226→              </CardContent>
+  1227→            </Card>
+  1228→          ))}
+  1229→        </div>
+  1230→      )}
+  1231→    </PageContainer>
+  1232→  );
+  1233→}
+  1234→
+  1235→// ============================================================
+  1236→// CANDIDATE DETAIL
+  1237→// ============================================================
+  1238→export function EmployerCandidateDetail() {
+  1239→  const { go, selectedCandidateId } = useApp();
+  1240→  const { toast } = useToast();
+  1241→  const { data, loading, refetch } = useFetch<any>(`/api/candidates`);
+  1242→  const allCandidates: any[] = data?.candidates ?? [];
+  1243→  const c = allCandidates.find((x: any) => x.id === selectedCandidateId) || allCandidates[0];
+  1244→  const [interviewDialogOpen, setInterviewDialogOpen] = useState(false);
+  1245→  const [actionLoading, setActionLoading] = useState(false);
+  1246→
+  1247→  const updateStatus = async (status: string) => {
+  1248→    if (!c?.applicationId) return;
+  1249→    setActionLoading(true);
+  1250→    try {
+  1251→      const res = await fetch("/api/applications", {
+  1252→        method: "PATCH",
+  1253→        headers: { "Content-Type": "application/json" },
+  1254→        body: JSON.stringify({ applicationId: c.applicationId, status }),
+  1255→      });
+  1256→      const json = await res.json();
+  1257→      if (json.ok) {
+  1258→        // Show toast with the action taken
+  1259→        const statusLabels: Record<string, string> = {
+  1260→          shortlisted: "Shortlisted",
+  1261→          interview: "Moved to interview",
+  1262→          screening: "Moved to screening",
+  1263→          offer: "Offer extended",
+  1264→          rejected: "Rejected",
+  1265→          withdrawn: "Withdrawn",
+  1266→        };
+  1267→        toast({
+  1268→          title: statusLabels[status] ?? `Status: ${status}`,
+  1269→          description: `${c.name} has been notified of your decision.`,
+  1270→        });
+  1271→        refetch();
+  1272→      } else {
+  1273→        toast({ title: "Action failed", description: json.error ?? "Please try again." });
+  1274→      }
+  1275→    } catch {
+  1276→      toast({ title: "Network error", description: "Please try again." });
+  1277→    } finally {
+  1278→      setActionLoading(false);
+  1279→    }
+  1280→  };
+  1281→
+  1282→  if (loading || !c) {
+  1283→    return <PageContainer><LoadingState label="Loading candidate profile…" rows={3} /></PageContainer>;
+  1284→  }
+  1285→
+  1286→  const isShortlisted = c.applicationStatus === "shortlisted" || c.applicationStatus === "interview";
+  1287→
+  1288→  return (
+  1289→    <PageContainer>
+  1290→      <button
+  1291→        onClick={() => go("candidates")}
+  1292→        className="mb-4 inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
+  1293→      >
+  1294→        <ArrowLeft className="h-3.5 w-3.5" /> Back to candidates
+  1295→      </button>
+  1296→
+  1297→      <div className="grid gap-4 lg:grid-cols-3">
+  1298→        <div className="lg:col-span-2 space-y-4">
+  1299→          {/* Candidate header */}
+  1300→          <Card>
+  1301→            <CardContent className="p-6">
+  1302→              <div className="flex flex-col gap-4 sm:flex-row sm:items-start">
+  1303→                {c.profilePhoto ? (
+  1304→                  <img src={c.profilePhoto} alt={c.name} className="h-14 w-14 rounded-full object-cover" />
+  1305→                ) : (
+  1306→                  <Avatar initials={c.initials} color={c.avatarColor} size="lg" />
+  1307→                )}
+  1308→                <div className="min-w-0 flex-1">
+  1309→                  <h1 className="text-xl font-bold tracking-tight">{c.name}</h1>
+  1310→                  <p className="text-sm text-muted-foreground">{c.title}</p>
+  1311→                  <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
+  1312→                    <span className="flex items-center gap-1"><MapPin className="h-3 w-3" />{c.location}</span>
+  1313→                    <span>Applied {timeAgo(c.appliedAt)}</span>
+  1314→                  </div>
+  1315→                  <div className="mt-3 flex flex-wrap gap-2">
+  1316→                    <ApplicationStatusBadge status={c.applicationStatus} />
+  1317→                  </div>
+  1318→                </div>
+  1319→                {c.matchScore > 0 && <MatchScore score={c.matchScore} size="lg" />}
+  1320→              </div>
+  1321→              {c.about && (
+  1322→                <p className="mt-4 text-sm text-muted-foreground border-t border-border pt-3">{c.about}</p>
+  1323→              )}
+  1324→            </CardContent>
+  1325→          </Card>
+  1326→
+  1327→          {/* Skills */}
+  1328→          {c.skills && c.skills.length > 0 && (
+  1329→            <Card>
+  1330→              <CardHeader className="pb-3">
+  1331→                <CardTitle className="text-sm">Candidate skills</CardTitle>
+  1332→                <CardDescription>{c.skills.length} skills on profile</CardDescription>
+  1333→              </CardHeader>
+  1334→              <CardContent>
+  1335→                <div className="flex flex-wrap gap-1.5">
+  1336→                  {c.skills.map((s: any) => (
+  1337→                    <SkillChip key={s.id} name={s.name} proficiency={s.proficiency} verified={s.verified} size="sm" />
+  1338→                  ))}
+  1339→                </div>
+  1340→              </CardContent>
+  1341→            </Card>
+  1342→          )}
+  1343→
+  1344→          {/* Experience */}
+  1345→          {c.experiences && c.experiences.length > 0 && (
+  1346→            <Card>
+  1347→              <CardHeader className="pb-3">
+  1348→                <CardTitle className="text-sm flex items-center gap-2">
+  1349→                  <Briefcase className="h-4 w-4 text-primary" /> Experience
+  1350→                </CardTitle>
+  1351→              </CardHeader>
+  1352→              <CardContent className="space-y-3">
+  1353→                {c.experiences.map((e: any) => (
+  1354→                  <div key={e.id} className="rounded-lg border border-border bg-card p-3">
+  1355→                    <p className="font-semibold text-sm">{e.title}</p>
+  1356→                    <p className="text-xs text-muted-foreground">{e.company} · {e.startDate} — {e.endDate}</p>
+  1357→                    {e.description && <p className="mt-1 text-xs text-muted-foreground">{e.description}</p>}
+  1358→                  </div>
+  1359→                ))}
+  1360→              </CardContent>
+  1361→            </Card>
+  1362→          )}
+  1363→
+  1364→          {/* Education */}
+  1365→          {c.educations && c.educations.length > 0 && (
+  1366→            <Card>
+  1367→              <CardHeader className="pb-3">
+  1368→                <CardTitle className="text-sm flex items-center gap-2">
+  1369→                  <GraduationCap className="h-4 w-4 text-primary" /> Education
+  1370→                </CardTitle>
+  1371→              </CardHeader>
+  1372→              <CardContent className="space-y-3">
+  1373→                {c.educations.map((ed: any) => (
+  1374→                  <div key={ed.id} className="rounded-lg border border-border bg-card p-3">
+  1375→                    <p className="font-semibold text-sm">{ed.degree}, {ed.field}</p>
+  1376→                    <p className="text-xs text-muted-foreground">{ed.institution} · {ed.startDate} — {ed.endDate}</p>
+  1377→                  </div>
+  1378→                ))}
+  1379→              </CardContent>
+  1380→            </Card>
+  1381→          )}
+  1382→        </div>
+  1383→
+  1384→        {/* Actions sidebar */}
+  1385→        <aside className="space-y-4">
+  1386→          <Card>
+  1387→            <CardHeader className="pb-3">
+  1388→              <CardTitle className="text-sm">Actions</CardTitle>
+  1389→            </CardHeader>
+  1390→            <CardContent className="space-y-2">
+  1391→              <Button
+  1392→                className="w-full btn-green"
+  1393→                variant={isShortlisted ? "secondary" : "default"}
+  1394→                onClick={() => updateStatus(isShortlisted ? "screening" : "shortlisted")}
+  1395→                disabled={actionLoading}
+  1396→              >
+  1397→                <Star className="h-4 w-4" /> {isShortlisted ? "Remove shortlist" : "Shortlist"}
+  1398→              </Button>
+  1399→              <Dialog open={interviewDialogOpen} onOpenChange={setInterviewDialogOpen}>
+  1400→                <DialogTrigger asChild>
+  1401→                  <Button className="w-full btn-blue" variant="outline">
+  1402→                    <CalendarClock className="h-4 w-4" /> Schedule interview
+  1403→                  </Button>
+  1404→                </DialogTrigger>
+  1405→                <DialogContent>
+  1406→                  <DialogHeader>
+  1407→                    <DialogTitle>Schedule interview with {c.name}</DialogTitle>
+  1408→                    <DialogDescription>
+  1409→                      The candidate will receive an invitation. Their contact information will be unlocked once they accept.
+  1410→                    </DialogDescription>
+  1411→                  </DialogHeader>
+  1412→                  <div className="space-y-3 py-2">
+  1413→                    <div className="grid grid-cols-2 gap-2">
+  1414→                      <div className="space-y-1.5">
+  1415→                        <Label>Date</Label>
+  1416→                        <Input type="date" defaultValue="2026-10-12" />
+  1417→                      </div>
+  1418→                      <div className="space-y-1.5">
+  1419→                        <Label>Time</Label>
+  1420→                        <Input type="time" defaultValue="14:00" />
+  1421→                      </div>
+  1422→                    </div>
+  1423→                    <div className="space-y-1.5">
+  1424→                      <Label>Interview type</Label>
+  1425→                      <Select defaultValue="technical">
+  1426→                        <SelectTrigger><SelectValue /></SelectTrigger>
+  1427→                        <SelectContent>
+  1428→                          <SelectItem value="screen">Recruiter screen</SelectItem>
+  1429→                          <SelectItem value="technical">Technical interview</SelectItem>
+  1430→                          <SelectItem value="behavioral">Behavioral interview</SelectItem>
+  1431→                          <SelectItem value="final">Final round</SelectItem>
+  1432→                        </SelectContent>
+  1433→                      </Select>
+  1434→                    </div>
+  1435→                    <div className="space-y-1.5">
+  1436→                      <Label>Notes for candidate</Label>
+  1437→                      <Textarea rows={3} placeholder="Anything they should prepare?" className="resize-none" />
+  1438→                    </div>
+  1439→                    <InfoCallout>
+  1440→                      <span className="font-medium">Privacy:</span> Contact details unlock only after {c.name} accepts this invitation.
+  1441→                    </InfoCallout>
+  1442→                  </div>
+  1443→                  <DialogFooter>
+  1444→                    <Button variant="outline" onClick={() => setInterviewDialogOpen(false)}>Cancel</Button>
+  1445→                    <Button className="btn-green" onClick={() => { updateStatus("interview"); setInterviewDialogOpen(false); }}>
+  1446→                      Send invitation
+  1447→                    </Button>
+  1448→                  </DialogFooter>
+  1449→                </DialogContent>
+  1450→              </Dialog>
+  1451→              <Button className="w-full" variant="outline" onClick={() => go("messages")}>
+  1452→                <MessageSquare className="h-4 w-4" /> Message
+  1453→              </Button>
+  1454→              <Button className="w-full" variant="ghost" onClick={() => updateStatus("rejected")}>
+  1455→                <X className="h-4 w-4" /> Reject
+  1456→              </Button>
+  1457→            </CardContent>
+  1458→          </Card>
+  1459→
+  1460→          <Card>
+  1461→            <CardHeader className="pb-3">
+  1462→              <CardTitle className="text-sm">Contact information</CardTitle>
+  1463→              <CardDescription>{c.contactUnlocked ? "Visible — candidate accepted interview" : "Locked — privacy protection active"}</CardDescription>
+  1464→            </CardHeader>
+  1465→            <CardContent>
+  1466→              {c.contactUnlocked ? (
+  1467→                <div className="space-y-2 text-xs">
+  1468→                  <div className="flex items-center gap-2">
+  1469→                    <Mail className="h-3.5 w-3.5 text-muted-foreground" />
+  1470→                    <span>{c.email}</span>
+  1471→                  </div>
+  1472→                </div>
+  1473→              ) : (
+  1474→                <div className="space-y-2">
+  1475→                  <PrivacyLock />
+  1476→                  <div className="rounded-md bg-muted/40 p-2 text-xs text-muted-foreground">
+  1477→                    <p>🔒 Email hidden</p>
+  1478→                  </div>
+  1479→                  <p className="text-[11px] text-muted-foreground">
+  1480→                    Per our privacy commitment, contact details become visible only after the candidate accepts your interview request.
+  1481→                  </p>
+  1482→                </div>
+  1483→              )}
+  1484→            </CardContent>
+  1485→          </Card>
+  1486→        </aside>
+  1487→      </div>
+  1488→    </PageContainer>
+  1489→  );
+  1490→}
+  1491→
+  1492→// ============================================================
+  1493→// EMPLOYER APPLICATIONS
+  1494→// ============================================================
+  1495→export function EmployerApplications() {
+  1496→  const { go } = useApp();
+  1497→  const { data, loading } = useFetch<any>("/api/applications");
+  1498→  const applications: any[] = data?.applications ?? [];
+  1499→
+  1500→  return (
+  1501→    <PageContainer>
+  1502→      <SectionHeader
+  1503→        title="Applications"
+  1504→        description="All applications across your active jobs."
+  1505→      />
+  1506→      {loading ? (
+  1507→        <LoadingState label="Loading applications…" rows={3} />
+  1508→      ) : applications.length === 0 ? (
+  1509→        <EmptyState className="mt-6" icon={<Send className="h-5 w-5" />} title="No applications yet" description="Once candidates apply to your jobs, they'll appear here." />
+  1510→      ) : (
+  1511→        <div className="mt-6 overflow-hidden rounded-lg border border-border">
+  1512→          <table className="w-full text-sm">
+  1513→            <thead className="bg-muted/50 text-[11px] uppercase tracking-wide text-muted-foreground">
+  1514→              <tr>
+  1515→                <th className="px-4 py-2.5 text-left font-medium">Candidate</th>
+  1516→                <th className="hidden px-4 py-2.5 text-left font-medium sm:table-cell">Job</th>
+  1517→                <th className="hidden px-4 py-2.5 text-left font-medium md:table-cell">Match</th>
+  1518→                <th className="px-4 py-2.5 text-left font-medium">Status</th>
+  1519→                <th className="hidden px-4 py-2.5 text-left font-medium lg:table-cell">Applied</th>
+  1520→                <th className="px-4 py-2.5 text-right font-medium">Actions</th>
+  1521→              </tr>
+  1522→            </thead>
+  1523→            <tbody className="divide-y divide-border bg-card">
+  1524→              {applications.map((a) => (
+  1525→                <tr key={a.id} className="hover:bg-accent/30">
+  1526→                  <td className="px-4 py-3">
+  1527→                    <div className="flex items-center gap-2.5">
+  1528→                      <Avatar initials={a.candidate?.initials ?? a.candidate?.name?.slice(0,2).toUpperCase() ?? "?"} color={a.candidate?.avatarColor ?? "oklch(0.55 0.22 285)"} size="sm" />
+  1529→                      <div className="min-w-0">
+  1530→                        <p className="truncate text-sm font-semibold">{a.candidate?.name ?? "—"}</p>
+  1531→                        <p className="truncate text-xs text-muted-foreground">{a.candidate?.title ?? ""}</p>
+  1532→                      </div>
+  1533→                    </div>
+  1534→                  </td>
+  1535→                  <td className="hidden px-4 py-3 sm:table-cell">
+  1536→                    <p className="text-sm">{a.job?.title ?? "—"}</p>
+  1537→                    <p className="text-xs text-muted-foreground">{a.job?.company ?? ""}</p>
+  1538→                  </td>
+  1539→                  <td className="hidden px-4 py-3 md:table-cell">
+  1540→                    {a.matchScore && <MatchScore score={a.matchScore} size="sm" showLabel={false} />}
+  1541→                  </td>
+  1542→                  <td className="px-4 py-3"><ApplicationStatusBadge status={a.status} /></td>
+  1543→                  <td className="hidden px-4 py-3 text-xs text-muted-foreground lg:table-cell">{timeAgo(a.appliedAt)}</td>
+  1544→                  <td className="px-4 py-3 text-right">
+  1545→                    <Button size="sm" variant="outline" onClick={() => go("candidate-detail", { candidateId: a.candidate?.id })}>
+  1546→                      Review
+  1547→                    </Button>
+  1548→                  </td>
+  1549→                </tr>
+  1550→              ))}
+  1551→            </tbody>
+  1552→          </table>
+  1553→        </div>
+  1554→      )}
+  1555→    </PageContainer>
+  1556→  );
+  1557→}
+  1558→
+  1559→// ============================================================
+  1560→// INTERVIEWS
+  1561→// ============================================================
+  1562→export function EmployerInterviews() {
+  1563→  const { go } = useApp();
+  1564→  const { data, loading } = useFetch<any>("/api/candidates");
+  1565→  const allCandidates: any[] = data?.candidates ?? [];
+  1566→  // Candidates in "interview" status are the interviews
+  1567→  const interviews = allCandidates
+  1568→    .filter((c: any) => c.applicationStatus === "interview")
+  1569→    .map((c: any, i: number) => ({
+  1570→      id: `iv-${i}`,
+  1571→      candidate: c,
+  1572→      title: c.job?.title ? `Interview for ${c.job.title}` : "Interview",
+  1573→      date: "2026-10-09",
+  1574→      time: "14:00 EAT",
+  1575→      type: "Technical",
+  1576→      status: "scheduled" as const,
+  1577→    }));
+  1578→
+  1579→  return (
+  1580→    <PageContainer>
+  1581→      <SectionHeader
+  1582→        title="Interviews"
+  1583→        description="Scheduled interviews and pending invitations."
+  1584→      />
+  1585→
+  1586→      <div className="mt-6 grid gap-3 sm:grid-cols-3">
+  1587→        <StatCard label="Scheduled" value={interviews.filter(i => i.status === "scheduled").length} icon={<CalendarClock className="h-4 w-4" />} />
+  1588→        <StatCard label="Pending confirmation" value={interviews.filter(i => i.status === "pending_confirmation").length} icon={<Clock className="h-4 w-4" />} />
+  1589→        <StatCard label="This week" value={2} icon={<Calendar className="h-4 w-4" />} hint="Thu, Fri" />
+  1590→      </div>
+  1591→
+  1592→      {loading ? (
+  1593→        <LoadingState label="Loading interviews…" rows={2} />
+  1594→      ) : interviews.length === 0 ? (
+  1595→        <EmptyState className="mt-6" icon={<CalendarClock className="h-5 w-5" />} title="No interviews scheduled" description="Shortlist candidates and schedule interviews from the Candidate Ranking page." action={<Button size="sm" onClick={() => go("candidates")}>View candidates</Button>} />
+  1596→      ) : (
+  1597→        <div className="mt-6 space-y-3">
+  1598→          {interviews.map((iv) => (
+  1599→            <Card key={iv.id}>
+  1600→              <CardContent className="p-4">
+  1601→                <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+  1602→                  {iv.candidate.profilePhoto ? (
+  1603→                    <img src={iv.candidate.profilePhoto} alt={iv.candidate.name} className="h-10 w-10 rounded-full object-cover" />
+  1604→                  ) : (
+  1605→                    <Avatar initials={iv.candidate.initials} color={iv.candidate.avatarColor} size="md" />
+  1606→                  )}
+  1607→                  <div className="min-w-0 flex-1">
+  1608→                    <div className="flex items-start justify-between gap-2">
+  1609→                      <div>
+  1610→                        <p className="text-sm font-semibold">{iv.candidate.name}</p>
+  1611→                        <p className="text-xs text-muted-foreground">{iv.candidate.title}</p>
+  1612→                      </div>
+  1613→                      <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-200 text-[10px]">
+  1614→                        Confirmed
+  1615→                      </Badge>
+  1616→                    </div>
+  1617→                    <div className="mt-2 flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
+  1618→                      <span className="flex items-center gap-1"><Calendar className="h-3 w-3" />{iv.date}</span>
+  1619→                      <span className="flex items-center gap-1"><Clock className="h-3 w-3" />{iv.time}</span>
+  1620→                      <span className="flex items-center gap-1"><Users className="h-3 w-3" />{iv.type}</span>
+  1621→                    </div>
+  1622→                  </div>
+  1623→                  <div className="flex gap-2">
+  1624→                    <Button size="sm" variant="outline" onClick={() => go("candidate-detail", { candidateId: iv.candidate.id })}>
+  1625→                      View profile
+  1626→                    </Button>
+  1627→                    <Button size="sm" variant="ghost" onClick={() => go("messages")}>
+  1628→                      <MessageSquare className="h-3.5 w-3.5" />
+  1629→                    </Button>
+  1630→                  </div>
+  1631→                </div>
+  1632→              </CardContent>
+  1633→            </Card>
+  1634→          ))}
+  1635→        </div>
+  1636→      )}
+  1637→    </PageContainer>
+  1638→  );
+  1639→}
+  1640→
+  1641→// ============================================================
+  1642→// EMPLOYER NOTIFICATIONS & MESSAGES (mirror seeker pattern)
+  1643→// ============================================================
+  1644→export function EmployerNotifications() {
+  1645→  const { go } = useApp();
+  1646→  const { data, loading, refetch } = useFetch<any>("/api/notifications");
+  1647→  const items: any[] = data?.notifications ?? [];
+  1648→  const markAllRead = async () => {
+  1649→    await fetch("/api/notifications", {
+  1650→      method: "PATCH",
+  1651→      headers: { "Content-Type": "application/json" },
+  1652→      body: JSON.stringify({ markAllRead: true }),
+  1653→    });
+  1654→    refetch();
+  1655→    window.dispatchEvent(new CustomEvent("notifications-changed"));
+  1656→  };
+  1657→
+  1658→  // Determine where the "View" button should navigate based on notification type
+  1659→  const getNotifDestination = (n: any): { view: any; label: string } | null => {
+  1660→    if (n.type === "application") {
+  1661→      return { view: "candidates", label: "View candidates" };
+  1662→    }
+  1663→    if (n.type === "interview") {
+  1664→      return { view: "interviews", label: "View interviews" };
+  1665→    }
+  1666→    if (n.type === "message") {
+  1667→      return { view: "messages", label: "View messages" };
+  1668→    }
+  1669→    if (n.type === "job") {
+  1670→      return { view: "jobs", label: "View jobs" };
+  1671→    }
+  1672→    return null;
+  1673→  };
+  1674→
+  1675→  return (
+  1676→    <PageContainer>
+  1677→      <SectionHeader
+  1678→        title="Notifications"
+  1679→        description={`${items.filter((n) => !n.read).length} unread`}
+  1680→        actions={
+  1681→          <Button variant="outline" size="sm" onClick={markAllRead} disabled={items.filter((n) => !n.read).length === 0}>
+  1682→            <Check className="h-3.5 w-3.5" /> Mark all read
+  1683→          </Button>
+  1684→        }
+  1685→      />
+  1686→      {loading ? (
+  1687→        <LoadingState label="Loading notifications…" rows={3} />
+  1688→      ) : items.length === 0 ? (
+  1689→        <EmptyState className="mt-6" icon={<Bell className="h-5 w-5" />} title="No notifications" description="You're all caught up." />
+  1690→      ) : (
+  1691→        <div className="mt-6 space-y-2">
+  1692→          {items.map((n) => {
+  1693→            const dest = getNotifDestination(n);
+  1694→            return (
+  1695→              <div
+  1696→                key={n.id}
+  1697→                className={cn(
+  1698→                  "flex items-start gap-3 rounded-lg border bg-card p-3",
+  1699→                  !n.read ? "border-primary/30 bg-primary/5" : "border-border"
+  1700→                )}
+  1701→              >
+  1702→                <div className={cn(
+  1703→                  "flex h-8 w-8 shrink-0 items-center justify-center rounded-full",
+  1704→                  n.type === "application" ? "bg-blue-100 text-blue-700" :
+  1705→                  n.type === "interview" ? "bg-amber-100 text-amber-700" :
+  1706→                  n.type === "job" ? "bg-violet-100 text-violet-700" :
+  1707→                  "bg-slate-100 text-slate-700"
+  1708→                )}>
+  1709→                  {n.type === "application" ? <Send className="h-4 w-4" /> :
+  1710→                   n.type === "interview" ? <CalendarClock className="h-4 w-4" /> :
+  1711→                   n.type === "job" ? <Briefcase className="h-4 w-4" /> :
+  1712→                   <Bell className="h-4 w-4" />}
+  1713→                </div>
+  1714→                <div className="min-w-0 flex-1">
+  1715→                  <div className="flex items-start justify-between gap-2">
+  1716→                    <p className="text-sm font-semibold">{n.title}</p>
+  1717→                    <span className="text-[10px] text-muted-foreground">{timeAgo(n.createdAt)}</span>
+  1718→                  </div>
+  1719→                  <p className="mt-0.5 text-xs text-muted-foreground">{n.message}</p>
+  1720→                  {dest && (
+  1721→                    <button
+  1722→                      onClick={() => go(dest.view)}
+  1723→                      className="mt-2 inline-flex items-center gap-1 rounded-md bg-primary/10 px-2.5 py-1 text-xs font-medium text-primary transition-all hover:bg-primary/20 hover:gap-1.5"
+  1724→                    >
+  1725→                      {dest.label} <ArrowRight className="h-3 w-3" />
+  1726→                    </button>
+  1727→                  )}
+  1728→                </div>
+  1729→                {!n.read && <span className="mt-1 h-2 w-2 shrink-0 rounded-full bg-primary" />}
+  1730→              </div>
+  1731→            );
+  1732→          })}
+  1733→        </div>
+  1734→      )}
+  1735→    </PageContainer>
+  1736→  );
+  1737→}
+  1738→
+  1739→export function EmployerMessages() {
+  1740→  const [conversations, setConversations] = useState<Conversation[]>(employerConversations);
+  1741→  const [activeId, setActiveId] = useState<string>(conversations[0].id);
+  1742→  const [draft, setDraft] = useState("");
+  1743→  const active = conversations.find((c) => c.id === activeId)!;
+  1744→
+  1745→  const send = () => {
+  1746→    if (!draft.trim()) return;
+  1747→    setConversations(conversations.map((c) =>
+  1748→      c.id === activeId
+  1749→        ? {
+  1750→            ...c,
+  1751→            lastMessage: draft.trim(),
+  1752→            lastTime: "now",
+  1753→            messages: [...c.messages, { id: String(Date.now()), sender: "me" as const, text: draft.trim(), time: "now" }],
+  1754→          }
+  1755→        : c
+  1756→    ));
+  1757→    setDraft("");
+  1758→  };
+  1759→
+  1760→  return (
+  1761→    <PageContainer>
+  1762→      <SectionHeader title="Messages" description="Chat with candidates after they're shortlisted." />
+  1763→      <div className="mt-6 grid gap-4 lg:grid-cols-3 lg:h-[calc(100vh-220px)]">
+  1764→        <Card className="lg:col-span-1 overflow-hidden">
+  1765→          <CardContent className="p-0">
+  1766→            <div className="border-b border-border p-3">
+  1767→              <Input placeholder="Search conversations…" className="h-9" />
+  1768→            </div>
+  1769→            <div className="max-h-[60vh] divide-y divide-border lg:max-h-full overflow-y-auto">
+  1770→              {conversations.map((c) => (
+  1771→                <button
+  1772→                  key={c.id}
+  1773→                  onClick={() => setActiveId(c.id)}
+  1774→                  className={cn(
+  1775→                    "flex w-full items-start gap-3 p-3 text-left transition-colors hover:bg-accent",
+  1776→                    activeId === c.id && "bg-primary/5"
+  1777→                  )}
+  1778→                >
+  1779→                  <Avatar initials={c.participantInitials} color={c.participantColor} size="sm" />
+  1780→                  <div className="min-w-0 flex-1">
+  1781→                    <div className="flex items-center justify-between">
+  1782→                      <p className="truncate text-sm font-semibold">{c.participantName}</p>
+  1783→                      <span className="text-[10px] text-muted-foreground">{c.lastTime}</span>
+  1784→                    </div>
+  1785→                    <p className="text-[11px] text-muted-foreground">{c.participantRole}</p>
+  1786→                    <p className="mt-0.5 truncate text-xs text-muted-foreground">{c.lastMessage}</p>
+  1787→                  </div>
+  1788→                  {c.unread > 0 && (
+  1789→                    <span className="inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-primary px-1.5 text-[10px] font-semibold text-primary-foreground">
+  1790→                      {c.unread}
+  1791→                    </span>
+  1792→                  )}
+  1793→                </button>
+  1794→              ))}
+  1795→            </div>
+  1796→          </CardContent>
+  1797→        </Card>
+  1798→
+  1799→        <Card className="lg:col-span-2 overflow-hidden flex flex-col">
+  1800→          <CardContent className="p-0 flex flex-1 flex-col">
+  1801→            <div className="flex items-center gap-3 border-b border-border p-3">
+  1802→              <Avatar initials={active.participantInitials} color={active.participantColor} size="sm" />
+  1803→              <div className="min-w-0 flex-1">
+  1804→                <p className="text-sm font-semibold">{active.participantName}</p>
+  1805→                <p className="text-[11px] text-muted-foreground">{active.participantRole}</p>
+  1806→              </div>
+  1807→            </div>
+  1808→            <div className="flex-1 space-y-3 overflow-y-auto bg-muted/20 p-4 max-h-[60vh]">
+  1809→              {active.messages.map((m) => (
+  1810→                <div
+  1811→                  key={m.id}
+  1812→                  className={cn("flex", m.sender === "me" ? "justify-end" : "justify-start")}
+  1813→                >
+  1814→                  <div
+  1815→                    className={cn(
+  1816→                      "max-w-[75%] rounded-lg px-3 py-2 text-sm",
+  1817→                      m.sender === "me" ? "bg-primary text-primary-foreground" : "bg-card border border-border"
+  1818→                    )}
+  1819→                  >
+  1820→                    <p>{m.text}</p>
+  1821→                    <p className={cn(
+  1822→                      "mt-1 text-[10px]",
+  1823→                      m.sender === "me" ? "text-primary-foreground/70" : "text-muted-foreground"
+  1824→                    )}>
+  1825→                      {m.time}
+  1826→                    </p>
+  1827→                  </div>
+  1828→                </div>
+  1829→              ))}
+  1830→            </div>
+  1831→            <div className="flex items-center gap-2 border-t border-border p-3">
+  1832→              <Input
+  1833→                placeholder="Type your message…"
+  1834→                value={draft}
+  1835→                onChange={(e) => setDraft(e.target.value)}
+  1836→                onKeyDown={(e) => { if (e.key === "Enter") send(); }}
+  1837→              />
+  1838→              <Button size="icon" onClick={send} aria-label="Send message">
+  1839→                <SendIcon className="h-4 w-4" />
+  1840→              </Button>
+  1841→            </div>
+  1842→          </CardContent>
+  1843→        </Card>
+  1844→      </div>
+  1845→    </PageContainer>
+  1846→  );
+  1847→}
+  1848→
+  1849→// ============================================================
+  1850→// AI REPORT — Employer hiring report generated by AI
+  1851→// ============================================================
+  1852→export function EmployerAIReport() {
+  1853→  const [report, setReport] = useState<any>(null);
+  1854→  const [loading, setLoading] = useState(false);
+  1855→  const [error, setError] = useState<string | null>(null);
+  1856→
+  1857→  const generate = async () => {
+  1858→    setLoading(true);
+  1859→    setError(null);
+  1860→    try {
+  1861→      const res = await fetch("/api/ai/report", {
+  1862→        method: "POST",
+  1863→        headers: { "Content-Type": "application/json" },
+  1864→        body: JSON.stringify({ type: "employer" }),
+  1865→      });
+  1866→      const data = await res.json();
+  1867→      if (data.ok) {
+  1868→        setReport(data.report);
+  1869→      } else {
+  1870→        setError(data.error ?? "Failed to generate report.");
+  1871→      }
+  1872→    } catch {
+  1873→      setError("Network error.");
+  1874→    } finally {
+  1875→      setLoading(false);
+  1876→    }
+  1877→  };
+  1878→
+  1879→  return (
+  1880→    <PageContainer>
+  1881→      <SectionHeader
+  1882→        title="AI Hiring Report"
+  1883→        description="AI-generated analysis of your hiring pipeline with actionable recommendations."
+  1884→        icon={<Cpu className="h-4 w-4" />}
+  1885→        actions={
+  1886→          <Button className="btn-rainbow" onClick={generate} disabled={loading}>
+  1887→            {loading ? "Generating…" : "Generate report"}
+  1888→          </Button>
+  1889→        }
+  1890→      />
+  1891→
+  1892→      {loading && <LoadingState label="AI is analyzing your hiring data…" rows={4} />}
+  1893→
+  1894→      {error && <ErrorState title="Report generation failed" description={error} action={<Button size="sm" variant="outline" onClick={generate}>Try again</Button>} />}
+  1895→
+  1896→      {report && !loading && (
+  1897→        <div className="mt-6 space-y-4">
+  1898→          {/* Summary */}
+  1899→          <Card className="border-primary/20">
+  1900→            <CardHeader className="pb-3">
+  1901→              <CardTitle className="text-base">{report.title}</CardTitle>
+  1902→              <CardDescription>Generated by AI · {new Date().toLocaleDateString()}</CardDescription>
+  1903→            </CardHeader>
+  1904→            <CardContent>
+  1905→              <p className="text-sm text-muted-foreground">{report.summary}</p>
+  1906→            </CardContent>
+  1907→          </Card>
+  1908→
+  1909→          {/* Sections */}
+  1910→          {report.sections.map((section: any, i: number) => (
+  1911→            <Card key={i}>
+  1912→              <CardHeader className="pb-3">
+  1913→                <CardTitle className="text-sm">{section.heading}</CardTitle>
+  1914→              </CardHeader>
+  1915→              <CardContent className="space-y-3">
+  1916→                <p className="text-sm text-muted-foreground">{section.content}</p>
+  1917→                {section.metrics && (
+  1918→                  <div className="grid gap-2 sm:grid-cols-3">
+  1919→                    {section.metrics.map((m: any, j: number) => (
+  1920→                      <div key={j} className="rounded-lg border border-border bg-muted/30 p-3 text-center">
+  1921→                        <p className="text-lg font-bold text-primary">{m.value}</p>
+  1922→                        <p className="text-[10px] uppercase text-muted-foreground">{m.label}</p>
+  1923→                      </div>
+  1924→                    ))}
+  1925→                  </div>
+  1926→                )}
+  1927→              </CardContent>
+  1928→            </Card>
+  1929→          ))}
+  1930→
+  1931→          {/* Recommendations */}
+  1932→          <Card className="border-emerald-200">
+  1933→            <CardHeader className="pb-3">
+  1934→              <CardTitle className="text-sm flex items-center gap-2">
+  1935→                <CheckCircle2 className="h-4 w-4 text-emerald-600" /> AI Recommendations
+  1936→              </CardTitle>
+  1937→            </CardHeader>
+  1938→            <CardContent>
+  1939→              <ul className="space-y-2">
+  1940→                {report.recommendations.map((rec: string, i: number) => (
+  1941→                  <li key={i} className="flex items-start gap-2 text-sm text-muted-foreground">
+  1942→                    <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-emerald-100 text-emerald-700 text-[10px] font-bold">{i + 1}</span>
+  1943→                    {rec}
+  1944→                  </li>
+  1945→                ))}
+  1946→              </ul>
+  1947→            </CardContent>
+  1948→          </Card>
+  1949→        </div>
+  1950→      )}
+  1951→
+  1952→      {!report && !loading && !error && (
+  1953→        <EmptyState
+  1954→          className="mt-6"
+  1955→          icon={<Cpu className="h-5 w-5" />}
+  1956→          title="No report generated yet"
+  1957→          description="Click 'Generate report' to get an AI-powered analysis of your hiring pipeline."
+  1958→          action={<Button size="sm" className="btn-rainbow" onClick={generate}>Generate report</Button>}
+  1959→        />
+  1960→      )}
+  1961→    </PageContainer>
+  1962→  );
+  1963→}
+  1964→

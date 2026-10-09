@@ -602,3 +602,27 @@ Stage Summary:
 - Desktop large screens: Left sidebar + top Topbar both stay anchored to the viewport during scroll.
 - Mobile/small screens: Top Topbar (with hamburger) + bottom MobileBottomNav both stay anchored to the viewport during scroll; slide-in navbar opens as overlay when needed.
 - Clicking any nav item triggers go() which calls window.scrollTo({top:0}), and now the nav itself never moves out of view during the subsequent scroll.
+
+---
+Task ID: 14
+Agent: main (Super Z)
+Task: (Repeat) Navigation bar must stay fixed during scroll on all screen sizes — previous sticky fix did not work.
+
+Work Log:
+- Root cause: globals.css sets `html { overflow-x: hidden }` and `body { overflow-x: hidden }`. Per CSS spec, setting overflow-x:hidden implicitly computes overflow-y to `auto` (not `visible`), which turns html/body into scroll containers. This breaks `position: sticky` on descendants because sticky sticks to the nearest scrolling ancestor, and with html+body both being scroll containers the behavior becomes unreliable.
+- Discarded the previous `lg:sticky lg:top-0 lg:h-screen` approach on the sidebar (it was unreliable due to the overflow issue above).
+- Adopted the standard "app shell" pattern (used by Slack, Discord, Linear, VS Code):
+  * Root container: `flex h-screen overflow-hidden` — locks the viewport so the window itself never scrolls.
+  * Desktop sidebar (<aside>): plain flex child, no sticky needed — stays fixed because it's outside the scroll container.
+  * Main column: `flex flex-col overflow-hidden` — contains the topbar + scrollable main.
+  * Topbar (header): plain flex child with `shrink-0` — no more `sticky top-0` needed; stays fixed because it's outside the inner scroll container.
+  * <main id="app-main-scroll">: `flex-1 overflow-y-auto overflow-x-hidden` — the ONLY element that scrolls.
+  * Mobile slide-in navbar and MobileBottomNav were already `position: fixed` — unchanged.
+- Updated src/lib/app-context.tsx `go()` function: now scrolls `#app-main-scroll` if present (authenticated app), with fallback to `window.scrollTo` for guest pages (login, register, FAQ, etc.) that don't use AppShell.
+- Added `id="app-main-scroll"` to the <main> element so the go() function can find it.
+- TypeScript check passes cleanly (no new errors).
+
+Stage Summary:
+- The desktop sidebar, topbar, and mobile bottom nav are now structurally outside the scroll container, so they are guaranteed to stay fixed regardless of which nav item is clicked or how far the page scrolls.
+- The previous fix's reliance on `position: sticky` is gone — replaced by the more robust app-shell pattern.
+- Scroll-to-top on navigation now correctly targets the inner scroll container for authenticated pages, and falls back to window for guest pages.

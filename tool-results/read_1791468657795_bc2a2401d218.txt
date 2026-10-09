@@ -1,0 +1,2002 @@
+     1→"use client";
+     2→
+     3→import React, { useState, useEffect } from "react";
+     4→import { cn } from "@/lib/utils";
+     5→import { useApp } from "@/lib/app-context";
+     6→import { useToast } from "@/hooks/use-toast";
+     7→import { Button } from "@/components/ui/button";
+     8→import { Input } from "@/components/ui/input";
+     9→import { Label } from "@/components/ui/label";
+    10→import { Textarea } from "@/components/ui/textarea";
+    11→import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+    12→import { Badge } from "@/components/ui/badge";
+    13→import { Progress } from "@/components/ui/progress";
+    14→import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+    15→import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+    16→import {
+    17→  Dialog,
+    18→  DialogContent,
+    19→  DialogDescription,
+    20→  DialogFooter,
+    21→  DialogHeader,
+    22→  DialogTitle,
+    23→  DialogTrigger,
+    24→} from "@/components/ui/dialog";
+    25→import { Switch } from "@/components/ui/switch";
+    26→import { Checkbox } from "@/components/ui/checkbox";
+    27→import {
+    28→  TooltipProvider,
+    29→  MatchScore,
+    30→  SkillChip,
+    31→  ApplicationStatusBadge,
+    32→  VerificationBadge,
+    33→  ProfileCompletionRing,
+    34→  Avatar,
+    35→  CompanyLogo,
+    36→  SectionHeader,
+    37→  StatCard,
+    38→  MatchFactorBar,
+    39→  EmptyState,
+    40→  LoadingState,
+    41→  ErrorState,
+    42→  SuccessBanner,
+    43→  InfoCallout,
+    44→  JobExpiryBadge,
+    45→} from "@/components/shared/ui";
+    46→import {
+    47→  recommendedJobs,
+    48→  seekerSkills,
+    49→  seekerEducation,
+    50→  seekerExperience,
+    51→  seekerApplications,
+    52→  seekerNotifications,
+    53→  seekerConversations,
+    54→  skillGapAnalysis,
+    55→  resumeAnalysis,
+    56→  seekerDashboardStats,
+    57→  currentUser,
+    58→} from "@/lib/mock-data";
+    59→import { useFetch } from "@/lib/use-fetch";
+    60→import { ProfilePhotoUpload } from "@/components/shared/profile-photo-upload";
+    61→import type {
+    62→  Job,
+    63→  Application,
+    64→  NotificationItem,
+    65→  Conversation,
+    66→  SkillGapItem,
+    67→  ProficiencyLevel,
+    68→  Skill,
+    69→} from "@/lib/types";
+    70→import {
+    71→  User,
+    72→  Sparkles,
+    73→  FileText,
+    74→  Target,
+    75→  Send,
+    76→  TrendingUp,
+    77→  Bell,
+    78→  MessageSquare,
+    79→  ArrowRight,
+    80→  ArrowLeft,
+    81→  CheckCircle2,
+    82→  Clock,
+    83→  AlertCircle,
+    84→  MapPin,
+    85→  Briefcase,
+    86→  Calendar,
+    87→  Upload,
+    88→  FileCheck2,
+    89→  Cpu,
+    90→  Check,
+    91→  Plus,
+    92→  Search,
+    93→  Filter,
+    94→  Star,
+    95→  Download,
+    96→  Lock,
+    97→  ShieldCheck,
+    98→  ChevronRight,
+    99→  Mail,
+   100→  Phone,
+   101→  GraduationCap,
+   102→  Award,
+   103→  Zap,
+   104→  Lightbulb,
+   105→  RefreshCw,
+   106→  X,
+   107→} from "lucide-react";
+   108→
+   109→// ============================================================
+   110→// Page container — uniform padding/max width
+   111→// ============================================================
+   112→export function PageContainer({ children, className }: { children: React.ReactNode; className?: string }) {
+   113→  return (
+   114→    <div className={cn("mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8 lg:py-8", className)}>
+   115→      {children}
+   116→    </div>
+   117→  );
+   118→}
+   119→
+   120→const formatSalary = (j: Job) =>
+   121→  `$${j.salary.min.toLocaleString()}–$${j.salary.max.toLocaleString()} / ${j.salary.period}`;
+   122→
+   123→function timeAgo(date: string) {
+   124→  const d = new Date(date);
+   125→  const days = Math.floor((Date.now() - d.getTime()) / (1000 * 60 * 60 * 24));
+   126→  if (days === 0) return "today";
+   127→  if (days === 1) return "1d ago";
+   128→  if (days < 7) return `${days}d ago`;
+   129→  if (days < 30) return `${Math.floor(days / 7)}w ago`;
+   130→  return `${Math.floor(days / 30)}mo ago`;
+   131→}
+   132→
+   133→// ============================================================
+   134→// SEEKER DASHBOARD
+   135→// ============================================================
+   136→export function SeekerDashboard() {
+   137→  const { go } = useApp();
+   138→  const { data: profileData, loading: profileLoading } = useFetch<any>("/api/profile");
+   139→  const { data: appsData, loading: appsLoading } = useFetch<any>("/api/applications");
+   140→  const { data: notifData, loading: notifLoading } = useFetch<any>("/api/notifications");
+   141→  const { data: jobsData } = useFetch<any>("/api/jobs");
+   142→  const [aiLoading, setAiLoading] = useState(false);
+   143→  const [aiAnalysis, setAiAnalysis] = useState<any>(null);
+   144→
+   145→  const profile = profileData?.profile;
+   146→  const applications = appsData?.applications ?? [];
+   147→  const notifications = notifData?.notifications ?? [];
+   148→  const publishedJobs = jobsData?.jobs ?? [];
+   149→
+   150→  // Compute profile completion from real data
+   151→  const profileCompletion = profile
+   152→    ? Math.round(
+   153→        (((profile.name ? 1 : 0) +
+   154→          (profile.about ? 1 : 0) +
+   155→          (profile.location ? 1 : 0) +
+   156→          (profile.skills?.length > 0 ? 1 : 0) +
+   157→          (profile.experiences?.length > 0 ? 1 : 0) +
+   158→          (profile.educations?.length > 0 ? 1 : 0)) /
+   159→          6) *
+   160→          100
+   161→      )
+   162→    : 0;
+   163→
+   164→  const firstName = profile?.name?.split(" ")[0] ?? "there";
+   165→  const activeApplications = applications.filter((a: any) =>
+   166→    ["submitted", "screening", "shortlisted", "interview"].includes(a.status)
+   167→  ).length;
+   168→  const interviewsScheduled = applications.filter((a: any) => a.status === "interview").length;
+   169→  const avgMatchScore = applications.length
+   170→    ? Math.round(applications.reduce((sum: number, a: any) => sum + (a.matchScore || 0), 0) / applications.length)
+   171→    : 0;
+   172→  const unreadNotifications = notifications.filter((n: any) => !n.read).length;
+   173→
+   174→  return (
+   175→    <PageContainer>
+   176→      <SectionHeader
+   177→        title={`Welcome back, ${firstName}`}
+   178→        description="Here's your job-search overview for today."
+   179→        actions={
+   180→          <Button onClick={() => go("recommended")}>
+   181→            <Target className="h-4 w-4" /> View recommendations
+   182→          </Button>
+   183→        }
+   184→      />
+   185→
+   186→      <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+   187→        <StatCard label="Profile completion" value={`${profileCompletion}%`} icon={<User className="h-4 w-4" />} hint={profileCompletion < 100 ? "Steps left" : "All done!"} />
+   188→        <StatCard label="Open jobs" value={publishedJobs.length} icon={<Target className="h-4 w-4" />} hint="Live on platform" />
+   189→        <StatCard label="Active applications" value={activeApplications} icon={<Send className="h-4 w-4" />} hint={`${interviewsScheduled} interview scheduled`} />
+   190→        <StatCard label="Avg. match score" value={`${avgMatchScore}%`} icon={<Sparkles className="h-4 w-4" />} hint="Across your applications" />
+   191→      </div>
+   192→
+   193→      <div className="mt-6 grid gap-4 lg:grid-cols-3">
+   194→        {/* Profile completion */}
+   195→        <Card>
+   196→          <CardHeader className="pb-3">
+   197→            <CardTitle className="text-sm">Profile completion</CardTitle>
+   198→            <CardDescription>Complete your profile to boost match scores</CardDescription>
+   199→          </CardHeader>
+   200→          <CardContent className="space-y-3">
+   201→            <div className="flex items-center gap-4">
+   202→              <ProfileCompletionRing value={profileCompletion} size={84} />
+   203→              <div className="space-y-1 text-xs">
+   204→                {[
+   205→                  { label: "Basic info", done: !!(profile?.name && profile?.about) },
+   206→                  { label: "Skills & proficiency", done: (profile?.skills?.length ?? 0) > 0 },
+   207→                  { label: "Education", done: (profile?.educations?.length ?? 0) > 0 },
+   208→                  { label: "Experience", done: (profile?.experiences?.length ?? 0) > 0 },
+   209→                  { label: "Location", done: !!profile?.location },
+   210→                  { label: "Skill verification", done: (profile?.skills?.filter((s: any) => s.verified === "verified").length ?? 0) > 0 },
+   211→                ].map((s) => (
+   212→                  <div key={s.label} className="flex items-center gap-2">
+   213→                    {s.done ? (
+   214→                      <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" />
+   215→                    ) : (
+   216→                      <div className="h-3.5 w-3.5 rounded-full border-2 border-muted-foreground/40" />
+   217→                    )}
+   218→                    <span className={s.done ? "text-muted-foreground line-through" : "font-medium"}>{s.label}</span>
+   219→                  </div>
+   220→                ))}
+   221→              </div>
+   222→            </div>
+   223→            <Button variant="outline" size="sm" className="w-full" onClick={() => go("profile")}>
+   224→              Continue setup
+   225→            </Button>
+   226→          </CardContent>
+   227→        </Card>
+   228→
+   229→        {/* Recommended jobs (from published jobs in DB) */}
+   230→        <Card className="lg:col-span-2">
+   231→          <CardHeader className="pb-3 flex flex-row items-center justify-between space-y-0">
+   232→            <div>
+   233→              <CardTitle className="text-sm">Open jobs on the platform</CardTitle>
+   234→              <CardDescription>Click any job to view details and apply</CardDescription>
+   235→            </div>
+   236→            <Button variant="ghost" size="sm" onClick={() => go("recommended")}>
+   237→              View all <ArrowRight className="h-3.5 w-3.5" />
+   238→            </Button>
+   239→          </CardHeader>
+   240→          <CardContent className="space-y-2.5">
+   241→            {profileLoading || jobsData === null ? (
+   242→              <LoadingState label="Loading jobs…" rows={2} />
+   243→            ) : publishedJobs.length === 0 ? (
+   244→              <EmptyState icon={<Target className="h-5 w-5" />} title="No open jobs yet" description="Check back soon — employers are posting new roles." />
+   245→            ) : (
+   246→              publishedJobs.slice(0, 4).map((j: any) => (
+   247→                <button
+   248→                  key={j.id}
+   249→                  onClick={() => go("job-detail", { jobId: j.id })}
+   250→                  className="group flex w-full items-center gap-3 rounded-lg border border-border bg-card p-3 text-left transition-colors hover:bg-accent"
+   251→                >
+   252→                  <CompanyLogo initials={j.companyLogo || j.company.slice(0, 2).toUpperCase()} size="md" />
+   253→                  <div className="min-w-0 flex-1">
+   254→                    <p className="truncate text-sm font-semibold group-hover:text-primary">{j.title}</p>
+   255→                    <p className="truncate text-xs text-muted-foreground">{j.company} · {j.location}</p>
+   256→                  </div>
+   257→                  <div className="flex flex-col items-end gap-1">
+   258→                    <span className="text-[10px] text-muted-foreground">${j.salaryMin.toLocaleString()}–${j.salaryMax.toLocaleString()}/{j.salaryPeriod}</span>
+   259→                    <span className="text-[10px] text-muted-foreground">{j.remote}</span>
+   260→                  </div>
+   261→                </button>
+   262→              ))
+   263→            )}
+   264→          </CardContent>
+   265→        </Card>
+   266→      </div>
+   267→
+   268→      <div className="mt-4 grid gap-4 lg:grid-cols-3">
+   269→        {/* Recent applications */}
+   270→        <Card className="lg:col-span-2">
+   271→          <CardHeader className="pb-3 flex flex-row items-center justify-between space-y-0">
+   272→            <div>
+   273→              <CardTitle className="text-sm">Recent applications</CardTitle>
+   274→              <CardDescription>Track your active applications</CardDescription>
+   275→            </div>
+   276→            <Button variant="ghost" size="sm" onClick={() => go("applications")}>
+   277→              View all <ArrowRight className="h-3.5 w-3.5" />
+   278→            </Button>
+   279→          </CardHeader>
+   280→          <CardContent className="space-y-2">
+   281→            {appsLoading ? (
+   282→              <LoadingState label="Loading applications…" rows={2} />
+   283→            ) : applications.length === 0 ? (
+   284→              <EmptyState
+   285→                icon={<Send className="h-5 w-5" />}
+   286→                title="No applications yet"
+   287→                description="Browse open jobs and apply to start tracking them here."
+   288→                action={<Button size="sm" onClick={() => go("recommended")}>Browse jobs</Button>}
+   289→              />
+   290→            ) : (
+   291→              applications.slice(0, 4).map((a: any) => (
+   292→                <button
+   293→                  key={a.id}
+   294→                  onClick={() => go("applications")}
+   295→                  className="group flex w-full items-center gap-3 rounded-lg border border-border bg-card p-3 text-left transition-colors hover:bg-accent"
+   296→                >
+   297→                  <CompanyLogo initials={a.job?.companyLogo || "CO"} size="sm" />
+   298→                  <div className="min-w-0 flex-1">
+   299→                    <p className="truncate text-sm font-semibold group-hover:text-primary">{a.job?.title}</p>
+   300→                    <p className="truncate text-xs text-muted-foreground">{a.job?.company} · applied {timeAgo(a.appliedAt)}</p>
+   301→                  </div>
+   302→                  <ApplicationStatusBadge status={a.status} />
+   303→                  {a.matchScore && <MatchScore score={a.matchScore} size="sm" showLabel={false} />}
+   304→                </button>
+   305→              ))
+   306→            )}
+   307→          </CardContent>
+   308→        </Card>
+   309→
+   310→        {/* Notifications */}
+   311→        <Card>
+   312→          <CardHeader className="pb-3 flex flex-row items-center justify-between space-y-0">
+   313→            <div>
+   314→              <CardTitle className="text-sm">Notifications</CardTitle>
+   315→              <CardDescription>{unreadNotifications} unread</CardDescription>
+   316→            </div>
+   317→            <Button variant="ghost" size="sm" onClick={() => go("notifications")}>
+   318→              <Bell className="h-3.5 w-3.5" />
+   319→            </Button>
+   320→          </CardHeader>
+   321→          <CardContent className="space-y-2">
+   322→            {notifLoading ? (
+   323→              <LoadingState label="Loading…" rows={2} />
+   324→            ) : notifications.length === 0 ? (
+   325→              <EmptyState icon={<Bell className="h-5 w-5" />} title="No notifications" />
+   326→            ) : (
+   327→              notifications.slice(0, 3).map((n: any) => (
+   328→                <div
+   329→                  key={n.id}
+   330→                  className={cn(
+   331→                    "rounded-lg border border-border bg-card p-3",
+   332→                    !n.read && "border-primary/30 bg-primary/5"
+   333→                  )}
+   334→                >
+   335→                  <div className="flex items-start gap-2">
+   336→                    {!n.read && <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-primary" />}
+   337→                    <div className="min-w-0 flex-1">
+   338→                      <p className="text-xs font-semibold">{n.title}</p>
+   339→                      <p className="mt-0.5 line-clamp-2 text-xs text-muted-foreground">{n.message}</p>
+   340→                      <p className="mt-1 text-[10px] text-muted-foreground">{timeAgo(n.createdAt)}</p>
+   341→                    </div>
+   342→                  </div>
+   343→                </div>
+   344→              ))
+   345→            )}
+   346→          </CardContent>
+   347→        </Card>
+   348→      </div>
+   349→
+   350→      {/* Skill summary */}
+   351→      <Card className="mt-4">
+   352→        <CardHeader className="pb-3 flex flex-row items-center justify-between space-y-0">
+   353→          <div>
+   354→            <CardTitle className="text-sm">Your skills</CardTitle>
+   355→            <CardDescription>{profile?.skills?.length ?? 0} skills on your profile</CardDescription>
+   356→          </div>
+   357→          <Button variant="ghost" size="sm" onClick={() => go("skills")}>
+   358→            Manage skills <ArrowRight className="h-3.5 w-3.5" />
+   359→          </Button>
+   360→        </CardHeader>
+   361→        <CardContent>
+   362→          {profileLoading ? (
+   363→            <LoadingState label="Loading skills…" rows={1} />
+   364→          ) : (profile?.skills?.length ?? 0) === 0 ? (
+   365→            <EmptyState icon={<Sparkles className="h-5 w-5" />} title="No skills yet" description="Add skills to your profile to start matching." action={<Button size="sm" onClick={() => go("skills")}>Add skills</Button>} />
+   366→          ) : (
+   367→            <div className="flex flex-wrap gap-2">
+   368→              {profile.skills.map((s: any) => (
+   369→                <SkillChip key={s.id} name={s.name} proficiency={s.proficiency} verified={s.verified} size="sm" />
+   370→              ))}
+   371→            </div>
+   372→          )}
+   373→        </CardContent>
+   374→      </Card>
+   375→
+   376→      {/* AI Profile Analysis */}
+   377→      <Card className="mt-4 border-primary/20">
+   378→        <CardHeader className="pb-3 flex flex-row items-center justify-between space-y-0">
+   379→          <div>
+   380→            <CardTitle className="text-sm flex items-center gap-2">
+   381→              <Cpu className="h-4 w-4 text-primary" /> AI Profile Analysis
+   382→            </CardTitle>
+   383→            <CardDescription>AI-powered analysis of your skills, qualifications, and market position</CardDescription>
+   384→          </div>
+   385→          <Button variant="outline" size="sm" className="btn-rainbow" onClick={async () => {
+   386→            setAiLoading(true);
+   387→            try {
+   388→              const res = await fetch("/api/ai/analyze", { method: "POST" });
+   389→              const data = await res.json();
+   390→              if (data.ok) setAiAnalysis(data.analysis);
+   391→            } catch { /* ignore */ }
+   392→            setAiLoading(false);
+   393→          }} disabled={aiLoading}>
+   394→            {aiLoading ? "Analyzing…" : "Analyze with AI"}
+   395→          </Button>
+   396→        </CardHeader>
+   397→        <CardContent>
+   398→          {aiLoading ? (
+   399→            <LoadingState label="AI is analyzing your profile…" rows={3} />
+   400→          ) : aiAnalysis ? (
+   401→            <div className="space-y-3">
+   402→              {/* Profile Score */}
+   403→              <div className="flex items-center gap-4 rounded-lg border border-primary/20 bg-primary/5 p-3">
+   404→                <div className="text-center">
+   405→                  <p className="text-3xl font-bold text-primary">{aiAnalysis.profileScore}</p>
+   406→                  <p className="text-[10px] uppercase text-muted-foreground">Profile Score</p>
+   407→                </div>
+   408→                <div className="flex-1">
+   409→                  <p className="text-sm font-semibold">{aiAnalysis.careerLevel} · {aiAnalysis.marketPosition}</p>
+   410→                  <div className="mt-1 flex flex-wrap gap-1">
+   411→                    {aiAnalysis.recommendedRoles.map((r: string, i: number) => (
+   412→                      <Badge key={i} variant="outline" className="text-[10px] bg-violet-50 text-violet-700 border-violet-200">{r}</Badge>
+   413→                    ))}
+   414→                  </div>
+   415→                </div>
+   416→              </div>
+   417→
+   418→              {/* Strengths & Weaknesses */}
+   419→              <div className="grid gap-3 sm:grid-cols-2">
+   420→                <div>
+   421→                  <p className="text-xs font-semibold text-emerald-700 mb-1.5">Strengths</p>
+   422→                  <ul className="space-y-1">
+   423→                    {aiAnalysis.strengths.map((s: string, i: number) => (
+   424→                      <li key={i} className="flex items-start gap-1.5 text-xs text-muted-foreground">
+   425→                        <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600 shrink-0 mt-0.5" /> {s}
+   426→                      </li>
+   427→                    ))}
+   428→                  </ul>
+   429→                </div>
+   430→                <div>
+   431→                  <p className="text-xs font-semibold text-rose-700 mb-1.5">Areas for Improvement</p>
+   432→                  <ul className="space-y-1">
+   433→                    {aiAnalysis.weaknesses.map((w: string, i: number) => (
+   434→                      <li key={i} className="flex items-start gap-1.5 text-xs text-muted-foreground">
+   435→                        <AlertCircle className="h-3.5 w-3.5 text-rose-600 shrink-0 mt-0.5" /> {w}
+   436→                      </li>
+   437→                    ))}
+   438→                  </ul>
+   439→                </div>
+   440→              </div>
+   441→
+   442→              {/* AI Insights */}
+   443→              {aiAnalysis.insights.length > 0 && (
+   444→                <div className="space-y-1.5">
+   445→                  <p className="text-xs font-semibold uppercase text-muted-foreground">AI Insights</p>
+   446→                  {aiAnalysis.insights.map((ins: any, i: number) => (
+   447→                    <div key={i} className={cn(
+   448→                      "rounded-md border px-3 py-2 text-xs",
+   449→                      ins.type === "positive" ? "border-emerald-200 bg-emerald-50 text-emerald-800" :
+   450→                      ins.type === "negative" ? "border-rose-200 bg-rose-50 text-rose-800" :
+   451→                      "border-blue-200 bg-blue-50 text-blue-800"
+   452→                    )}>
+   453→                      <span className="font-semibold">{ins.title}:</span> {ins.description}
+   454→                    </div>
+   455→                  ))}
+   456→                </div>
+   457→              )}
+   458→            </div>
+   459→          ) : (
+   460→            <div className="flex flex-col items-center py-6 text-center">
+   461→              <Cpu className="h-10 w-10 text-muted-foreground mb-2" />
+   462→              <p className="text-sm text-muted-foreground">Click "Analyze with AI" to get a comprehensive analysis of your profile, including strengths, weaknesses, market position, and recommended roles.</p>
+   463→            </div>
+   464→          )}
+   465→        </CardContent>
+   466→      </Card>
+   467→    </PageContainer>
+   468→  );
+   469→}
+   470→
+   471→// ============================================================
+   472→// SEEKER PROFILE
+   473→// ============================================================
+   474→export function SeekerProfile() {
+   475→  const { go, user: sessionUser } = useApp();
+   476→  const { data, loading, refetch } = useFetch<any>("/api/profile");
+   477→  const profile = data?.profile;
+   478→
+   479→  // Editable form state
+   480→  const [name, setName] = useState("");
+   481→  const [title, setTitle] = useState("");
+   482→  const [location, setLocation] = useState("");
+   483→  const [about, setAbout] = useState("");
+   484→  const [saving, setSaving] = useState(false);
+   485→  const [saveMsg, setSaveMsg] = useState<{ ok: boolean; msg: string } | null>(null);
+   486→
+   487→  // Add experience dialog state
+   488→  const [expOpen, setExpOpen] = useState(false);
+   489→  const [expForm, setExpForm] = useState({ company: "", title: "", startDate: "", endDate: "", description: "", current: false });
+   490→  const [expError, setExpError] = useState<string | null>(null);
+   491→  const [expSaving, setExpSaving] = useState(false);
+   492→
+   493→  // Add education dialog state
+   494→  const [eduOpen, setEduOpen] = useState(false);
+   495→  const [eduForm, setEduForm] = useState({ institution: "", degree: "", field: "", startDate: "", endDate: "" });
+   496→  const [eduError, setEduError] = useState<string | null>(null);
+   497→  const [eduSaving, setEduSaving] = useState(false);
+   498→
+   499→  // Sync form state when profile loads
+   500→  useEffect(() => {
+   501→    if (profile) {
+   502→      setName(profile.name ?? "");
+   503→      setTitle(profile.title ?? "");
+   504→      setLocation(profile.location ?? "");
+   505→      setAbout(profile.about ?? "");
+   506→    }
+   507→  }, [profile]);
+   508→
+   509→  const save = async () => {
+   510→    setSaving(true);
+   511→    setSaveMsg(null);
+   512→    try {
+   513→      const res = await fetch("/api/profile", {
+   514→        method: "PUT",
+   515→        headers: { "Content-Type": "application/json" },
+   516→        body: JSON.stringify({ name, title, location, about }),
+   517→      });
+   518→      const json = await res.json();
+   519→      if (json.ok) {
+   520→        setSaveMsg({ ok: true, msg: "Profile updated successfully." });
+   521→        refetch();
+   522→      } else {
+   523→        setSaveMsg({ ok: false, msg: json.error ?? "Save failed." });
+   524→      }
+   525→    } catch {
+   526→      setSaveMsg({ ok: false, msg: "Network error." });
+   527→    } finally {
+   528→      setSaving(false);
+   529→    }
+   530→  };
+   531→
+   532→  const addExperience = async () => {
+   533→    setExpError(null);
+   534→    if (!expForm.company.trim()) { setExpError("Company is required."); return; }
+   535→    if (!expForm.title.trim()) { setExpError("Job title is required."); return; }
+   536→    setExpSaving(true);
+   537→    try {
+   538→      const res = await fetch("/api/profile/experience", {
+   539→        method: "POST",
+   540→        headers: { "Content-Type": "application/json" },
+   541→        body: JSON.stringify(expForm),
+   542→      });
+   543→      const json = await res.json();
+   544→      if (json.ok) {
+   545→        setExpOpen(false);
+   546→        setExpForm({ company: "", title: "", startDate: "", endDate: "", description: "", current: false });
+   547→        refetch();
+   548→      } else {
+   549→        setExpError(json.error ?? "Failed to add experience.");
+   550→      }
+   551→    } catch {
+   552→      setExpError("Network error.");
+   553→    } finally {
+   554→      setExpSaving(false);
+   555→    }
+   556→  };
+   557→
+   558→  const addEducation = async () => {
+   559→    setEduError(null);
+   560→    if (!eduForm.institution.trim()) { setEduError("Institution is required."); return; }
+   561→    if (!eduForm.degree.trim()) { setEduError("Degree is required."); return; }
+   562→    if (!eduForm.field.trim()) { setEduError("Field of study is required."); return; }
+   563→    setEduSaving(true);
+   564→    try {
+   565→      const res = await fetch("/api/profile/education", {
+   566→        method: "POST",
+   567→        headers: { "Content-Type": "application/json" },
+   568→        body: JSON.stringify(eduForm),
+   569→      });
+   570→      const json = await res.json();
+   571→      if (json.ok) {
+   572→        setEduOpen(false);
+   573→        setEduForm({ institution: "", degree: "", field: "", startDate: "", endDate: "" });
+   574→        refetch();
+   575→      } else {
+   576→        setEduError(json.error ?? "Failed to add education.");
+   577→      }
+   578→    } catch {
+   579→      setEduError("Network error.");
+   580→    } finally {
+   581→      setEduSaving(false);
+   582→    }
+   583→  };
+   584→
+   585→  const completion = profile
+   586→    ? Math.round(
+   587→        (((profile.name ? 1 : 0) +
+   588→          (profile.about ? 1 : 0) +
+   589→          (profile.location ? 1 : 0) +
+   590→          (profile.skills?.length > 0 ? 1 : 0) +
+   591→          (profile.experiences?.length > 0 ? 1 : 0) +
+   592→          (profile.educations?.length > 0 ? 1 : 0)) /
+   593→          6) *
+   594→          100
+   595→      )
+   596→    : 0;
+   597→
+   598→  const pendingSkills = profile?.skills?.filter((s: any) => s.verified === "pending").length ?? 0;
+   599→
+   600→  return (
+   601→    <PageContainer>
+   602→      <SectionHeader
+   603→        title="My Profile"
+   604→        description="Your professional profile is used by the AI matching engine."
+   605→        actions={
+   606→          <Button variant="outline" onClick={() => window.print()}>
+   607→            <Download className="h-4 w-4" /> Export PDF
+   608→          </Button>
+   609→        }
+   610→      />
+   611→
+   612→      {loading ? (
+   613→        <LoadingState label="Loading profile…" rows={3} />
+   614→      ) : (
+   615→        <div className="mt-6 grid gap-4 lg:grid-cols-3">
+   616→          {/* Profile card */}
+   617→          <Card className="lg:col-span-1">
+   618→            <CardContent className="p-6">
+   619→              {/* Profile photo with upload */}
+   620→              <div className="flex flex-col items-center text-center">
+   621→                <ProfilePhotoUpload
+   622→                  photo={profile?.profilePhoto}
+   623→                  initials={profile?.initials ?? sessionUser?.initials ?? "U"}
+   624→                  color={profile?.avatarColor ?? sessionUser?.avatarColor ?? "oklch(0.55 0.22 285)"}
+   625→                  onUploaded={() => refetch()}
+   626→                />
+   627→                <h2 className="mt-3 text-base font-semibold">{profile?.name ?? "—"}</h2>
+   628→                <p className="text-xs text-muted-foreground">{profile?.title ?? "—"}</p>
+   629→                <p className="mt-1 text-xs text-muted-foreground">{profile?.location ?? "—"}</p>
+   630→              </div>
+   631→              <div className="mt-5 space-y-3 border-t border-border pt-4">
+   632→                <div className="flex items-center gap-2 text-xs">
+   633→                  <Mail className="h-3.5 w-3.5 text-muted-foreground" />
+   634→                  <span className="text-muted-foreground">{sessionUser?.email}</span>
+   635→                </div>
+   636→                {profile?.location && (
+   637→                  <div className="flex items-center gap-2 text-xs">
+   638→                    <MapPin className="h-3.5 w-3.5 text-muted-foreground" />
+   639→                    <span className="text-muted-foreground">{profile.location}</span>
+   640→                  </div>
+   641→                )}
+   642→              </div>
+   643→              <div className="mt-5 border-t border-border pt-4">
+   644→                <div className="flex items-center justify-between">
+   645→                  <p className="text-xs font-semibold">Profile completion</p>
+   646→                  <span className="text-xs font-semibold text-primary">{completion}%</span>
+   647→                </div>
+   648→                <Progress value={completion} className="mt-1.5 h-1.5" />
+   649→                {pendingSkills > 0 && (
+   650→                  <Button variant="outline" size="sm" className="mt-3 w-full" onClick={() => go("skills")}>
+   651→                    <Sparkles className="h-3.5 w-3.5" /> {pendingSkills} skill{pendingSkills === 1 ? "" : "s"} pending verification
+   652→                  </Button>
+   653→                )}
+   654→              </div>
+   655→            </CardContent>
+   656→          </Card>
+   657→
+   658→          {/* About + editable sections */}
+   659→          <div className="lg:col-span-2 space-y-4">
+   660→            <Card>
+   661→              <CardHeader className="pb-3">
+   662→                <CardTitle className="text-sm">About</CardTitle>
+   663→                <CardDescription>Edit your name, title, location, and bio.</CardDescription>
+   664→              </CardHeader>
+   665→              <CardContent className="space-y-3">
+   666→                <div className="grid gap-3 sm:grid-cols-2">
+   667→                  <div className="space-y-1.5">
+   668→                    <Label htmlFor="name">Full name</Label>
+   669→                    <Input id="name" value={name} onChange={(e) => setName(e.target.value)} placeholder="Your name" />
+   670→                  </div>
+   671→                  <div className="space-y-1.5">
+   672→                    <Label htmlFor="title">Professional title</Label>
+   673→                    <Input id="title" value={title} onChange={(e) => setTitle(e.target.value)} placeholder="e.g. Senior Frontend Engineer" />
+   674→                  </div>
+   675→                </div>
+   676→                <div className="space-y-1.5">
+   677→                  <Label htmlFor="location">Location</Label>
+   678→                  <Input id="location" value={location} onChange={(e) => setLocation(e.target.value)} placeholder="City, Country" />
+   679→                </div>
+   680→                <div className="space-y-1.5">
+   681→                  <Label htmlFor="about">About / Bio</Label>
+   682→                  <Textarea
+   683→                    id="about"
+   684→                    value={about}
+   685→                    onChange={(e) => setAbout(e.target.value)}
+   686→                    rows={4}
+   687→                    className="resize-none"
+   688→                    placeholder="Tell employers about your experience, strengths, and what you're looking for."
+   689→                  />
+   690→                </div>
+   691→                {saveMsg && (
+   692→                  <div className={cn(
+   693→                    "rounded-md border px-3 py-2 text-xs",
+   694→                    saveMsg.ok ? "border-emerald-200 bg-emerald-50 text-emerald-700" : "border-rose-200 bg-rose-50 text-rose-700"
+   695→                  )}>
+   696→                    {saveMsg.msg}
+   697→                  </div>
+   698→                )}
+   699→                <div className="flex justify-end gap-2">
+   700→                  <Button variant="ghost" size="sm" onClick={() => refetch()} disabled={saving}>Cancel</Button>
+   701→                  <Button size="sm" onClick={save} disabled={saving} className="btn-blue">
+   702→                    {saving ? (
+   703→                      <>
+   704→                        <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-primary-foreground border-t-transparent" />
+   705→                        Saving…
+   706→                      </>
+   707→                    ) : (
+   708→                      "Save changes"
+   709→                    )}
+   710→                  </Button>
+   711→                </div>
+   712→              </CardContent>
+   713→            </Card>
+   714→
+   715→            {/* Experience */}
+   716→            <Card>
+   717→              <CardHeader className="pb-3 flex flex-row items-center justify-between space-y-0">
+   718→                <CardTitle className="text-sm flex items-center gap-2">
+   719→                  <Briefcase className="h-4 w-4 text-primary" /> Experience
+   720→                </CardTitle>
+   721→                <Dialog open={expOpen} onOpenChange={(o) => { setExpOpen(o); setExpError(null); }}>
+   722→                  <DialogTrigger asChild>
+   723→                    <Button variant="outline" size="sm" className="btn-green">
+   724→                      <Plus className="h-3.5 w-3.5" /> Add experience
+   725→                    </Button>
+   726→                  </DialogTrigger>
+   727→                  <DialogContent>
+   728→                    <DialogHeader>
+   729→                      <DialogTitle>Add work experience</DialogTitle>
+   730→                      <DialogDescription>Fill in the details of your work experience.</DialogDescription>
+   731→                    </DialogHeader>
+   732→                    <div className="space-y-3 py-2">
+   733→                      <div className="grid gap-3 sm:grid-cols-2">
+   734→                        <div className="space-y-1.5">
+   735→                          <Label htmlFor="exp-title">Job title *</Label>
+   736→                          <Input id="exp-title" value={expForm.title} onChange={(e) => setExpForm({ ...expForm, title: e.target.value })} placeholder="e.g. Senior Frontend Engineer" />
+   737→                        </div>
+   738→                        <div className="space-y-1.5">
+   739→                          <Label htmlFor="exp-company">Company *</Label>
+   740→                          <Input id="exp-company" value={expForm.company} onChange={(e) => setExpForm({ ...expForm, company: e.target.value })} placeholder="e.g. Twiga Foods" />
+   741→                        </div>
+   742→                        <div className="space-y-1.5">
+   743→                          <Label htmlFor="exp-start">Start date</Label>
+   744→                          <Input id="exp-start" type="month" value={expForm.startDate} onChange={(e) => setExpForm({ ...expForm, startDate: e.target.value })} />
+   745→                        </div>
+   746→                        <div className="space-y-1.5">
+   747→                          <Label htmlFor="exp-end">End date</Label>
+   748→                          <Input id="exp-end" type="month" value={expForm.endDate} onChange={(e) => setExpForm({ ...expForm, endDate: e.target.value })} disabled={expForm.current} />
+   749→                        </div>
+   750→                      </div>
+   751→                      <div className="flex items-center gap-2">
+   752→                        <Checkbox id="exp-current" checked={expForm.current} onCheckedChange={(v) => setExpForm({ ...expForm, current: Boolean(v), endDate: Boolean(v) ? "Present" : "" })} />
+   753→                        <label htmlFor="exp-current" className="text-xs">I currently work here</label>
+   754→                      </div>
+   755→                      <div className="space-y-1.5">
+   756→                        <Label htmlFor="exp-desc">Description</Label>
+   757→                        <Textarea id="exp-desc" rows={3} value={expForm.description} onChange={(e) => setExpForm({ ...expForm, description: e.target.value })} placeholder="What did you do?" className="resize-none" />
+   758→                      </div>
+   759→                      {expError && <p className="text-xs text-rose-600">{expError}</p>}
+   760→                    </div>
+   761→                    <DialogFooter>
+   762→                      <Button variant="outline" onClick={() => setExpOpen(false)}>Cancel</Button>
+   763→                      <Button onClick={addExperience} disabled={expSaving} className="btn-green">
+   764→                        {expSaving ? "Saving…" : "Add experience"}
+   765→                      </Button>
+   766→                    </DialogFooter>
+   767→                  </DialogContent>
+   768→                </Dialog>
+   769→              </CardHeader>
+   770→              <CardContent className="space-y-3">
+   771→                {(profile?.experiences?.length ?? 0) === 0 ? (
+   772→                  <EmptyState icon={<Briefcase className="h-5 w-5" />} title="No experience added" description="Click 'Add experience' above or upload your resume to auto-extract." />
+   773→                ) : (
+   774→                  profile.experiences.map((e: any) => (
+   775→                    <div key={e.id} className="rounded-lg border border-border bg-card p-3">
+   776→                      <div className="flex items-start justify-between gap-2">
+   777→                        <div>
+   778→                          <p className="text-sm font-semibold">{e.title}</p>
+   779→                          <p className="text-xs text-muted-foreground">{e.company}</p>
+   780→                          <p className="text-[11px] text-muted-foreground">{e.startDate} — {e.endDate}</p>
+   781→                        </div>
+   782→                        {e.current && <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-200 text-[10px]">Current</Badge>}
+   783→                      </div>
+   784→                      {e.description && <p className="mt-2 text-xs text-muted-foreground">{e.description}</p>}
+   785→                    </div>
+   786→                  ))
+   787→                )}
+   788→              </CardContent>
+   789→            </Card>
+   790→
+   791→            {/* Education */}
+   792→            <Card>
+   793→              <CardHeader className="pb-3 flex flex-row items-center justify-between space-y-0">
+   794→                <CardTitle className="text-sm flex items-center gap-2">
+   795→                  <GraduationCap className="h-4 w-4 text-primary" /> Education
+   796→                </CardTitle>
+   797→                <Dialog open={eduOpen} onOpenChange={(o) => { setEduOpen(o); setEduError(null); }}>
+   798→                  <DialogTrigger asChild>
+   799→                    <Button variant="outline" size="sm" className="btn-blue">
+   800→                      <Plus className="h-3.5 w-3.5" /> Add education
+   801→                    </Button>
+   802→                  </DialogTrigger>
+   803→                  <DialogContent>
+   804→                    <DialogHeader>
+   805→                      <DialogTitle>Add education</DialogTitle>
+   806→                      <DialogDescription>Fill in your education details.</DialogDescription>
+   807→                    </DialogHeader>
+   808→                    <div className="space-y-3 py-2">
+   809→                      <div className="space-y-1.5">
+   810→                        <Label htmlFor="edu-institution">Institution *</Label>
+   811→                        <Input id="edu-institution" value={eduForm.institution} onChange={(e) => setEduForm({ ...eduForm, institution: e.target.value })} placeholder="e.g. University of Nairobi" />
+   812→                      </div>
+   813→                      <div className="grid gap-3 sm:grid-cols-2">
+   814→                        <div className="space-y-1.5">
+   815→                          <Label htmlFor="edu-degree">Degree *</Label>
+   816→                          <Input id="edu-degree" value={eduForm.degree} onChange={(e) => setEduForm({ ...eduForm, degree: e.target.value })} placeholder="e.g. B.Sc." />
+   817→                        </div>
+   818→                        <div className="space-y-1.5">
+   819→                          <Label htmlFor="edu-field">Field of study *</Label>
+   820→                          <Input id="edu-field" value={eduForm.field} onChange={(e) => setEduForm({ ...eduForm, field: e.target.value })} placeholder="e.g. Computer Science" />
+   821→                        </div>
+   822→                        <div className="space-y-1.5">
+   823→                          <Label htmlFor="edu-start">Start date</Label>
+   824→                          <Input id="edu-start" type="month" value={eduForm.startDate} onChange={(e) => setEduForm({ ...eduForm, startDate: e.target.value })} />
+   825→                        </div>
+   826→                        <div className="space-y-1.5">
+   827→                          <Label htmlFor="edu-end">End date</Label>
+   828→                          <Input id="edu-end" type="month" value={eduForm.endDate} onChange={(e) => setEduForm({ ...eduForm, endDate: e.target.value })} />
+   829→                        </div>
+   830→                      </div>
+   831→                      {eduError && <p className="text-xs text-rose-600">{eduError}</p>}
+   832→                    </div>
+   833→                    <DialogFooter>
+   834→                      <Button variant="outline" onClick={() => setEduOpen(false)}>Cancel</Button>
+   835→                      <Button onClick={addEducation} disabled={eduSaving} className="btn-blue">
+   836→                        {eduSaving ? "Saving…" : "Add education"}
+   837→                      </Button>
+   838→                    </DialogFooter>
+   839→                  </DialogContent>
+   840→                </Dialog>
+   841→              </CardHeader>
+   842→              <CardContent className="space-y-3">
+   843→                {(profile?.educations?.length ?? 0) === 0 ? (
+   844→                  <EmptyState icon={<GraduationCap className="h-5 w-5" />} title="No education added" description="Click 'Add education' above or upload your resume to auto-extract." />
+   845→                ) : (
+   846→                  profile.educations.map((ed: any) => (
+   847→                    <div key={ed.id} className="rounded-lg border border-border bg-card p-3">
+   848→                      <div className="flex items-start justify-between gap-2">
+   849→                        <div>
+   850→                          <p className="text-sm font-semibold">{ed.degree}, {ed.field}</p>
+   851→                          <p className="text-xs text-muted-foreground">{ed.institution}</p>
+   852→                          <p className="text-[11px] text-muted-foreground">{ed.startDate} — {ed.endDate}</p>
+   853→                        </div>
+   854→                        {ed.verified ? (
+   855→                          <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-200 text-[10px] gap-1">
+   856→                            <ShieldCheck className="h-3 w-3" /> Verified
+   857→                          </Badge>
+   858→                        ) : (
+   859→                          <Badge variant="outline" className="bg-amber-50 text-amber-700 border-amber-200 text-[10px] gap-1">
+   860→                            <Clock className="h-3 w-3" /> Pending
+   861→                          </Badge>
+   862→                        )}
+   863→                      </div>
+   864→                    </div>
+   865→                  ))
+   866→                )}
+   867→              </CardContent>
+   868→            </Card>
+   869→          </div>
+   870→        </div>
+   871→      )}
+   872→    </PageContainer>
+   873→  );
+   874→}
+   875→
+   876→// ============================================================
+   877→// SEEKER SKILLS
+   878→// ============================================================
+   879→export function SeekerSkills() {
+   880→  const { data, loading, refetch } = useFetch<any>("/api/skills");
+   881→  const skills: any[] = data?.skills ?? [];
+   882→
+   883→  const [addDialogOpen, setAddDialogOpen] = useState(false);
+   884→  const [newSkill, setNewSkill] = useState("");
+   885→  const [newProficiency, setNewProficiency] = useState<ProficiencyLevel>("intermediate");
+   886→  const [newYears, setNewYears] = useState("");
+   887→  const [addError, setAddError] = useState<string | null>(null);
+   888→  const [adding, setAdding] = useState(false);
+   889→  const [deletingId, setDeletingId] = useState<string | null>(null);
+   890→
+   891→  const grouped = skills.reduce<Record<string, any[]>>((acc, s) => {
+   892→    (acc[s.category] = acc[s.category] || []).push(s);
+   893→    return acc;
+   894→  }, {});
+   895→
+   896→  const addSkill = async () => {
+   897→    setAddError(null);
+   898→    if (!newSkill.trim()) {
+   899→      setAddError("Skill name is required.");
+   900→      return;
+   901→    }
+   902→    if (newSkill.trim().length < 2) {
+   903→      setAddError("Skill name must be at least 2 characters.");
+   904→      return;
+   905→    }
+   906→    setAdding(true);
+   907→    try {
+   908→      const res = await fetch("/api/skills", {
+   909→        method: "POST",
+   910→        headers: { "Content-Type": "application/json" },
+   911→        body: JSON.stringify({
+   912→          name: newSkill.trim(),
+   913→          proficiency: newProficiency,
+   914→          category: "Custom",
+   915→          yearsOfExperience: newYears ? Number(newYears) : null,
+   916→        }),
+   917→      });
+   918→      const json = await res.json();
+   919→      if (!json.ok) {
+   920→        setAddError(json.error ?? "Failed to add skill.");
+   921→        return;
+   922→      }
+   923→      setNewSkill("");
+   924→      setNewYears("");
+   925→      setAddDialogOpen(false);
+   926→      refetch();
+   927→    } catch {
+   928→      setAddError("Network error.");
+   929→    } finally {
+   930→      setAdding(false);
+   931→    }
+   932→  };
+   933→
+   934→  const deleteSkill = async (id: string) => {
+   935→    setDeletingId(id);
+   936→    try {
+   937→      await fetch(`/api/skills/${id}`, { method: "DELETE" });
+   938→      refetch();
+   939→    } catch {
+   940→      /* ignore */
+   941→    } finally {
+   942→      setDeletingId(null);
+   943→    }
+   944→  };
+   945→
+   946→  const verifiedCount = skills.filter((s) => s.verified === "verified").length;
+   947→  const pendingCount = skills.filter((s) => s.verified === "pending").length;
+   948→
+   949→  return (
+   950→    <PageContainer>
+   951→      <SectionHeader
+   952→        title="Skills & Proficiency"
+   953→        description="The AI uses your verified skills to compute match scores."
+   954→        actions={
+   955→          <Dialog open={addDialogOpen} onOpenChange={setAddDialogOpen}>
+   956→            <DialogTrigger asChild>
+   957→              <Button className="btn-rainbow">
+   958→                <Plus className="h-4 w-4" /> Add skill
+   959→              </Button>
+   960→            </DialogTrigger>
+   961→            <DialogContent>
+   962→              <DialogHeader>
+   963→                <DialogTitle>Add a skill</DialogTitle>
+   964→                <DialogDescription>Search our skill ontology or add a custom skill.</DialogDescription>
+   965→              </DialogHeader>
+   966→              <div className="space-y-3 py-2">
+   967→                <div className="space-y-1.5">
+   968→                  <Label htmlFor="skill-name">Skill name *</Label>
+   969→                  <Input
+   970→                    id="skill-name"
+   971→                    placeholder="e.g. Kubernetes"
+   972→                    value={newSkill}
+   973→                    onChange={(e) => setNewSkill(e.target.value)}
+   974→                  />
+   975→                  {addError && <p className="text-xs text-rose-600">{addError}</p>}
+   976→                </div>
+   977→                <div className="space-y-1.5">
+   978→                  <Label>Proficiency level *</Label>
+   979→                  <Select value={newProficiency} onValueChange={(v) => setNewProficiency(v as ProficiencyLevel)}>
+   980→                    <SelectTrigger>
+   981→                      <SelectValue />
+   982→                    </SelectTrigger>
+   983→                    <SelectContent>
+   984→                      <SelectItem value="beginner">Beginner — basic knowledge</SelectItem>
+   985→                      <SelectItem value="intermediate">Intermediate — practical experience</SelectItem>
+   986→                      <SelectItem value="advanced">Advanced — production experience</SelectItem>
+   987→                      <SelectItem value="expert">Expert — can mentor others</SelectItem>
+   988→                    </SelectContent>
+   989→                  </Select>
+   990→                </div>
+   991→                <div className="space-y-1.5">
+   992→                  <Label htmlFor="skill-years">Years of experience (optional)</Label>
+   993→                  <Input
+   994→                    id="skill-years"
+   995→                    type="number"
+   996→                    min="0"
+   997→                    max="50"
+   998→                    placeholder="e.g. 3"
+   999→                    value={newYears}
+  1000→                    onChange={(e) => setNewYears(e.target.value)}
+  1001→                  />
+  1002→                </div>
+  1003→                <InfoCallout>
+  1004→                  New skills start as <span className="font-medium">unverified</span>. You can request verification through a short assessment.
+  1005→                </InfoCallout>
+  1006→              </div>
+  1007→              <DialogFooter>
+  1008→                <Button variant="outline" onClick={() => { setAddDialogOpen(false); setAddError(null); }}>Cancel</Button>
+  1009→                <Button onClick={addSkill} disabled={adding} className="btn-green">
+  1010→                  {adding ? (
+  1011→                    <>
+  1012→                      <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-primary-foreground border-t-transparent" />
+  1013→                      Adding…
+  1014→                    </>
+  1015→                  ) : (
+  1016→                    "Add skill"
+  1017→                  )}
+  1018→                </Button>
+  1019→              </DialogFooter>
+  1020→            </DialogContent>
+  1021→          </Dialog>
+  1022→        }
+  1023→      />
+  1024→
+  1025→      <div className="mt-6 grid gap-4 sm:grid-cols-3">
+  1026→        <StatCard label="Total skills" value={skills.length} icon={<Sparkles className="h-4 w-4" />} />
+  1027→        <StatCard label="Verified" value={verifiedCount} icon={<ShieldCheck className="h-4 w-4" />} hint="Boosts match weight" />
+  1028→        <StatCard label="Pending verification" value={pendingCount} icon={<Clock className="h-4 w-4" />} />
+  1029→      </div>
+  1030→
+  1031→      {loading ? (
+  1032→        <LoadingState label="Loading skills…" rows={3} />
+  1033→      ) : skills.length === 0 ? (
+  1034→        <EmptyState
+  1035→          className="mt-6"
+  1036→          icon={<Sparkles className="h-5 w-5" />}
+  1037→          title="No skills yet"
+  1038→          description="Add your first skill to start matching with jobs."
+  1039→          action={<Button size="sm" onClick={() => setAddDialogOpen(true)}><Plus className="h-3.5 w-3.5" /> Add skill</Button>}
+  1040→        />
+  1041→      ) : (
+  1042→        <div className="mt-6 space-y-4">
+  1043→          {Object.entries(grouped).map(([category, items]) => (
+  1044→            <Card key={category}>
+  1045→              <CardHeader className="pb-3">
+  1046→                <CardTitle className="text-sm flex items-center gap-2">
+  1047→                  {category}
+  1048→                  <Badge variant="outline" className="text-[10px]">{items.length}</Badge>
+  1049→                </CardTitle>
+  1050→              </CardHeader>
+  1051→              <CardContent>
+  1052→                <div className="flex flex-wrap gap-2">
+  1053→                  {items.map((s) => (
+  1054→                    <div
+  1055→                      key={s.id}
+  1056→                      className="group inline-flex items-center gap-2 rounded-lg border border-border bg-card px-3 py-1.5 text-xs"
+  1057→                    >
+  1058→                      <SkillChip name={s.name} proficiency={s.proficiency} verified={s.verified} />
+  1059→                      {s.yearsOfExperience && (
+  1060→                        <span className="text-[10px] text-muted-foreground">· {s.yearsOfExperience}y</span>
+  1061→                      )}
+  1062→                      {s.verified === "pending" && (
+  1063→                        <Badge variant="outline" className="text-[9px] bg-amber-50 text-amber-700 border-amber-200">
+  1064→                          <Clock className="h-2.5 w-2.5" /> Pending
+  1065→                        </Badge>
+  1066→                      )}
+  1067→                      {s.verified === "verified" && (
+  1068→                        <Badge variant="outline" className="text-[9px] bg-emerald-50 text-emerald-700 border-emerald-200">
+  1069→                          <ShieldCheck className="h-2.5 w-2.5" /> Verified
+  1070→                        </Badge>
+  1071→                      )}
+  1072→                      <button
+  1073→                        onClick={() => deleteSkill(s.id)}
+  1074→                        disabled={deletingId === s.id}
+  1075→                        className="text-muted-foreground hover:text-rose-600 transition-colors"
+  1076→                        aria-label={`Delete ${s.name}`}
+  1077→                        title="Delete skill"
+  1078→                      >
+  1079→                        {deletingId === s.id ? (
+  1080→                          <span className="h-3 w-3 animate-spin rounded-full border-2 border-rose-500 border-t-transparent" />
+  1081→                        ) : (
+  1082→                          <X className="h-3 w-3" />
+  1083→                        )}
+  1084→                      </button>
+  1085→                    </div>
+  1086→                  ))}
+  1087→                </div>
+  1088→              </CardContent>
+  1089→            </Card>
+  1090→          ))}
+  1091→        </div>
+  1092→      )}
+  1093→    </PageContainer>
+  1094→  );
+  1095→}
+  1096→
+  1097→// ============================================================
+  1098→// SEEKER RESUME & AI ANALYSIS
+  1099→// ============================================================
+  1100→// Sample resume text used by the "Try with sample resume" button — lets users
+  1101→// test the AI extraction without having to upload a file.
+  1102→const SAMPLE_RESUME_TEXT = `Amara Okafor
+  1103→Senior Frontend Engineer · Nairobi, Kenya · amara.okafor@gmail.com · +254 712 345 678
+  1104→
+  1105→SUMMARY
+  1106→Senior Frontend Engineer with 6 years of experience building customer-facing
+  1107→products across fintech, agritech, and payments. Led the React/Next.js rewrite
+  1108→at Twiga Foods, lifting Lighthouse scores by 47%. Passionate about
+  1109→accessibility, performance, and mentoring.
+  1110→
+  1111→EXPERIENCE
+  1112→Senior Frontend Engineer · Twiga Foods · 2022 — Present
+  1113→- Led the frontend rewrite from Vue to React/Next.js, improving Lighthouse
+  1114→  scores by 47%.
+  1115→- Mentored 4 junior engineers and established a design-system practice used
+  1116→  across 6 product teams.
+  1117→- Owned the migration to TypeScript and Tailwind CSS.
+  1118→
+  1119→Frontend Engineer · Safaricom PLC · 2019 — 2022
+  1120→- Built customer-facing dashboards for the M-Pesa merchant portal serving
+  1121→  1.2M monthly users.
+  1122→- Owned the component library migration to a typed system.
+  1123→- Introduced Jest and React Testing Library, lifting test coverage from 12% to 78%.
+  1124→
+  1125→Junior Developer · Andela · 2018 — 2019
+  1126→- Contributed to multiple partner teams across fintech and edtech.
+  1127→- Completed the Andela fellowship with distinction.
+  1128→
+  1129→EDUCATION
+  1130→B.Sc. Computer Science · University of Nairobi · 2014 — 2018
+  1131→Diploma in Software Engineering · ALX Africa · 2020
+  1132→
+  1133→SKILLS
+  1134→React.js (expert), TypeScript (advanced), Next.js (advanced), Tailwind CSS
+  1135→(advanced), Node.js (intermediate), GraphQL (intermediate), Jest (intermediate),
+  1136→PostgreSQL (intermediate), Figma (beginner).`;
+  1137→
+  1138→export function SeekerResume() {
+  1139→  const { go } = useApp();
+  1140→  const [showProcessing, setShowProcessing] = useState(false);
+  1141→  const [showError, setShowError] = useState(false);
+  1142→  const [showSuccess, setShowSuccess] = useState(false);
+  1143→  const [errorMsg, setErrorMsg] = useState<string>("We couldn't parse the file. It may be corrupted, password-protected, or in an unsupported format.");
+  1144→  const [processingStep, setProcessingStep] = useState(0);
+  1145→  const [fileName, setFileName] = useState<string | null>(null);
+  1146→  const fileInputRef = React.useRef<HTMLInputElement>(null);
+  1147→
+  1148→  // Step-through animation for the processing card
+  1149→  useEffect(() => {
+  1150→    if (!showProcessing) return;
+  1151→    // eslint-disable-next-line react-hooks/set-state-in-effect
+  1152→    setProcessingStep(0);
+  1153→    const id = setInterval(() => {
+  1154→      setProcessingStep((s) => Math.min(s + 1, 4));
+  1155→    }, 500);
+  1156→    return () => clearInterval(id);
+  1157→  }, [showProcessing]);
+  1158→
+  1159→  const runExtraction = async (text: string, label: string) => {
+  1160→    setShowError(false);
+  1161→    setShowSuccess(false);
+  1162→    setShowProcessing(true);
+  1163→    setFileName(label);
+  1164→    try {
+  1165→      const res = await fetch("/api/ai/extract-resume", {
+  1166→        method: "POST",
+  1167→        headers: { "Content-Type": "application/json" },
+  1168→        body: JSON.stringify({ text }),
+  1169→      });
+  1170→      const data = await res.json();
+  1171→      // Give the animation a moment to complete
+  1172→      await new Promise((r) => setTimeout(r, 1200));
+  1173→      setShowProcessing(false);
+  1174→      if (!data.ok) {
+  1175→        setErrorMsg(data.error ?? "AI extraction failed.");
+  1176→        setShowError(true);
+  1177→        return;
+  1178→      }
+  1179→      setShowSuccess(true);
+  1180→      // Store the AI result so the analysis page can display it
+  1181→      try {
+  1182→        sessionStorage.setItem("skillmatch.last-extraction", JSON.stringify({ result: data.result, fileName: label }));
+  1183→      } catch { /* ignore */ }
+  1184→      setTimeout(() => go("resume-analysis"), 900);
+  1185→    } catch {
+  1186→      setShowProcessing(false);
+  1187→      setErrorMsg("Network error. Please try again.");
+  1188→      setShowError(true);
+  1189→    }
+  1190→  };
+  1191→
+  1192→  const runFileExtraction = async (file: File) => {
+  1193→    setShowError(false);
+  1194→    setShowSuccess(false);
+  1195→    setShowProcessing(true);
+  1196→    setFileName(file.name);
+  1197→    try {
+  1198→      const formData = new FormData();
+  1199→      formData.append("file", file);
+  1200→      const res = await fetch("/api/ai/extract-resume", {
+  1201→        method: "POST",
+  1202→        body: formData,
+  1203→      });
+  1204→      const data = await res.json();
+  1205→      await new Promise((r) => setTimeout(r, 1200));
+  1206→      setShowProcessing(false);
+  1207→      if (!data.ok) {
+  1208→        setErrorMsg(data.error ?? "AI extraction failed.");
+  1209→        setShowError(true);
+  1210→        return;
+  1211→      }
+  1212→      setShowSuccess(true);
+  1213→      try {
+  1214→        sessionStorage.setItem("skillmatch.last-extraction", JSON.stringify({ result: data.result, fileName: file.name }));
+  1215→      } catch { /* ignore */ }
+  1216→      setTimeout(() => go("resume-analysis"), 900);
+  1217→    } catch {
+  1218→      setShowProcessing(false);
+  1219→      setErrorMsg("Network error. Please try again.");
+  1220→      setShowError(true);
+  1221→    }
+  1222→  };
+  1223→
+  1224→  const onFileSelected = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  1225→    const file = e.target.files?.[0];
+  1226→    if (!file) return;
+  1227→    // Upload the file to the server which uses pdf-parse for PDFs and
+  1228→    // text-decoding for .txt/.md files.
+  1229→    await runFileExtraction(file);
+  1230→    // Reset input so the same file can be re-selected
+  1231→    if (fileInputRef.current) fileInputRef.current.value = "";
+  1232→  };
+  1233→
+  1234→  const startAnalysis = () => {
+  1235→    runExtraction(SAMPLE_RESUME_TEXT, "Amara_Okafor_Resume_2026.pdf");
+  1236→  };
+  1237→
+  1238→  const steps = [
+  1239→    "Uploading file",
+  1240→    "Extracting text (OCR)",
+  1241→    "Detecting skills (NLP)",
+  1242→    "Normalizing against skill ontology",
+  1243→    "Inferring proficiency levels",
+  1244→  ];
+  1245→
+  1246→  return (
+  1247→    <PageContainer>
+  1248→      <SectionHeader
+  1249→        title="Resume & AI Analysis"
+  1250→        description="Upload your resume and our AI will extract, normalize, and verify your skills."
+  1251→      />
+  1252→
+  1253→      <div className="mt-6 grid gap-4 lg:grid-cols-3">
+  1254→        <div className="lg:col-span-2 space-y-4">
+  1255→          {/* Upload card */}
+  1256→          <Card>
+  1257→            <CardHeader className="pb-3">
+  1258→              <CardTitle className="text-sm flex items-center gap-2">
+  1259→                <Upload className="h-4 w-4 text-primary" /> Upload resume
+  1260→              </CardTitle>
+  1261→              <CardDescription>PDF, DOCX, or TXT up to 5MB. We'll process it locally before sending for AI analysis.</CardDescription>
+  1262→            </CardHeader>
+  1263→            <CardContent>
+  1264→              <input
+  1265→                ref={fileInputRef}
+  1266→                type="file"
+  1267→                accept=".pdf,.docx,.txt,.md"
+  1268→                onChange={onFileSelected}
+  1269→                className="hidden"
+  1270→                aria-hidden="true"
+  1271→              />
+  1272→              <div className="rounded-xl border-2 border-dashed border-border bg-muted/30 p-8 text-center">
+  1273→                <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-primary/10 text-primary">
+  1274→                  <FileText className="h-6 w-6" />
+  1275→                </div>
+  1276→                <p className="mt-3 text-sm font-semibold">Drop your resume here</p>
+  1277→                <p className="text-xs text-muted-foreground">or click to browse</p>
+  1278→                <div className="mt-4 flex flex-wrap justify-center gap-2">
+  1279→                  <Button size="sm" onClick={() => fileInputRef.current?.click()}>
+  1280→                    <Upload className="h-3.5 w-3.5" /> Choose file
+  1281→                  </Button>
+  1282→                  <Button size="sm" variant="outline" onClick={startAnalysis}>
+  1283→                    <Sparkles className="h-3.5 w-3.5" /> Try with sample resume
+  1284→                  </Button>
+  1285→                </div>
+  1286→              </div>
+  1287→            </CardContent>
+  1288→          </Card>
+  1289→
+  1290→          {/* Processing state */}
+  1291→          {showProcessing && (
+  1292→            <Card className="border-primary/30">
+  1293→              <CardHeader className="pb-3">
+  1294→                <CardTitle className="text-sm flex items-center gap-2">
+  1295→                  <Cpu className="h-4 w-4 text-primary animate-pulse" /> AI is analyzing {fileName ?? "your resume"}…
+  1296→                </CardTitle>
+  1297→                <CardDescription>This usually takes 5–10 seconds.</CardDescription>
+  1298→              </CardHeader>
+  1299→              <CardContent className="space-y-2">
+  1300→                {steps.map((label, i) => {
+  1301→                  const done = i < processingStep;
+  1302→                  const active = i === processingStep;
+  1303→                  return (
+  1304→                    <div key={label} className="flex items-center gap-2 text-xs">
+  1305→                      {done ? (
+  1306→                        <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" />
+  1307→                      ) : active ? (
+  1308→                        <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+  1309→                      ) : (
+  1310→                        <div className="h-3.5 w-3.5 rounded-full border-2 border-muted-foreground/30" />
+  1311→                      )}
+  1312→                      <span className={done || active ? "font-medium" : "text-muted-foreground"}>{label}</span>
+  1313→                    </div>
+  1314→                  );
+  1315→                })}
+  1316→              </CardContent>
+  1317→            </Card>
+  1318→          )}
+  1319→
+  1320→          {/* Error state */}
+  1321→          {showError && (
+  1322→            <ErrorState
+  1323→              title="Resume processing failed"
+  1324→              description={errorMsg}
+  1325→              action={
+  1326→                <div className="flex gap-2">
+  1327→                  <Button variant="outline" size="sm" onClick={() => setShowError(false)}>Dismiss</Button>
+  1328→                  <Button size="sm" onClick={startAnalysis}>
+  1329→                    <RefreshCw className="h-3.5 w-3.5" /> Try with sample
+  1330→                  </Button>
+  1331→                </div>
+  1332→              }
+  1333→            />
+  1334→          )}
+  1335→
+  1336→          {/* Success state */}
+  1337→          {showSuccess && (
+  1338→            <SuccessBanner
+  1339→              title="Resume processed successfully"
+  1340→              description="AI extraction complete. Redirecting to your analysis…"
+  1341→              onClose={() => setShowSuccess(false)}
+  1342→            />
+  1343→          )}
+  1344→
+  1345→          {/* Existing resume */}
+  1346→          {!showProcessing && !showError && (
+  1347→            <Card>
+  1348→              <CardHeader className="pb-3">
+  1349→                <CardTitle className="text-sm">Current resume</CardTitle>
+  1350→              </CardHeader>
+  1351→              <CardContent>
+  1352→                <div className="flex items-center gap-3 rounded-lg border border-border bg-card p-3">
+  1353→                  <div className="flex h-10 w-10 items-center justify-center rounded-md bg-rose-50 text-rose-600">
+  1354→                    <FileText className="h-5 w-5" />
+  1355→                  </div>
+  1356→                  <div className="min-w-0 flex-1">
+  1357→                    <p className="truncate text-sm font-semibold">{resumeAnalysis.fileName}</p>
+  1358→                    <p className="text-xs text-muted-foreground">
+  1359→                      {resumeAnalysis.fileSize} · uploaded {resumeAnalysis.uploadedAt}
+  1360→                    </p>
+  1361→                  </div>
+  1362→                  <Button variant="outline" size="sm" onClick={() => go("resume-analysis")}>
+  1363→                    View analysis
+  1364→                  </Button>
+  1365→                </div>
+  1366→              </CardContent>
+  1367→            </Card>
+  1368→          )}
+  1369→        </div>
+  1370→
+  1371→        <div className="space-y-4">
+  1372→          <Card>
+  1373→            <CardHeader className="pb-3">
+  1374→              <CardTitle className="text-sm flex items-center gap-2">
+  1375→                <Lightbulb className="h-4 w-4 text-primary" /> How AI analysis works
+  1376→              </CardTitle>
+  1377→            </CardHeader>
+  1378→            <CardContent className="space-y-3 text-xs text-muted-foreground">
+  1379→              <p>1. <span className="font-medium text-foreground">Upload</span> — your file is processed for text extraction (OCR for scanned PDFs).</p>
+  1380→              <p>2. <span className="font-medium text-foreground">Extract</span> — an NLP model detects raw skill mentions, education, and experience.</p>
+  1381→              <p>3. <span className="font-medium text-foreground">Normalize</span> — raw skills are mapped to our skill ontology (e.g. "React.js" → "React").</p>
+  1382→              <p>4. <span className="font-medium text-foreground">Infer proficiency</span> — based on years of experience and contextual signals.</p>
+  1383→              <p>5. <span className="font-medium text-foreground">Review & edit</span> — you can correct any extraction before it's saved.</p>
+  1384→            </CardContent>
+  1385→          </Card>
+  1386→
+  1387→          <InfoCallout>
+  1388→            <span className="font-medium">Privacy first.</span> Your resume is processed to extract skills and is never shared with employers. Only your verified skill profile is visible to them.
+  1389→          </InfoCallout>
+  1390→        </div>
+  1391→      </div>
+  1392→    </PageContainer>
+  1393→  );
+  1394→}
+  1395→
+  1396→export function SeekerResumeAnalysis() {
+  1397→  const { go } = useApp();
+  1398→  const { toast } = useToast();
+  1399→  const [editingSkill, setEditingSkill] = useState<string | null>(null);
+  1400→  const [saving, setSaving] = useState(false);
+  1401→  const [saveResult, setSaveResult] = useState<{ ok: boolean; msg: string } | null>(null);
+  1402→
+  1403→  // Try to load the last extraction from sessionStorage (set by SeekerResume)
+  1404→  const [extractionData, setExtractionData] = useState<{
+  1405→    skills: typeof resumeAnalysis.extractedSkills;
+  1406→    education: typeof resumeAnalysis.extractedEducation;
+  1407→    experience: typeof resumeAnalysis.extractedExperience;
+  1408→    fileName: string;
+  1409→  } | null>(null);
+  1410→
+  1411→  useEffect(() => {
+  1412→    try {
+  1413→      const raw = sessionStorage.getItem("skillmatch.last-extraction");
+  1414→      if (raw) {
+  1415→        const parsed = JSON.parse(raw);
+  1416→        if (parsed.result) {
+  1417→          setExtractionData({
+  1418→            skills: parsed.result.skills ?? resumeAnalysis.extractedSkills,
+  1419→            education: parsed.result.education ?? resumeAnalysis.extractedEducation,
+  1420→            experience: parsed.result.experience ?? resumeAnalysis.extractedExperience,
+  1421→            fileName: parsed.fileName ?? "resume.pdf",
+  1422→          });
+  1423→        }
+  1424→      }
+  1425→    } catch { /* ignore */ }
+  1426→  }, []);
+  1427→
+  1428→  const saveToProfile = async () => {
+  1429→    setSaving(true);
+  1430→    setSaveResult(null);
+  1431→    try {
+  1432→      const payload = {
+  1433→        skills: (extractionData?.skills ?? resumeAnalysis.extractedSkills).map((s) => ({
+  1434→          name: s.raw,
+  1435→          normalized: s.normalized,
+  1436→          proficiency: s.proficiency,
+  1437→          source: "ai_extraction",
+  1438→        })),
+  1439→        education: (extractionData?.education ?? resumeAnalysis.extractedEducation).map((e) => ({
+  1440→          institution: e.institution,
+  1441→          degree: e.degree,
+  1442→          field: e.field,
+  1443→          startDate: e.startDate,
+  1444→          endDate: e.endDate,
+  1445→        })),
+  1446→        experience: (extractionData?.experience ?? resumeAnalysis.extractedExperience).map((e) => ({
+  1447→          company: e.company,
+  1448→          title: e.title,
+  1449→          startDate: e.startDate,
+  1450→          endDate: e.endDate,
+  1451→          description: e.description,
+  1452→        })),
+  1453→      };
+  1454→      const res = await fetch("/api/profile/save-extraction", {
+  1455→        method: "POST",
+  1456→        headers: { "Content-Type": "application/json" },
+  1457→        body: JSON.stringify(payload),
+  1458→      });
+  1459→      const data = await res.json();
+  1460→      if (data.ok) {
+  1461→        setSaveResult({
+  1462→          ok: true,
+  1463→          msg: `Saved ${data.skillsSaved} new skills (${data.skillsSkipped} already existed), ${data.educationSaved} education entries, ${data.experienceSaved} experience entries to your profile.`,
+  1464→        });
+  1465→        // Redirect to skills page after a moment
+  1466→        setTimeout(() => go("skills"), 1800);
+  1467→      } else {
+  1468→        setSaveResult({ ok: false, msg: data.error ?? "Save failed." });
+  1469→      }
+  1470→    } catch {
+  1471→      setSaveResult({ ok: false, msg: "Network error. Please try again." });
+  1472→    } finally {
+  1473→      setSaving(false);
+  1474→    }
+  1475→  };
+  1476→
+  1477→  return (
+  1478→    <PageContainer>
+  1479→      <SectionHeader
+  1480→        title="AI Resume Analysis"
+  1481→        description="Review and edit the extracted information before saving to your profile."
+  1482→        icon={<Cpu className="h-4 w-4" />}
+  1483→        actions={
+  1484→          <Button onClick={saveToProfile} disabled={saving}>
+  1485→            {saving ? (
+  1486→              <>
+  1487→                <span className="h-4 w-4 animate-spin rounded-full border-2 border-primary-foreground border-t-transparent" />
+  1488→                Saving…
+  1489→              </>
+  1490→            ) : (
+  1491→              <>
+  1492→                <Check className="h-4 w-4" /> Save to profile
+  1493→              </>
+  1494→            )}
+  1495→          </Button>
+  1496→        }
+  1497→      />
+  1498→
+  1499→      {saveResult && (
+  1500→        <div className="mt-4">
+  1501→          {saveResult.ok ? (
+  1502→            <SuccessBanner
+  1503→              title="Saved to profile"
+  1504→              description={saveResult.msg + " Redirecting to your skills…"}
+  1505→              onClose={() => setSaveResult(null)}
+  1506→            />
+  1507→          ) : (
+  1508→            <ErrorState title="Save failed" description={saveResult.msg} action={<Button size="sm" variant="outline" onClick={saveToProfile}>Try again</Button>} />
+  1509→          )}
+  1510→        </div>
+  1511→      )}
+  1512→
+  1513→      <SuccessBanner
+  1514→        title="Resume processed successfully"
+  1515→        description={`${(extractionData?.skills ?? resumeAnalysis.extractedSkills).length} skills detected, ${(extractionData?.education ?? resumeAnalysis.extractedEducation).length} education entries, ${(extractionData?.experience ?? resumeAnalysis.extractedExperience).length} experience entries. Please review for accuracy.`}
+  1516→      />
+  1517→
+  1518→      <div className="mt-6 grid gap-4 lg:grid-cols-3">
+  1519→        <div className="lg:col-span-2 space-y-4">
+  1520→          {/* Processing pipeline */}
+  1521→          <Card>
+  1522→            <CardHeader className="pb-3">
+  1523→              <CardTitle className="text-sm flex items-center gap-2">
+  1524→                <Cpu className="h-4 w-4 text-primary" /> Processing pipeline
+  1525→              </CardTitle>
+  1526→              <CardDescription>{resumeAnalysis.fileName} · {resumeAnalysis.fileSize}</CardDescription>
+  1527→            </CardHeader>
+  1528→            <CardContent>
+  1529→              <div className="grid gap-2 sm:grid-cols-2">
+  1530→                {resumeAnalysis.processingSteps.map((step, i) => (
+  1531→                  <div key={i} className="flex items-center gap-2 rounded-md border border-emerald-200 bg-emerald-50 p-2">
+  1532→                    <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-600" />
+  1533→                    <div className="min-w-0">
+  1534→                      <p className="text-xs font-semibold">{step.label}</p>
+  1535→                      <p className="text-[10px] text-muted-foreground">{step.detail}</p>
+  1536→                    </div>
+  1537→                  </div>
+  1538→                ))}
+  1539→              </div>
+  1540→            </CardContent>
+  1541→          </Card>
+  1542→
+  1543→          {/* Extracted skills */}
+  1544→          <Card>
+  1545→            <CardHeader className="pb-3 flex flex-row items-center justify-between space-y-0">
+  1546→              <div>
+  1547→                <CardTitle className="text-sm flex items-center gap-2">
+  1548→                  <Sparkles className="h-4 w-4 text-primary" /> Extracted skills
+  1549→                </CardTitle>
+  1550→                <CardDescription>Normalized against the skill ontology · click to edit</CardDescription>
+  1551→              </div>
+  1552→              <Badge variant="outline" className="bg-primary/5 text-primary border-primary/20">
+  1553→                {resumeAnalysis.extractedSkills.length} detected
+  1554→              </Badge>
+  1555→            </CardHeader>
+  1556→            <CardContent>
+  1557→              <div className="overflow-hidden rounded-lg border border-border">
+  1558→                <table className="w-full text-sm">
+  1559→                  <thead className="bg-muted/50 text-[11px] uppercase tracking-wide text-muted-foreground">
+  1560→                    <tr>
+  1561→                      <th className="px-3 py-2 text-left font-medium">Raw text</th>
+  1562→                      <th className="px-3 py-2 text-left font-medium">Normalized</th>
+  1563→                      <th className="px-3 py-2 text-left font-medium">Proficiency</th>
+  1564→                      <th className="px-3 py-2 text-left font-medium">Confidence</th>
+  1565→                      <th className="px-3 py-2"></th>
+  1566→                    </tr>
+  1567→                  </thead>
+  1568→                  <tbody className="divide-y divide-border">
+  1569→                    {resumeAnalysis.extractedSkills.map((s) => (
+  1570→                      <tr key={s.raw} className="hover:bg-accent/30">
+  1571→                        <td className="px-3 py-2 text-xs text-muted-foreground">{s.raw}</td>
+  1572→                        <td className="px-3 py-2">
+  1573→                          <SkillChip name={s.normalized} size="sm" />
+  1574→                        </td>
+  1575→                        <td className="px-3 py-2">
+  1576→                          {editingSkill === s.raw ? (
+  1577→                            <Select defaultValue={s.proficiency}>
+  1578→                              <SelectTrigger className="h-7 w-32 text-xs">
+  1579→                                <SelectValue />
+  1580→                              </SelectTrigger>
+  1581→                              <SelectContent>
+  1582→                                <SelectItem value="beginner">Beginner</SelectItem>
+  1583→                                <SelectItem value="intermediate">Intermediate</SelectItem>
+  1584→                                <SelectItem value="advanced">Advanced</SelectItem>
+  1585→                                <SelectItem value="expert">Expert</SelectItem>
+  1586→                              </SelectContent>
+  1587→                            </Select>
+  1588→                          ) : (
+  1589→                            <Badge variant="outline" className="text-[10px] capitalize">{s.proficiency}</Badge>
+  1590→                          )}
+  1591→                        </td>
+  1592→                        <td className="px-3 py-2">
+  1593→                          <div className="flex items-center gap-1.5">
+  1594→                            <Progress value={s.confidence * 100} className="h-1.5 w-16" />
+  1595→                            <span className="text-[10px] text-muted-foreground">{Math.round(s.confidence * 100)}%</span>
+  1596→                          </div>
+  1597→                        </td>
+  1598→                        <td className="px-3 py-2 text-right">
+  1599→                          <Button
+  1600→                            variant="ghost"
+  1601→                            size="sm"
+  1602→                            className="h-7 text-xs"
+  1603→                            onClick={() => setEditingSkill(editingSkill === s.raw ? null : s.raw)}
+  1604→                          >
+  1605→                            {editingSkill === s.raw ? "Done" : "Edit"}
+  1606→                          </Button>
+  1607→                        </td>
+  1608→                      </tr>
+  1609→                    ))}
+  1610→                  </tbody>
+  1611→                </table>
+  1612→              </div>
+  1613→              <p className="mt-2 text-xs text-muted-foreground">
+  1614→                <span className="font-medium">Source:</span> {resumeAnalysis.extractedSkills[0].source} indicates the skill was inferred from context, not stated explicitly.
+  1615→              </p>
+  1616→            </CardContent>
+  1617→          </Card>
+  1618→
+  1619→          {/* Education */}
+  1620→          <Card>
+  1621→            <CardHeader className="pb-3">
+  1622→              <CardTitle className="text-sm flex items-center gap-2">
+  1623→                <GraduationCap className="h-4 w-4 text-primary" /> Education
+  1624→              </CardTitle>
+  1625→            </CardHeader>
+  1626→            <CardContent className="space-y-2">
+  1627→              {resumeAnalysis.extractedEducation.map((ed) => (
+  1628→                <div key={ed.id} className="rounded-lg border border-border bg-card p-3">
+  1629→                  <div className="flex items-start justify-between gap-2">
+  1630→                    <div>
+  1631→                      <p className="text-sm font-semibold">{ed.degree}, {ed.field}</p>
+  1632→                      <p className="text-xs text-muted-foreground">{ed.institution}</p>
+  1633→                      <p className="text-[11px] text-muted-foreground">{ed.startDate} — {ed.endDate}</p>
+  1634→                    </div>
+  1635→                    {ed.verified ? (
+  1636→                      <VerificationBadge status="verified" />
+  1637→                    ) : (
+  1638→                      <VerificationBadge status="pending" />
+  1639→                    )}
+  1640→                  </div>
+  1641→                </div>
+  1642→              ))}
+  1643→            </CardContent>
+  1644→          </Card>
+  1645→
+  1646→          {/* Experience */}
+  1647→          <Card>
+  1648→            <CardHeader className="pb-3">
+  1649→              <CardTitle className="text-sm flex items-center gap-2">
+  1650→                <Briefcase className="h-4 w-4 text-primary" /> Experience
+  1651→              </CardTitle>
+  1652→            </CardHeader>
+  1653→            <CardContent className="space-y-2">
+  1654→              {resumeAnalysis.extractedExperience.map((e) => (
+  1655→                <div key={e.id} className="rounded-lg border border-border bg-card p-3">
+  1656→                  <p className="text-sm font-semibold">{e.title}</p>
+  1657→                  <p className="text-xs text-muted-foreground">{e.company} · {e.startDate} — {e.endDate}</p>
+  1658→                  <p className="mt-1 text-xs text-muted-foreground">{e.description}</p>
+  1659→                </div>
+  1660→              ))}
+  1661→            </CardContent>
+  1662→          </Card>
+  1663→        </div>
+  1664→
+  1665→        <div className="space-y-4">
+  1666→          <Card>
+  1667→            <CardHeader className="pb-3">
+  1668→              <CardTitle className="text-sm">Analysis summary</CardTitle>
+  1669→            </CardHeader>
+  1670→            <CardContent className="space-y-2 text-xs">
+  1671→              <div className="flex justify-between"><span className="text-muted-foreground">Skills detected</span><span className="font-semibold">{resumeAnalysis.extractedSkills.length}</span></div>
+  1672→              <div className="flex justify-between"><span className="text-muted-foreground">Normalized</span><span className="font-semibold">{resumeAnalysis.extractedSkills.length}</span></div>
+  1673→              <div className="flex justify-between"><span className="text-muted-foreground">Education entries</span><span className="font-semibold">{resumeAnalysis.extractedEducation.length}</span></div>
+  1674→              <div className="flex justify-between"><span className="text-muted-foreground">Experience entries</span><span className="font-semibold">{resumeAnalysis.extractedExperience.length}</span></div>
+  1675→              <div className="flex justify-between"><span className="text-muted-foreground">Eligible for verification</span><span className="font-semibold">4</span></div>
+  1676→            </CardContent>
+  1677→          </Card>
+  1678→
+  1679→          <InfoCallout>
+  1680→            <span className="font-medium">Disclaimer.</span> AI extraction is probabilistic. Always review extracted data before saving. SkillMatch AI is not trained on real production data — your corrections improve future extractions on your account only.
+  1681→          </InfoCallout>
+  1682→
+  1683→          <Card>
+  1684→            <CardHeader className="pb-3">
+  1685→              <CardTitle className="text-sm">Verification status</CardTitle>
+  1686→              <CardDescription>4 skills flagged for verification</CardDescription>
+  1687→            </CardHeader>
+  1688→            <CardContent className="space-y-2">
+  1689→              {["React", "TypeScript", "Tailwind CSS", "Jest"].map((s) => (
+  1690→                <div key={s} className="flex items-center justify-between text-xs">
+  1691→                  <span className="font-medium">{s}</span>
+  1692→                  <Button
+  1693→                    size="sm"
+  1694→                    variant="outline"
+  1695→                    className="h-7 text-xs"
+  1696→                    onClick={() => toast({ title: "Verification requested", description: `${s} verification request submitted. You'll be notified when it's reviewed.` })}
+  1697→                  >
+  1698→                    <ShieldCheck className="h-3 w-3" /> Verify
+  1699→                  </Button>
+  1700→                </div>
+  1701→              ))}
+  1702→            </CardContent>
+  1703→          </Card>
+  1704→        </div>
+  1705→      </div>
+  1706→    </PageContainer>
+  1707→  );
+  1708→}
+  1709→
+  1710→// ============================================================
+  1711→// RECOMMENDED JOBS LIST
+  1712→// ============================================================
+  1713→export function SeekerRecommended() {
+  1714→  const { go } = useApp();
+  1715→  const { data, loading, refetch } = useFetch<any>("/api/jobs");
+  1716→  const [sortBy, setSortBy] = useState("recent");
+  1717→  const [filter, setFilter] = useState("all");
+  1718→  const [aiLoading, setAiLoading] = useState(false);
+  1719→  const [aiError, setAiError] = useState<string | null>(null);
+  1720→  const [aiReranked, setAiReranked] = useState(false);
+  1721→
+  1722→  const dbJobs: any[] = data?.jobs ?? [];
+  1723→
+  1724→  // Re-rank jobs using the AI recommendation endpoint
+  1725→  const refreshWithAI = async () => {
+  1726→    setAiLoading(true);
+  1727→    setAiError(null);
+  1728→    try {
+  1729→      const res = await fetch("/api/ai/recommend", {
+  1730→        method: "POST",
+  1731→        headers: { "Content-Type": "application/json" },
+  1732→        body: JSON.stringify({
+  1733→          candidate: {
+  1734→            name: "Amara Okafor",
+  1735→            title: "Senior Frontend Engineer",
+  1736→            skills: seekerSkills.map((s) => ({
+  1737→              name: s.name,
+  1738→              proficiency: s.proficiency,
+  1739→              verified: s.verified === "verified",
+  1740→            })),
+  1741→            experienceYears: 6,
+  1742→            education: "B.Sc. Computer Science · University of Nairobi",
+  1743→            location: "Nairobi, Kenya",
+  1744→            preferences: "Open to remote and hybrid roles across Africa",
+  1745→          },
+  1746→        }),
+  1747→      });
+  1748→      const aiData = await res.json();
+  1749→      if (!aiData.ok) {
+  1750→        setAiError(aiData.error ?? "AI recommendation failed.");
+  1751→        return;
+  1752→      }
+  1753→      setAiReranked(true);
+  1754→      refetch();
+  1755→    } catch {
+  1756→      setAiError("Network error. Please try again.");
+  1757→    } finally {
+  1758→      setAiLoading(false);
+  1759→    }
+  1760→  };
+  1761→
+  1762→  let filtered = [...dbJobs];
+  1763→  if (filter === "remote") filtered = filtered.filter((j) => j.remote === "remote");
+  1764→  if (sortBy === "recent") filtered.sort((a, b) => new Date(b.postedAt).getTime() - new Date(a.postedAt).getTime());
+  1765→
+  1766→  return (
+  1767→    <PageContainer>
+  1768→      <SectionHeader
+  1769→        title="Open Jobs"
+  1770→        description="Browse all open jobs on the platform. Click any job to view details and apply."
+  1771→        actions={
+  1772→          <Button variant="outline" size="sm" onClick={refreshWithAI} disabled={aiLoading}>
+  1773→            {aiLoading ? (
+  1774→              <>
+  1775→                <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+  1776→                Re-ranking…
+  1777→              </>
+  1778→            ) : (
+  1779→              <>
+  1780→                <Sparkles className="h-3.5 w-3.5" /> Re-rank with AI
+  1781→              </>
+  1782→            )}
+  1783→          </Button>
+  1784→        }
+  1785→      />
+  1786→
+  1787→      {aiReranked && !aiError && (
+  1788→        <div className="mt-4">
+  1789→          <SuccessBanner
+  1790→            title="Recommendations re-ranked by AI"
+  1791→            description="We re-evaluated all jobs against your profile, skills, and preferences."
+  1792→            onClose={() => setAiReranked(false)}
+  1793→          />
+  1794→        </div>
+  1795→      )}
+  1796→      {aiError && (
+  1797→        <div className="mt-4">
+  1798→          <ErrorState title="AI re-ranking failed" description={aiError} action={<Button size="sm" variant="outline" onClick={refreshWithAI}>Try again</Button>} />
+  1799→        </div>
+  1800→      )}
+  1801→
+  1802→      <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+  1803→        <Tabs value={filter} onValueChange={setFilter}>
+  1804→          <TabsList>
+  1805→            <TabsTrigger value="all">All ({dbJobs.length})</TabsTrigger>
+  1806→            <TabsTrigger value="remote">Remote ({dbJobs.filter(j => j.remote === "remote").length})</TabsTrigger>
+  1807→          </TabsList>
+  1808→        </Tabs>
+  1809→        <div className="flex items-center gap-2 text-xs">
+  1810→          <span className="text-muted-foreground">Sort by</span>
+  1811→          <Select value={sortBy} onValueChange={setSortBy}>
+  1812→            <SelectTrigger className="h-8 w-36">
+  1813→              <SelectValue />
+  1814→            </SelectTrigger>
+  1815→            <SelectContent>
+  1816→              <SelectItem value="recent">Most recent</SelectItem>
+  1817→            </SelectContent>
+  1818→          </Select>
+  1819→        </div>
+  1820→      </div>
+  1821→
+  1822→      {loading ? (
+  1823→        <LoadingState label="Loading jobs…" rows={3} />
+  1824→      ) : filtered.length === 0 ? (
+  1825→        <EmptyState
+  1826→          className="mt-6"
+  1827→          icon={<Target className="h-5 w-5" />}
+  1828→          title="No open jobs yet"
+  1829→          description="Check back soon — employers are posting new roles."
+  1830→        />
+  1831→      ) : (
+  1832→        <div className="mt-4 space-y-3">
+  1833→          {filtered.map((j) => (
+  1834→            <Card key={j.id} className="overflow-hidden">
+  1835→              <CardContent className="p-4">
+  1836→                <div className="flex flex-col gap-3 sm:flex-row sm:items-start">
+  1837→                  <CompanyLogo initials={j.companyLogo || j.company?.slice(0, 2).toUpperCase() || "CO"} size="lg" />
+  1838→                  <div className="min-w-0 flex-1">
+  1839→                    <div className="flex items-start justify-between gap-2">
+  1840→                      <div className="min-w-0 flex-1">
+  1841→                        <button
+  1842→                          onClick={() => go("job-detail", { jobId: j.id })}
+  1843→                          className="text-left text-base font-semibold tracking-tight hover:text-primary"
+  1844→                        >
+  1845→                          {j.title}
+  1846→                        </button>
+  1847→                        <p className="text-sm text-muted-foreground">{j.company}</p>
+  1848→                        <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
+  1849→                          <span className="flex items-center gap-1"><MapPin className="h-3 w-3" />{j.location}</span>
+  1850→                          <span className="flex items-center gap-1"><Briefcase className="h-3 w-3" />{j.type}</span>
+  1851→                          <span className="flex items-center gap-1"><Clock className="h-3 w-3" />{timeAgo(j.postedAt)}</span>
+  1852→                          <span className="font-medium text-foreground">${j.salaryMin.toLocaleString()}–${j.salaryMax.toLocaleString()}/{j.salaryPeriod}</span>
+  1853→                        </div>
+  1854→                      </div>
+  1855→                      {j.expiresAt && <JobExpiryBadge expiresAt={j.expiresAt} status={j.status} />}
+  1856→                    </div>
+  1857→
+  1858→                    <p className="mt-2 line-clamp-2 text-xs text-muted-foreground">{j.description}</p>
+  1859→
+  1860→                    <div className="mt-3 flex flex-wrap items-center gap-2">
+  1861→                      <Button size="sm" onClick={() => go("job-detail", { jobId: j.id })}>
+  1862→                        View details <ArrowRight className="h-3.5 w-3.5" />
+  1863→                      </Button>
+  1864→                      <Button size="sm" variant="outline" onClick={() => go("match-explanation", { jobId: j.id })}>
+  1865→                        <Sparkles className="h-3.5 w-3.5" /> Why this match?
+  1866→                      </Button>
+  1867→                    </div>
+  1868→                  </div>
+  1869→                </div>
+  1870→              </CardContent>
+  1871→            </Card>
+  1872→          ))}
+  1873→        </div>
+  1874→      )}
+  1875→    </PageContainer>
+  1876→  );
+  1877→}
+  1878→
+  1879→// ============================================================
+  1880→// JOB DETAIL
+  1881→// ============================================================
+  1882→export function SeekerJobDetail() {
+  1883→  const { go, selectedJobId } = useApp();
+  1884→  const { toast } = useToast();
+  1885→  // Fetch the real job from the API (includes expiresAt + status)
+  1886→  const { data: jobData, loading } = useFetch<any>(selectedJobId ? `/api/jobs/${selectedJobId}` : null);
+  1887→  const apiJob = jobData?.job;
+  1888→  // Fall back to mock data if the API call fails or is loading
+  1889→  const mockJob = recommendedJobs.find((j) => j.id === selectedJobId) || recommendedJobs[0];
+  1890→  const job = apiJob ?? mockJob;
+  1891→  const [applied, setApplied] = useState(false);
+  1892→  const [confirmOpen, setConfirmOpen] = useState(false);
+  1893→
+  1894→  // If the job is expired, show a prominent expired banner
+  1895→  const isExpired = apiJob?.status === "expired" || (apiJob?.expiresAt && new Date(apiJob.expiresAt).getTime() <= Date.now());
+  1896→
+  1897→  return (
+  1898→    <PageContainer>
+  1899→      <button
+  1900→        onClick={() => go("recommended")}
+  1901→        className="mb-4 inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
+  1902→      >
+  1903→        <ArrowLeft className="h-3.5 w-3.5" /> Back to recommendations
+  1904→      </button>
+  1905→
+  1906→      {/* Expired job banner */}
+  1907→      {isExpired && (
+  1908→        <div className="mb-4 flex items-center gap-3 rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
+  1909→          <AlertCircle className="h-5 w-5 shrink-0" />
+  1910→          <div>
+  1911→            <p className="font-semibold">Job Expired</p>
+  1912→            <p className="text-xs">This job posting has expired and is no longer accepting applications.</p>
+  1913→          </div>
+  1914→        </div>
+  1915→      )}
+  1916→
+  1917→      <div className="grid gap-4 lg:grid-cols-3">
+  1918→        <div className="lg:col-span-2 space-y-4">
+  1919→          <Card>
+  1920→            <CardContent className="p-6">
+  1921→              <div className="flex flex-col gap-4 sm:flex-row sm:items-start">
+  1922→                <CompanyLogo initials={job.companyLogo || job.company?.slice(0, 2).toUpperCase() || "CO"} size="lg" />
+  1923→                <div className="min-w-0 flex-1">
+  1924→                  <div className="flex items-start justify-between gap-3">
+  1925→                    <div>
+  1926→                      <h1 className="text-xl font-bold tracking-tight sm:text-2xl">{job.title}</h1>
+  1927→                      <p className="text-sm text-muted-foreground">{job.company}</p>
+  1928→                      <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground">
+  1929→                        <span className="flex items-center gap-1"><MapPin className="h-3 w-3" />{job.location}</span>
+  1930→                        <span className="flex items-center gap-1"><Briefcase className="h-3 w-3" />{job.type}</span>
+  1931→                        <span className="flex items-center gap-1"><Clock className="h-3 w-3" />{timeAgo(job.postedAt)}</span>
+  1932→                      </div>
+  1933→                    </div>
+  1934→                    {apiJob?.expiresAt && <JobExpiryBadge expiresAt={apiJob.expiresAt} status={apiJob.status} />}
+  1935→                  </div>
+  1936→                  <div className="mt-3 flex flex-wrap gap-2 text-xs">
+  1937→                    <Badge variant="outline" className="bg-violet-50 text-violet-700 border-violet-200">{job.category}</Badge>
+  1938→                    <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200 capitalize">{job.remote}</Badge>
+  1939→                    {apiJob ? (
+  1940→                      <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-200">${Number(apiJob.salaryMin || 0).toLocaleString()}–${Number(apiJob.salaryMax || 0).toLocaleString()} / {apiJob.salaryPeriod || "month"}</Badge>
+  1941→                    ) : (
+  1942→                      <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-200">${job.salary.min.toLocaleString()}–${job.salary.max.toLocaleString()} / {job.salary.period}</Badge>
+  1943→                    )}
+  1944→                  </div>
+  1945→                </div>
+  1946→              </div>
+  1947→
+  1948→              <div className="mt-6 grid gap-6 lg:grid-cols-2">
+  1949→                <div>
+  1950→                  <h2 className="text-sm font-semibold">About the role</h2>
+  1951→                  <p className="mt-2 text-sm text-muted-foreground">{job.description}</p>
+  1952→                </div>
+  1953→                <div>
+  1954→                  <h2 className="text-sm font-semibold">Required skills</h2>
+  1955→                  <div className="mt-2 flex flex-wrap gap-1.5">
+  1956→                    {(job.skills ?? []).map((s: any, i: number) => (
+  1957→                      <SkillChip key={s.id ?? i} name={s.name} proficiency={s.proficiency} mandatory={s.mandatory} size="sm" />
+  1958→                    ))}
+  1959→                    {(!job.skills || job.skills.length === 0) && (
+  1960→                      <span className="text-xs text-muted-foreground">Skills not specified for this posting.</span>
+  1961→                    )}
+  1962→                  </div>
+  1963→                </div>
+  1964→                <div>
+  1965→                  <h2 className="text-sm font-semibold">What you'll do</h2>
+  1966→                  <ul className="mt-2 space-y-1.5">
+  1967→                    {(job.responsibilities ?? []).map((r: string, i: number) => (
+  1968→                      <li key={i} className="flex gap-2 text-sm text-muted-foreground">
+  1969→                        <Check className="h-4 w-4 shrink-0 text-emerald-600 mt-0.5" />{r}
+  1970→                      </li>
+  1971→                    ))}
+  1972→                    {(!job.responsibilities || job.responsibilities.length === 0) && (
+  1973→                      <li className="text-xs text-muted-foreground">Responsibilities will be discussed during the interview.</li>
+  1974→                    )}
+  1975→                  </ul>
+  1976→                </div>
+  1977→                <div>
+  1978→                  <h2 className="text-sm font-semibold">What we're looking for</h2>
+  1979→                  <ul className="mt-2 space-y-1.5">
+  1980→                    {(job.requirements ?? []).map((r: string, i: number) => (
+  1981→                      <li key={i} className="flex gap-2 text-sm text-muted-foreground">
+  1982→                        <Check className="h-4 w-4 shrink-0 text-emerald-600 mt-0.5" />{r}
+  1983→                      </li>
+  1984→                    ))}
+  1985→                    {(!job.requirements || job.requirements.length === 0) && (
+  1986→                      <li className="text-xs text-muted-foreground">See the job description above for requirements.</li>
+  1987→                    )}
+  1988→                  </ul>
+  1989→                </div>
+  1990→              </div>
+  1991→            </CardContent>
+  1992→          </Card>
+  1993→        </div>
+  1994→
+  1995→        <aside className="space-y-4">
+  1996→          {/* Match score */}
+  1997→          <Card className="border-primary/30">
+  1998→            <CardHeader className="pb-3">
+  1999→              <CardTitle className="text-sm flex items-center gap-2">
+  2000→                <Sparkles className="h-4 w-4 text-primary" /> Your match score
+
+[showing lines 1-2000 of 2703; use offset=2001 with limit to continue reading]
