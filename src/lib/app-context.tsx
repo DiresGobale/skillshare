@@ -5,7 +5,7 @@ import { useSession, signOut as nextAuthSignOut } from "next-auth/react";
 import type { Role } from "./types";
 
 // All navigable views keyed by role
-export type GuestView = "landing" | "home" | "faq" | "privacy" | "terms" | "login" | "register" | "public-jobs" | "public-job-detail" | "about" | "contact";
+export type GuestView = "landing" | "home" | "faq" | "privacy" | "terms" | "login" | "register" | "public-jobs" | "public-job-detail" | "about" | "contact" | "public-news" | "public-news-detail";
 export type SeekerView =
   | "dashboard"
   | "profile"
@@ -43,7 +43,8 @@ export type AdminView =
   | "monitoring"
   | "ai-analytics"
   | "security"
-  | "site-images";
+  | "site-images"
+  | "news";
 
 export type View = GuestView | SeekerView | EmployerView | AdminView;
 
@@ -54,6 +55,7 @@ interface AppState {
   selectedJobId?: string;
   selectedCandidateId?: string;
   selectedConversationId?: string;
+  selectedNewsId?: string;
   // User (derived from NextAuth session, with fallback for guest)
   user: {
     id: string;
@@ -74,7 +76,7 @@ interface AppState {
   signOut: () => void;
   setRole: (r: Role) => void;
   setView: (v: View) => void;
-  go: (v: View, opts?: { jobId?: string; candidateId?: string; conversationId?: string }) => void;
+  go: (v: View, opts?: { jobId?: string; candidateId?: string; conversationId?: string; newsId?: string }) => void;
 }
 
 const AppContext = createContext<AppState | null>(null);
@@ -87,6 +89,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [selectedJobId, setSelectedJobId] = useState<string | undefined>();
   const [selectedCandidateId, setSelectedCandidateId] = useState<string | undefined>();
   const [selectedConversationId, setSelectedConversationId] = useState<string | undefined>();
+  const [selectedNewsId, setSelectedNewsId] = useState<string | undefined>();
   const [isAdminUnlocked, setIsAdminUnlocked] = useState<boolean>(false);
 
   // Derive user + role from session
@@ -156,6 +159,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     if (opts?.jobId !== undefined) setSelectedJobId(opts.jobId);
     if (opts?.candidateId !== undefined) setSelectedCandidateId(opts.candidateId);
     if (opts?.conversationId !== undefined) setSelectedConversationId(opts.conversationId);
+    if (opts?.newsId !== undefined) setSelectedNewsId(opts.newsId);
     setView(v);
     if (typeof window !== "undefined") {
       // The authenticated app shell scrolls inside #app-main-scroll (not the window).
@@ -176,6 +180,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       selectedJobId,
       selectedCandidateId,
       selectedConversationId,
+      selectedNewsId,
       user,
       isAdminUnlocked,
       unlockAdmin,
@@ -185,7 +190,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       setView: go,
       go,
     }),
-    [role, view, selectedJobId, selectedCandidateId, selectedConversationId, user, isAdminUnlocked, unlockAdmin, lockAdmin, signOut, setRole, go]
+    [role, view, selectedJobId, selectedCandidateId, selectedConversationId, selectedNewsId, user, isAdminUnlocked, unlockAdmin, lockAdmin, signOut, setRole, go]
   );
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;

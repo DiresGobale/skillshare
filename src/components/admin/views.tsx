@@ -78,6 +78,10 @@ import {
   EyeOff,
   ArrowUp,
   ArrowDown,
+  Newspaper,
+  Pin,
+  Tag,
+  Loader2,
 } from "lucide-react";
 
 function PageContainer({ children, className }: { children: React.ReactNode; className?: string }) {
@@ -2572,6 +2576,468 @@ export function AdminSiteImages() {
                 <><span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-primary-foreground border-t-transparent" /> Saving…</>
               ) : (
                 <>{editing ? <Edit className="h-3.5 w-3.5" /> : <Plus className="h-3.5 w-3.5" />} {editing ? "Save changes" : "Add image"}</>
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </PageContainer>
+  );
+}
+
+// ============================================================
+// ADMIN NEWS — manage platform news & announcements
+// ============================================================
+interface AdminNewsItem {
+  id: string;
+  title: string;
+  content: string;
+  excerpt: string | null;
+  category: string;
+  imageUrl: string | null;
+  status: string;
+  pinned: boolean;
+  publishedAt: string;
+  createdAt: string;
+  updatedAt: string;
+  author: string;
+  authorInitials: string;
+  authorColor: string;
+}
+
+const ADMIN_NEWS_CATEGORIES = ["Update", "Announcement", "Event", "Release", "Maintenance"];
+
+const ADMIN_NEWS_CATEGORY_STYLE: Record<string, string> = {
+  Update: "bg-blue-50 text-blue-700 border-blue-200",
+  Announcement: "bg-violet-50 text-violet-700 border-violet-200",
+  Event: "bg-amber-50 text-amber-700 border-amber-200",
+  Release: "bg-emerald-50 text-emerald-700 border-emerald-200",
+  Maintenance: "bg-rose-50 text-rose-700 border-rose-200",
+};
+
+export function AdminNews() {
+  const { toast } = useToast();
+  const { data, loading, refetch } = useFetch<any>("/api/news?includeDrafts=true&limit=200");
+  const news: AdminNewsItem[] = data?.news ?? [];
+
+  const [addOpen, setAddOpen] = useState(false);
+  const [editing, setEditing] = useState<AdminNewsItem | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [search, setSearch] = useState("");
+  const [filterCat, setFilterCat] = useState<string>("all");
+
+  // Form state
+  const [title, setTitle] = useState("");
+  const [content, setContent] = useState("");
+  const [excerpt, setExcerpt] = useState("");
+  const [category, setCategory] = useState("Update");
+  const [imageUrl, setImageUrl] = useState("");
+  const [status, setStatus] = useState("published");
+  const [pinned, setPinned] = useState(false);
+
+  const resetForm = () => {
+    setTitle(""); setContent(""); setExcerpt("");
+    setCategory("Update"); setImageUrl(""); setStatus("published"); setPinned(false);
+    setEditing(null);
+  };
+
+  const openAdd = () => { resetForm(); setAddOpen(true); };
+
+  const openEdit = (item: AdminNewsItem) => {
+    setEditing(item);
+    setTitle(item.title);
+    setContent(item.content);
+    setExcerpt(item.excerpt ?? "");
+    setCategory(item.category);
+    setImageUrl(item.imageUrl ?? "");
+    setStatus(item.status);
+    setPinned(item.pinned);
+    setAddOpen(true);
+  };
+
+  const handleFileUpload = (file: File) => {
+    if (!file.type.startsWith("image/")) {
+      toast({ title: "Invalid file", description: "Please select an image file." });
+      return;
+    }
+    if (file.size > 2 * 1024 * 1024) {
+      toast({ title: "File too large", description: "Max 2MB for news cover images." });
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => setImageUrl(reader.result as string);
+    reader.readAsDataURL(file);
+  };
+
+  const save = async () => {
+    if (!title.trim()) {
+      toast({ title: "Title is required", description: "Please enter a title for the news article." });
+      return;
+    }
+    if (!content.trim()) {
+      toast({ title: "Content is required", description: "Please enter the article content." });
+      return;
+    }
+    setSaving(true);
+    try {
+      const payload = {
+        title: title.trim(),
+        content: content.trim(),
+        excerpt: excerpt.trim() || null,
+        category,
+        imageUrl: imageUrl || null,
+        status,
+        pinned,
+      };
+      const res = await fetch("/api/news", {
+        method: editing ? "PATCH" : "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(editing ? { id: editing.id, ...payload } : payload),
+      });
+      const json = await res.json();
+      if (json.ok) {
+        toast({
+          title: editing ? "News updated" : "News published",
+          description: `"${title.trim()}" has been ${editing ? "updated" : status === "published" ? "published" : "saved as draft"}.`,
+        });
+        setAddOpen(false);
+        resetForm();
+        refetch();
+      } else {
+        toast({ title: "Save failed", description: json.error ?? "Unknown error." });
+      }
+    } catch {
+      toast({ title: "Network error", description: "Please try again." });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const togglePin = async (item: AdminNewsItem) => {
+    try {
+      const res = await fetch("/api/news", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: item.id, pinned: !item.pinned }),
+      });
+      const json = await res.json();
+      if (json.ok) {
+        toast({ title: item.pinned ? "Unpinned" : "Pinned", description: `"${item.title}" is now ${item.pinned ? "unpinned" : "pinned to the top"}.` });
+        refetch();
+      }
+    } catch {
+      toast({ title: "Failed", description: "Please try again." });
+    }
+  };
+
+  const toggleStatus = async (item: AdminNewsItem) => {
+    const newStatus = item.status === "published" ? "draft" : "published";
+    try {
+      const res = await fetch("/api/news", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: item.id, status: newStatus }),
+      });
+      const json = await res.json();
+      if (json.ok) {
+        toast({ title: newStatus === "published" ? "Published" : "Unpublished", description: `"${item.title}" is now ${newStatus === "published" ? "visible to the public" : "a draft (hidden from public view)"}.` });
+        refetch();
+      }
+    } catch {
+      toast({ title: "Failed", description: "Please try again." });
+    }
+  };
+
+  const deleteNews = async (item: AdminNewsItem) => {
+    if (!confirm(`Delete "${item.title}"? This cannot be undone.`)) return;
+    try {
+      const res = await fetch(`/api/news?id=${item.id}`, { method: "DELETE" });
+      const json = await res.json();
+      if (json.ok) {
+        toast({ title: "News deleted", description: `"${item.title}" has been removed.` });
+        refetch();
+      } else {
+        toast({ title: "Delete failed", description: json.error ?? "Unknown error." });
+      }
+    } catch {
+      toast({ title: "Network error", description: "Please try again." });
+    }
+  };
+
+  const filtered = news.filter((n) => {
+    if (filterCat !== "all" && n.category !== filterCat) return false;
+    if (search.trim()) {
+      const q = search.toLowerCase();
+      if (!n.title.toLowerCase().includes(q) && !n.content.toLowerCase().includes(q)) return false;
+    }
+    return true;
+  });
+
+  return (
+    <PageContainer>
+      <SectionHeader
+        title="News & Announcements"
+        description="Publish platform news, product updates, event announcements, and maintenance notices. Published articles appear immediately on the public News page."
+        icon={<Newspaper className="h-4 w-4" />}
+        actions={<Button className="btn-rainbow" onClick={openAdd}><Plus className="h-4 w-4" /> New article</Button>}
+      />
+
+      <div className="mt-6">
+        <InfoCallout>
+          <span className="font-medium">How this works:</span> Articles saved with status <code className="rounded bg-muted px-1 py-0.5 text-[11px]">published</code> are immediately visible on the public News page. Drafts are only visible here. Pinned articles appear first. All changes are persisted to the database and audited.
+        </InfoCallout>
+      </div>
+
+      {/* Stats */}
+      <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <StatCard label="Total articles" value={news.length.toString()} icon={<Newspaper className="h-4 w-4" />} />
+        <StatCard label="Published" value={news.filter((n) => n.status === "published").length.toString()} icon={<CheckCircle2 className="h-4 w-4" />} hint="Visible publicly" />
+        <StatCard label="Drafts" value={news.filter((n) => n.status === "draft").length.toString()} icon={<Edit className="h-4 w-4" />} hint="Hidden from public" />
+        <StatCard label="Pinned" value={news.filter((n) => n.pinned).length.toString()} icon={<Pin className="h-4 w-4" />} hint="Shown first" />
+      </div>
+
+      {/* Toolbar */}
+      <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex flex-1 items-center gap-2">
+          <div className="relative flex-1 max-w-sm">
+            <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              placeholder="Search articles…"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="h-9 pl-8"
+            />
+          </div>
+          <Select value={filterCat} onValueChange={setFilterCat}>
+            <SelectTrigger className="h-9 w-[160px]"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All categories</SelectItem>
+              {ADMIN_NEWS_CATEGORIES.map((c) => (
+                <SelectItem key={c} value={c}>{c}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+      </div>
+
+      {/* List */}
+      <div className="mt-4 space-y-3">
+        {loading ? (
+          <div className="flex flex-col items-center justify-center py-16 text-muted-foreground">
+            <Loader2 className="h-8 w-8 animate-spin text-primary" />
+            <p className="mt-3 text-sm">Loading articles…</p>
+          </div>
+        ) : filtered.length === 0 ? (
+          <EmptyState
+            icon={<Newspaper className="h-5 w-5" />}
+            title={news.length === 0 ? "No news articles yet" : "No articles match your filters"}
+            description={news.length === 0 ? "Publish your first news article to announce updates, events, or releases." : "Try clearing the search or category filter."}
+            action={news.length === 0 ? <Button size="sm" onClick={openAdd}><Plus className="h-3.5 w-3.5" /> New article</Button> : undefined}
+          />
+        ) : (
+          filtered.map((item) => (
+            <Card key={item.id} className={cn("overflow-hidden", item.status !== "published" && "opacity-70")}>
+              <CardContent className="flex flex-col gap-3 p-4 sm:flex-row sm:items-start">
+                {/* Thumbnail */}
+                <div className="h-20 w-full shrink-0 overflow-hidden rounded-lg bg-muted sm:h-16 sm:w-24">
+                  {item.imageUrl ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={item.imageUrl} alt={item.title} className="h-full w-full object-cover" />
+                  ) : (
+                    <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-violet-500/20 to-blue-500/20">
+                      <Newspaper className="h-6 w-6 text-muted-foreground" />
+                    </div>
+                  )}
+                </div>
+
+                {/* Body */}
+                <div className="min-w-0 flex-1">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Badge variant="outline" className={cn("text-[10px]", ADMIN_NEWS_CATEGORY_STYLE[item.category] ?? "bg-slate-50 text-slate-700 border-slate-200")}>
+                      <Tag className="mr-1 h-2.5 w-2.5" /> {item.category}
+                    </Badge>
+                    {item.status === "published" ? (
+                      <Badge variant="outline" className="text-[10px] bg-emerald-50 text-emerald-700 border-emerald-200">Published</Badge>
+                    ) : (
+                      <Badge variant="outline" className="text-[10px] bg-amber-50 text-amber-700 border-amber-200">Draft</Badge>
+                    )}
+                    {item.pinned && (
+                      <Badge variant="outline" className="text-[10px] bg-amber-50 text-amber-700 border-amber-200">
+                        <Pin className="mr-1 h-2.5 w-2.5" /> Pinned
+                      </Badge>
+                    )}
+                    <span className="flex items-center gap-1 text-[10px] text-muted-foreground">
+                      <Calendar className="h-2.5 w-2.5" /> {new Date(item.publishedAt).toLocaleDateString()}
+                    </span>
+                  </div>
+                  <h3 className="mt-1.5 truncate text-sm font-semibold">{item.title}</h3>
+                  <p className="mt-0.5 line-clamp-2 text-xs text-muted-foreground">
+                    {item.excerpt || item.content.slice(0, 160) + "…"}
+                  </p>
+                  <p className="mt-1 text-[10px] text-muted-foreground">By {item.author}</p>
+                </div>
+
+                {/* Actions */}
+                <div className="flex shrink-0 items-center gap-1">
+                  <Button
+                    size="icon"
+                    variant="ghost"
+                    className={cn("h-8 w-8", item.pinned && "text-amber-500")}
+                    onClick={() => togglePin(item)}
+                    title={item.pinned ? "Unpin" : "Pin to top"}
+                  >
+                    <Pin className="h-3.5 w-3.5" />
+                  </Button>
+                  <Button
+                    size="icon"
+                    variant="ghost"
+                    className="h-8 w-8"
+                    onClick={() => toggleStatus(item)}
+                    title={item.status === "published" ? "Unpublish (move to draft)" : "Publish"}
+                  >
+                    {item.status === "published" ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+                  </Button>
+                  <Button size="sm" variant="outline" className="h-8" onClick={() => openEdit(item)}>
+                    <Edit className="h-3 w-3" /> Edit
+                  </Button>
+                  <Button
+                    size="icon"
+                    variant="ghost"
+                    className="h-8 w-8 text-rose-600"
+                    onClick={() => deleteNews(item)}
+                    title="Delete"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          ))
+        )}
+      </div>
+
+      {/* Add / Edit dialog */}
+      <Dialog open={addOpen} onOpenChange={(o) => { setAddOpen(o); if (!o) resetForm(); }}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>{editing ? `Edit: ${editing.title}` : "Publish a new article"}</DialogTitle>
+            <DialogDescription>
+              {editing
+                ? "Update this news article. Changes take effect immediately."
+                : "Create a new news article. Published articles appear immediately on the public News page."}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3 py-2 max-h-[60vh] overflow-y-auto">
+            <div className="space-y-1.5">
+              <Label htmlFor="news-title">Title *</Label>
+              <Input
+                id="news-title"
+                placeholder="e.g. SkillMatch AI launches new resume parser"
+                value={title}
+                onChange={(e) => setTitle(e.target.value)}
+              />
+            </div>
+
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div className="space-y-1.5">
+                <Label htmlFor="news-category">Category *</Label>
+                <Select value={category} onValueChange={setCategory}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {ADMIN_NEWS_CATEGORIES.map((c) => (
+                      <SelectItem key={c} value={c}>{c}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="news-status">Status *</Label>
+                <Select value={status} onValueChange={setStatus}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="published">Published (visible publicly)</SelectItem>
+                    <SelectItem value="draft">Draft (hidden from public)</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            <div className="space-y-1.5">
+              <Label htmlFor="news-excerpt">Excerpt (optional)</Label>
+              <Input
+                id="news-excerpt"
+                placeholder="A short summary shown in the news list. If empty, the first 140 characters of content are used."
+                value={excerpt}
+                onChange={(e) => setExcerpt(e.target.value)}
+              />
+            </div>
+
+            <div className="space-y-1.5">
+              <Label htmlFor="news-content">Content *</Label>
+              <Textarea
+                id="news-content"
+                rows={6}
+                placeholder="Write the full article content here…"
+                value={content}
+                onChange={(e) => setContent(e.target.value)}
+                className="resize-y"
+              />
+              <p className="text-[11px] text-muted-foreground">{content.length} characters</p>
+            </div>
+
+            <div className="space-y-1.5">
+              <Label htmlFor="news-image">Cover image (optional)</Label>
+              <Input
+                id="news-image"
+                placeholder="https://example.com/image.jpg  (or upload below)"
+                value={imageUrl.startsWith("data:") ? "(uploaded image — see below)" : imageUrl}
+                onChange={(e) => setImageUrl(e.target.value)}
+                disabled={imageUrl.startsWith("data:")}
+              />
+              <div className="flex items-center gap-2">
+                <input
+                  type="file"
+                  accept="image/*"
+                  id="news-file"
+                  className="hidden"
+                  onChange={(e) => { const f = e.target.files?.[0]; if (f) handleFileUpload(f); e.target.value = ""; }}
+                />
+                <Button type="button" variant="outline" size="sm" onClick={() => document.getElementById("news-file")?.click()}>
+                  <ImageIcon className="h-3.5 w-3.5" /> Upload file (max 2MB)
+                </Button>
+                {imageUrl.startsWith("data:") && (
+                  <Button type="button" variant="ghost" size="sm" onClick={() => setImageUrl("")}>
+                    <X className="h-3.5 w-3.5" /> Clear upload
+                  </Button>
+                )}
+              </div>
+              {imageUrl && (
+                <div className="mt-2 overflow-hidden rounded-lg border border-border">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={imageUrl} alt="Cover preview" className="h-32 w-full object-cover" />
+                </div>
+              )}
+            </div>
+
+            <div className="flex items-center justify-between rounded-lg border border-border p-3">
+              <div>
+                <p className="text-xs font-semibold">Pin to top</p>
+                <p className="text-[11px] text-muted-foreground">Pinned articles appear first on the public News page</p>
+              </div>
+              <Switch checked={pinned} onCheckedChange={setPinned} />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setAddOpen(false)}>Cancel</Button>
+            <Button
+              className="btn-blue"
+              onClick={save}
+              disabled={saving || !title.trim() || !content.trim()}
+            >
+              {saving ? (
+                <><span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-primary-foreground border-t-transparent" /> Saving…</>
+              ) : (
+                <>{editing ? <Edit className="h-3.5 w-3.5" /> : <Plus className="h-3.5 w-3.5" />} {editing ? "Save changes" : status === "published" ? "Publish article" : "Save draft"}</>
               )}
             </Button>
           </DialogFooter>

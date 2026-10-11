@@ -40,6 +40,7 @@ model User {
   jobsPosted   Job[]      @relation("JobEmployer")
   notifications Notification[]
   auditLogs    AuditLog[]
+  news         News[]     @relation("NewsAuthor")
 
   // 2FA
   twoFactorSecretHash String?
@@ -214,4 +215,27 @@ model SiteImage {
 
   @@index([category])
   @@index([isActive])
+}
+
+// ============================================================
+// NEWS — platform announcements & updates published by admins
+// ============================================================
+model News {
+  id           String   @id @default(cuid())
+  title        String
+  content      String
+  excerpt      String?
+  category     String   @default("Update") // Update | Announcement | Event | Release | Maintenance
+  imageUrl     String?  // optional cover image (URL path or base64 data URL)
+  status       String   @default("published") // published | draft
+  pinned       Boolean  @default(false) // pinned items appear first
+  authorId     String?
+  author       User?    @relation("NewsAuthor", fields: [authorId], references: [id], onDelete: SetNull)
+  publishedAt  DateTime @default(now())
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([status])
+  @@index([category])
+  @@index([publishedAt])
 }

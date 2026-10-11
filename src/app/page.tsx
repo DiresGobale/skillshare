@@ -19,6 +19,7 @@ import {
   PublicJobDetail,
   AboutPage,
   ContactPage,
+  PublicNewsPage,
 } from "@/components/guest/views";
 import { JobPostedNotifier } from "@/components/shared/job-posted-notifier";
 // Seeker views
@@ -64,6 +65,7 @@ import {
   AdminAIAnalytics,
   AdminSecurity,
   AdminSiteImages,
+  AdminNews,
 } from "@/components/admin/views";
 
 function Router() {
@@ -92,10 +94,19 @@ function Router() {
     if (view === "landing") return <Landing />;
     if (view === "public-jobs") return <PublicJobs />;
     if (view === "public-job-detail") return <PublicJobDetail />;
+    if (view === "public-news") return <PublicNewsPage />;
+    if (view === "public-news-detail") return <PublicNewsPage />;
     if (view === "about") return <AboutPage />;
     if (view === "contact") return <ContactPage />;
     // Default to the Home page for first-time visitors
     return <HomePage />;
+  }
+
+  // ---------- AUTHENTICATED: PUBLIC NEWS (read-only, available to all roles) ----------
+  // Authenticated seekers/employers/admins can also view the public news page.
+  // Rendered outside the AppShell so the public header/footer are shown.
+  if (view === "public-news" || view === "public-news-detail") {
+    return <PublicNewsPage />;
   }
 
   // ---------- AUTHENTICATED VIEWS ----------
@@ -145,6 +156,7 @@ function Router() {
       case "ai-analytics": content = <AdminAIAnalytics />; break;
       case "security": content = <AdminSecurity />; break;
       case "site-images": content = <AdminSiteImages />; break;
+      case "news": content = <AdminNews />; break;
       default: content = <AdminDashboard />;
     }
   }

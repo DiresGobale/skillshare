@@ -650,3 +650,73 @@ Stage Summary:
 - Zero JWT errors, zero 500 errors in dev log after restart.
 - Dev server is running as a detached daemon (PID 2002) that survives across bash tool calls.
 - Note for future: if 401 storms reappear, first check `cat .env` — the .env file appears to get periodically overwritten, losing NEXTAUTH_SECRET.
+
+---
+Task ID: 16
+Agent: main (Super Z)
+Task: Add a News component to the navigation bar with full database integration. Authorized users/admins can create, edit, delete news; regular users can only view published news. News items have title, content, publication date, and optional image.
+
+Work Log:
+- Audited existing state: a /api/news route file already existed but was non-functional because the Prisma schema had no News model. No UI components, no nav links, no view types existed.
+- Added a News model to prisma/schema.prisma with fields: id, title, content, excerpt, category, imageUrl, status (published/draft), pinned, authorId (FK to User), publishedAt, createdAt, updatedAt. Added the back-relation `news News[] @relation("NewsAuthor")` on User. Ran `prisma db push` + `prisma generate` to materialize the table and regenerate the client.
+- Updated /api/news route to allow both admin AND employer roles to create/edit/delete (requirement: "authorized users or administrators"). Seekers and unauthenticated users get 403/401. Public GET remains open to all (only returns published news; drafts only visible to admin/employer via ?includeDrafts=true).
+- Created new /api/news/[id]/route.ts — GET single news article by id. Public for published news; drafts only visible to admin/employer (returns 404 otherwise).
+- Extended GuestView type with "public-news" and "public-news-detail". Extended AdminView type with "news". Added `selectedNewsId` to AppState + go() opts for navigating to a specific article.
+- Added "News" link to the PublicHeader navLinks array (between "Browse jobs" and "FAQ"). Also added "News" to the PublicFooter Product column. Both render in desktop nav and mobile slide-down panel.
+- Built PublicNewsPage component (in guest/views.tsx):
+  * NewsHero — gradient hero section with Newspaper icon badge and headline
+  * Category filter pills (All / Update / Announcement / Event / Release / Maintenance)
+  * NewsListCard — card with cover image (or gradient fallback), category badge, pinned indicator, title, excerpt, author avatar, date, hover lift effect
+  * Pinned section appears first, then regular news grid (responsive: 1/2/3 columns)
+  * Loading state with spinner, error state with retry button, empty state
+  * Fetches from /api/news?limit=50 on mount
+- Built PublicNewsDetailPage component — single article view with:
+  * Large cover image (or gradient fallback with Newspaper icon)
+  * Category badge, published date, "time ago" indicator
+  * Author avatar + name + "Published on" date
+  * Excerpt (bold), then full content (whitespace-pre-wrap)
+  * Back to news button, last updated timestamp
+  * Fetches from /api/news/[id]
+- Built AdminNews component (in admin/views.tsx):
+  * Stats cards: Total / Published / Drafts / Pinned counts
+  * Search bar + category filter dropdown
+  * List view with thumbnail, category badge, status badge (Published/Draft), pinned badge, date, title, excerpt, author
+  * Per-item actions: pin/unpin toggle, publish/unpublish toggle, edit, delete
+  * Add/Edit dialog with: title, category (5 options), status (published/draft), excerpt, content (textarea with char count), cover image (URL input OR file upload via FileReader→data URL, max 2MB, with preview), pin toggle
+  * All CRUD operations call /api/news and show toast notifications
+  * Refetches list after every mutation so changes appear immediately
+- Added "News & Announcements" to the admin sidebar nav (between "Site Images" and "System Settings") with Newspaper icon.
+- Added "News & Updates" to seeker and employer sidebar navs (linking to public-news view, so they can read published news).
+- Updated Router in src/app/page.tsx:
+  * Imported PublicNewsPage and AdminNews
+  * Added guest routes: public-news → <PublicNewsPage/>, public-news-detail → <PublicNewsPage/> (the component internally checks selectedNewsId)
+  * Added authenticated route: if view is public-news or public-news-detail, render <PublicNewsPage/> outside AppShell (so seekers/employers/admins can read public news too)
+  * Added admin switch case: "news" → <AdminNews/>
+- Restarted dev server to pick up the regenerated Prisma client (cleared .next/cache to ensure fresh compile).
+
+End-to-end test results (all 12 steps passed):
+1. ✅ Admin creates published news → saved to DB with publishedAt timestamp
+2. ✅ Admin creates draft news → saved to DB (status=draft)
+3. ✅ Public fetch returns only published news (1 article, draft excluded)
+4. ✅ Draft is NOT in public list (count=1, not 2)
+5. ✅ Seeker POST → 403 "Only authorized users (admins/employers) can publish news"
+6. ✅ Seeker DELETE → 403
+7. ✅ Unauthenticated POST → 401 "Unauthorized"
+8. ✅ GET /api/news/[id] returns full article with author info
+9. ✅ Admin PATCH (unpin) → updated successfully
+10. ✅ Admin GET with includeDrafts=true → returns 2 articles (1 draft + 1 published)
+11. ✅ Admin DELETE → 200 OK
+12. ✅ Public list after delete → 0 articles
+Plus: ✅ Employer can create news (200 OK) — requirement: "authorized users or administrators"
+
+Stage Summary:
+- News model in DB: ✅ (Prisma schema + db push + generate)
+- API with role-based permissions: ✅ (admin/employer can write, all can read, drafts hidden from public)
+- Public News page: ✅ (list with category filter, pinned section, image cards, detail view)
+- Admin News management: ✅ (full CRUD, search, filter, stats, image upload, pin/unpin, publish/unpublish)
+- News nav link in public header: ✅ (desktop + mobile)
+- News nav link in admin sidebar: ✅ ("News & Announcements")
+- News nav link in seeker/employer sidebar: ✅ ("News & Updates" → public news page)
+- Database integration: ✅ (all news persisted to SQLite via Prisma, auto-appears on public page after publication)
+- Optional image/attachment: ✅ (cover image via URL or file upload as base64 data URL)
+- 0 TypeScript errors in news-related code (all pre-existing errors are in unrelated files)

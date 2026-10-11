@@ -77,6 +77,11 @@ import {
   Github,
   Twitter,
   Linkedin,
+  Newspaper,
+  Calendar,
+  Tag,
+  Pin,
+  Loader2,
 } from "lucide-react";
 import { Textarea } from "@/components/ui/textarea";
 import { useScrollReveal } from "@/hooks/use-scroll-reveal";
@@ -110,6 +115,7 @@ function PublicHeader({ onAuth }: { onAuth: (r: "login" | "register") => void })
     { label: "Home", view: "home" as const },
     { label: "How it works", view: "landing" as const },
     { label: "Browse jobs", view: "public-jobs" as const },
+    { label: "News", view: "public-news" as const },
     { label: "FAQ", view: "faq" as const },
     { label: "About", view: "about" as const },
     { label: "Contact", view: "contact" as const },
@@ -213,6 +219,7 @@ function PublicFooter() {
               <li><button className="text-muted-foreground hover:text-foreground" onClick={() => go("home")}>Home</button></li>
               <li><button className="text-muted-foreground hover:text-foreground" onClick={() => go("public-jobs")}>Browse jobs</button></li>
               <li><button className="text-muted-foreground hover:text-foreground" onClick={() => go("landing")}>How it works</button></li>
+              <li><button className="text-muted-foreground hover:text-foreground" onClick={() => go("public-news")}>News</button></li>
               <li><button className="text-muted-foreground hover:text-foreground" onClick={() => go("faq")}>FAQ</button></li>
             </ul>
           </div>
@@ -2901,6 +2908,444 @@ export function ContactPage() {
               </Card>
             </div>
           </div>
+        </div>
+      </main>
+      <PublicFooter />
+    </div>
+  );
+}
+
+// ============================================================
+// PUBLIC NEWS PAGE — list of published news articles
+// ============================================================
+interface PublicNewsItem {
+  id: string;
+  title: string;
+  content: string;
+  excerpt: string | null;
+  category: string;
+  imageUrl: string | null;
+  status: string;
+  pinned: boolean;
+  publishedAt: string;
+  createdAt: string;
+  updatedAt: string;
+  author: string;
+  authorInitials: string;
+  authorColor: string;
+}
+
+const NEWS_CATEGORY_STYLE: Record<string, { bg: string; text: string; border: string }> = {
+  Update:        { bg: "bg-blue-50",     text: "text-blue-700",     border: "border-blue-200" },
+  Announcement:  { bg: "bg-violet-50",   text: "text-violet-700",   border: "border-violet-200" },
+  Event:         { bg: "bg-amber-50",    text: "text-amber-700",    border: "border-amber-200" },
+  Release:       { bg: "bg-emerald-50",  text: "text-emerald-700",  border: "border-emerald-200" },
+  Maintenance:   { bg: "bg-rose-50",     text: "text-rose-700",     border: "border-rose-200" },
+};
+
+function newsCategoryStyle(category: string) {
+  return NEWS_CATEGORY_STYLE[category] ?? { bg: "bg-slate-50", text: "text-slate-700", border: "border-slate-200" };
+}
+
+function formatNewsDate(iso: string) {
+  const d = new Date(iso);
+  return d.toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" });
+}
+
+function timeAgoNews(iso: string) {
+  const diff = Date.now() - new Date(iso).getTime();
+  const mins = Math.floor(diff / 60000);
+  if (mins < 1) return "just now";
+  if (mins < 60) return `${mins}m ago`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `${hrs}h ago`;
+  const days = Math.floor(hrs / 24);
+  if (days < 7) return `${days}d ago`;
+  return formatNewsDate(iso);
+}
+
+function NewsHero() {
+  return (
+    <section className="relative overflow-hidden border-b border-border bg-hero-glow">
+      <div className="absolute inset-0 bg-grid-subtle opacity-50 [mask-image:radial-gradient(ellipse_at_center,black,transparent_75%)]" />
+      <div className="relative mx-auto max-w-4xl px-4 py-16 text-center sm:px-6 sm:py-20 lg:px-8">
+        <Badge variant="outline" className="mb-4 border-primary/20 bg-primary/5 text-primary">
+          <Newspaper className="mr-1 h-3 w-3" /> News & Announcements
+        </Badge>
+        <h1 className="text-4xl font-extrabold tracking-tight sm:text-5xl">
+          <span className="text-gradient-primary">Latest updates</span> from SkillMatch AI
+        </h1>
+        <p className="mx-auto mt-5 max-w-2xl text-base text-muted-foreground sm:text-lg">
+          Product releases, platform announcements, upcoming events, and important maintenance
+          notices — all in one place.
+        </p>
+      </div>
+    </section>
+  );
+}
+
+function NewsListCard({ item, onOpen }: { item: PublicNewsItem; onOpen: () => void }) {
+  const style = newsCategoryStyle(item.category);
+  return (
+    <button
+      onClick={onOpen}
+      className="group flex flex-col overflow-hidden rounded-xl border border-border bg-card text-left transition-all hover:-translate-y-0.5 hover:shadow-card-soft"
+    >
+      {item.imageUrl ? (
+        <div className="relative aspect-[16/9] w-full overflow-hidden bg-muted">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={item.imageUrl}
+            alt={item.title}
+            className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
+          />
+          {item.pinned && (
+            <span className="absolute left-3 top-3 inline-flex items-center gap-1 rounded-full bg-amber-500/95 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-white shadow">
+              <Pin className="h-2.5 w-2.5" /> Pinned
+            </span>
+          )}
+        </div>
+      ) : (
+        <div className="relative aspect-[16/9] w-full overflow-hidden bg-gradient-to-br from-violet-500 via-blue-500 to-emerald-500">
+          <div className="absolute inset-0 bg-grid-subtle opacity-20" />
+          <div className="absolute inset-0 flex items-center justify-center">
+            <Newspaper className="h-12 w-12 text-white/80" />
+          </div>
+          {item.pinned && (
+            <span className="absolute left-3 top-3 inline-flex items-center gap-1 rounded-full bg-amber-500/95 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-white shadow">
+              <Pin className="h-2.5 w-2.5" /> Pinned
+            </span>
+          )}
+        </div>
+      )}
+      <div className="flex flex-1 flex-col p-5">
+        <div className="flex flex-wrap items-center gap-2 text-xs">
+          <Badge variant="outline" className={cn(style.bg, style.text, style.border)}>
+            <Tag className="mr-1 h-2.5 w-2.5" /> {item.category}
+          </Badge>
+          <span className="flex items-center gap-1 text-muted-foreground">
+            <Calendar className="h-3 w-3" /> {formatNewsDate(item.publishedAt)}
+          </span>
+        </div>
+        <h3 className="mt-3 line-clamp-2 text-base font-semibold leading-snug tracking-tight group-hover:text-primary">
+          {item.title}
+        </h3>
+        <p className="mt-1.5 line-clamp-2 text-sm text-muted-foreground">
+          {item.excerpt || item.content.slice(0, 140) + "…"}
+        </p>
+        <div className="mt-auto flex items-center gap-2 pt-4 text-xs text-muted-foreground">
+          <span
+            className="flex h-6 w-6 items-center justify-center rounded-full text-[10px] font-semibold text-white"
+            style={{ background: item.authorColor }}
+          >
+            {item.authorInitials}
+          </span>
+          <span>{item.author}</span>
+          <span className="ml-auto flex items-center gap-1 text-primary opacity-0 transition-opacity group-hover:opacity-100">
+            Read more <ArrowRight className="h-3 w-3" />
+          </span>
+        </div>
+      </div>
+    </button>
+  );
+}
+
+export function PublicNewsPage() {
+  const { go, selectedNewsId } = useApp();
+  const [news, setNews] = useState<PublicNewsItem[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [activeCategory, setActiveCategory] = useState<string>("All");
+
+  // Load published news from API
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    fetch("/api/news?limit=50")
+      .then((r) => r.json())
+      .then((data) => {
+        if (cancelled) return;
+        if (data.ok) {
+          setNews(data.news);
+          setError(null);
+        } else {
+          setError(data.error || "Failed to load news.");
+        }
+      })
+      .catch(() => {
+        if (!cancelled) setError("Network error. Please try again.");
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  // If we have a selectedNewsId, render the detail page instead
+  if (selectedNewsId) {
+    return <PublicNewsDetailPage newsId={selectedNewsId} />;
+  }
+
+  const categories = ["All", ...Array.from(new Set(news.map((n) => n.category)))];
+  const filtered = activeCategory === "All" ? news : news.filter((n) => n.category === activeCategory);
+  const pinned = filtered.filter((n) => n.pinned);
+  const regular = filtered.filter((n) => !n.pinned);
+
+  return (
+    <div className="flex min-h-screen flex-col">
+      <PublicHeader onAuth={(r) => go(r)} />
+      <main className="flex-1 bg-muted/20">
+        <NewsHero />
+
+        <div className="mx-auto max-w-7xl px-4 py-10 sm:px-6 lg:px-8">
+          {/* Category filter pills */}
+          {!loading && !error && news.length > 0 && (
+            <div className="mb-8 flex flex-wrap items-center justify-center gap-2">
+              {categories.map((cat) => (
+                <button
+                  key={cat}
+                  onClick={() => setActiveCategory(cat)}
+                  className={cn(
+                    "rounded-full px-4 py-1.5 text-xs font-medium transition-colors",
+                    activeCategory === cat
+                      ? "bg-primary text-primary-foreground"
+                      : "border border-border bg-card text-muted-foreground hover:bg-accent"
+                  )}
+                >
+                  {cat}
+                </button>
+              ))}
+            </div>
+          )}
+
+          {/* Loading state */}
+          {loading && (
+            <div className="flex flex-col items-center justify-center py-20 text-muted-foreground">
+              <Loader2 className="h-8 w-8 animate-spin text-primary" />
+              <p className="mt-3 text-sm">Loading news…</p>
+            </div>
+          )}
+
+          {/* Error state */}
+          {error && !loading && (
+            <div className="mx-auto max-w-md rounded-xl border border-rose-200 bg-rose-50 p-6 text-center">
+              <AlertCircle className="mx-auto h-8 w-8 text-rose-600" />
+              <p className="mt-2 text-sm font-medium text-rose-700">{error}</p>
+              <Button
+                size="sm"
+                variant="outline"
+                className="mt-4"
+                onClick={() => {
+                  setLoading(true);
+                  setError(null);
+                  fetch("/api/news?limit=50")
+                    .then((r) => r.json())
+                    .then((data) => {
+                      if (data.ok) setNews(data.news);
+                      else setError(data.error || "Failed to load news.");
+                    })
+                    .catch(() => setError("Network error. Please try again."))
+                    .finally(() => setLoading(false));
+                }}
+              >
+                Try again
+              </Button>
+            </div>
+          )}
+
+          {/* Empty state */}
+          {!loading && !error && news.length === 0 && (
+            <div className="mx-auto max-w-md rounded-xl border border-border bg-card p-10 text-center">
+              <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-muted">
+                <Newspaper className="h-7 w-7 text-muted-foreground" />
+              </div>
+              <h3 className="mt-4 text-base font-semibold">No news yet</h3>
+              <p className="mt-1 text-sm text-muted-foreground">
+                Check back soon for the latest platform updates, announcements, and events.
+              </p>
+            </div>
+          )}
+
+          {/* Pinned section */}
+          {!loading && !error && pinned.length > 0 && (
+            <div className="mb-10">
+              <div className="mb-4 flex items-center gap-2">
+                <Pin className="h-4 w-4 text-amber-500" />
+                <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">Pinned</h2>
+              </div>
+              <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+                {pinned.map((item) => (
+                  <NewsListCard
+                    key={item.id}
+                    item={item}
+                    onOpen={() => go("public-news-detail", { newsId: item.id })}
+                  />
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Regular news grid */}
+          {!loading && !error && regular.length > 0 && (
+            <div>
+              {pinned.length > 0 && (
+                <div className="mb-4 flex items-center gap-2">
+                  <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">Recent updates</h2>
+                </div>
+              )}
+              <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+                {regular.map((item) => (
+                  <NewsListCard
+                    key={item.id}
+                    item={item}
+                    onOpen={() => go("public-news-detail", { newsId: item.id })}
+                  />
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      </main>
+      <PublicFooter />
+    </div>
+  );
+}
+
+// ============================================================
+// PUBLIC NEWS DETAIL PAGE — single article view
+// ============================================================
+export function PublicNewsDetailPage({ newsId }: { newsId: string }) {
+  const { go } = useApp();
+  const [item, setItem] = useState<PublicNewsItem | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    fetch(`/api/news/${newsId}`)
+      .then((r) => r.json())
+      .then((data) => {
+        if (cancelled) return;
+        if (data.ok) {
+          setItem(data.news);
+          setError(null);
+        } else {
+          setError(data.error || "News article not found.");
+        }
+      })
+      .catch(() => {
+        if (!cancelled) setError("Network error. Please try again.");
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [newsId]);
+
+  return (
+    <div className="flex min-h-screen flex-col">
+      <PublicHeader onAuth={(r) => go(r)} />
+      <main className="flex-1 bg-muted/20">
+        <div className="mx-auto max-w-3xl px-4 py-8 sm:px-6 lg:px-8">
+          <button
+            onClick={() => go("public-news")}
+            className="mb-4 inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
+          >
+            <ArrowLeft className="h-3.5 w-3.5" /> Back to news
+          </button>
+
+          {loading && (
+            <div className="flex flex-col items-center justify-center py-20 text-muted-foreground">
+              <Loader2 className="h-8 w-8 animate-spin text-primary" />
+              <p className="mt-3 text-sm">Loading article…</p>
+            </div>
+          )}
+
+          {error && !loading && (
+            <div className="mx-auto max-w-md rounded-xl border border-rose-200 bg-rose-50 p-6 text-center">
+              <AlertCircle className="mx-auto h-8 w-8 text-rose-600" />
+              <p className="mt-2 text-sm font-medium text-rose-700">{error}</p>
+              <Button size="sm" variant="outline" className="mt-4" onClick={() => go("public-news")}>
+                Back to news
+              </Button>
+            </div>
+          )}
+
+          {item && !loading && !error && (
+            <article className="overflow-hidden rounded-2xl border border-border bg-card shadow-card-soft">
+              {item.imageUrl ? (
+                <div className="relative aspect-[16/7] w-full overflow-hidden bg-muted">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={item.imageUrl} alt={item.title} className="h-full w-full object-cover" />
+                  {item.pinned && (
+                    <span className="absolute left-4 top-4 inline-flex items-center gap-1 rounded-full bg-amber-500/95 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide text-white shadow">
+                      <Pin className="h-2.5 w-2.5" /> Pinned
+                    </span>
+                  )}
+                </div>
+              ) : (
+                <div className="relative aspect-[16/7] w-full overflow-hidden bg-gradient-to-br from-violet-500 via-blue-500 to-emerald-500">
+                  <div className="absolute inset-0 bg-grid-subtle opacity-20" />
+                  <div className="absolute inset-0 flex items-center justify-center">
+                    <Newspaper className="h-16 w-16 text-white/80" />
+                  </div>
+                  {item.pinned && (
+                    <span className="absolute left-4 top-4 inline-flex items-center gap-1 rounded-full bg-amber-500/95 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide text-white shadow">
+                      <Pin className="h-2.5 w-2.5" /> Pinned
+                    </span>
+                  )}
+                </div>
+              )}
+
+              <div className="p-6 sm:p-8">
+                <div className="flex flex-wrap items-center gap-3 text-xs">
+                  <Badge variant="outline" className={cn(newsCategoryStyle(item.category).bg, newsCategoryStyle(item.category).text, newsCategoryStyle(item.category).border)}>
+                    <Tag className="mr-1 h-2.5 w-2.5" /> {item.category}
+                  </Badge>
+                  <span className="flex items-center gap-1 text-muted-foreground">
+                    <Calendar className="h-3 w-3" /> {formatNewsDate(item.publishedAt)} · {timeAgoNews(item.publishedAt)}
+                  </span>
+                </div>
+
+                <h1 className="mt-4 text-2xl font-extrabold leading-tight tracking-tight sm:text-3xl">
+                  {item.title}
+                </h1>
+
+                <div className="mt-4 flex items-center gap-3 border-y border-border py-3">
+                  <span
+                    className="flex h-9 w-9 items-center justify-center rounded-full text-xs font-semibold text-white"
+                    style={{ background: item.authorColor }}
+                  >
+                    {item.authorInitials}
+                  </span>
+                  <div>
+                    <p className="text-sm font-medium">{item.author}</p>
+                    <p className="text-xs text-muted-foreground">Published on {formatNewsDate(item.publishedAt)}</p>
+                  </div>
+                </div>
+
+                {item.excerpt && (
+                  <p className="mt-6 text-base font-medium text-foreground/90">{item.excerpt}</p>
+                )}
+
+                <div className="prose prose-sm mt-4 max-w-none whitespace-pre-wrap text-sm leading-relaxed text-muted-foreground sm:text-base sm:leading-relaxed">
+                  {item.content}
+                </div>
+
+                <div className="mt-8 flex items-center justify-between border-t border-border pt-6">
+                  <Button variant="outline" size="sm" onClick={() => go("public-news")}>
+                    <ArrowLeft className="mr-1 h-3.5 w-3.5" /> All news
+                  </Button>
+                  <span className="text-xs text-muted-foreground">Last updated {formatNewsDate(item.updatedAt)}</span>
+                </div>
+              </div>
+            </article>
+          )}
         </div>
       </main>
       <PublicFooter />

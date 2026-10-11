@@ -14,8 +14,8 @@ export async function GET(req: NextRequest) {
   let where: any = {};
   if (includeDrafts) {
     const session = await getServerSession(authOptions);
-    if (!session?.user?.email || session.user.role !== "admin") {
-      return NextResponse.json({ ok: false, error: "Admins only" }, { status: 403 });
+    if (!session?.user?.email || (session.user.role !== "admin" && session.user.role !== "employer")) {
+      return NextResponse.json({ ok: false, error: "Authorized users only" }, { status: 403 });
     }
   } else {
     where.status = "published";
@@ -57,7 +57,8 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   const session = await getServerSession(authOptions);
   if (!session?.user?.email) return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
-  if (session.user.role !== "admin") return NextResponse.json({ ok: false, error: "Admins only" }, { status: 403 });
+  if (session.user.role !== "admin" && session.user.role !== "employer")
+    return NextResponse.json({ ok: false, error: "Only authorized users (admins/employers) can publish news" }, { status: 403 });
 
   try {
     const body = await req.json();
@@ -102,11 +103,12 @@ export async function POST(req: NextRequest) {
   }
 }
 
-// PATCH /api/news — update news (admin only)
+// PATCH /api/news — update news (admin or employer)
 export async function PATCH(req: NextRequest) {
   const session = await getServerSession(authOptions);
   if (!session?.user?.email) return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
-  if (session.user.role !== "admin") return NextResponse.json({ ok: false, error: "Admins only" }, { status: 403 });
+  if (session.user.role !== "admin" && session.user.role !== "employer")
+    return NextResponse.json({ ok: false, error: "Only authorized users (admins/employers) can edit news" }, { status: 403 });
 
   try {
     const body = await req.json();
@@ -133,11 +135,12 @@ export async function PATCH(req: NextRequest) {
   }
 }
 
-// DELETE /api/news?id=... — delete news (admin only)
+// DELETE /api/news?id=... — delete news (admin or employer)
 export async function DELETE(req: NextRequest) {
   const session = await getServerSession(authOptions);
   if (!session?.user?.email) return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
-  if (session.user.role !== "admin") return NextResponse.json({ ok: false, error: "Admins only" }, { status: 403 });
+  if (session.user.role !== "admin" && session.user.role !== "employer")
+    return NextResponse.json({ ok: false, error: "Only authorized users (admins/employers) can delete news" }, { status: 403 });
 
   try {
     const url = new URL(req.url);

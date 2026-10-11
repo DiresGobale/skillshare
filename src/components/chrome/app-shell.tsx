@@ -35,6 +35,7 @@ import {
   Cpu,
   Server,
   Image as ImageIcon,
+  Newspaper,
 } from "lucide-react";
 import type { Role } from "@/lib/types";
 
@@ -53,6 +54,7 @@ const seekerNav: NavItem[] = [
   { label: "Recommended Jobs", view: "recommended", icon: <Target className="h-4 w-4" />, badge: 4 },
   { label: "Applications", view: "applications", icon: <Send className="h-4 w-4" /> },
   { label: "Skill Gap Analysis", view: "skill-gap", icon: <TrendingUp className="h-4 w-4" /> },
+  { label: "News & Updates", view: "public-news", icon: <Newspaper className="h-4 w-4" /> },
   { label: "Messages", view: "messages", icon: <MessageSquare className="h-4 w-4" /> },
   { label: "Notifications", view: "notifications", icon: <Bell className="h-4 w-4" />, badge: 2 },
 ];
@@ -65,6 +67,7 @@ const employerNav: NavItem[] = [
   { label: "Applications", view: "applications", icon: <Send className="h-4 w-4" /> },
   { label: "Interviews", view: "interviews", icon: <CalendarClock className="h-4 w-4" /> },
   { label: "AI Report", view: "ai-report", icon: <Cpu className="h-4 w-4" /> },
+  { label: "News & Updates", view: "public-news", icon: <Newspaper className="h-4 w-4" /> },
   { label: "Messages", view: "messages", icon: <MessageSquare className="h-4 w-4" /> },
   { label: "Notifications", view: "notifications", icon: <Bell className="h-4 w-4" />, badge: 2 },
 ];
@@ -81,6 +84,7 @@ const adminNav: NavItem[] = [
   { label: "System Monitoring", view: "monitoring", icon: <Server className="h-4 w-4" /> },
   { label: "Security & Compliance", view: "security", icon: <ShieldCheck className="h-4 w-4" /> },
   { label: "Site Images", view: "site-images", icon: <ImageIcon className="h-4 w-4" /> },
+  { label: "News & Announcements", view: "news", icon: <Newspaper className="h-4 w-4" /> },
   { label: "System Settings", view: "config", icon: <Settings className="h-4 w-4" /> },
 ];
 
