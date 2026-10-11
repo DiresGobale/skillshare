@@ -185,7 +185,7 @@ export function SeekerDashboard() {
         title={`Welcome back, ${firstName}`}
         description="Here's your job-search overview for today."
         actions={
-          <Button onClick={() => go("recommended")}>
+          <Button onClick={() => go("recommended", { jobId: undefined })}>
             <Target className="h-4 w-4" /> View recommendations
           </Button>
         }
@@ -241,7 +241,7 @@ export function SeekerDashboard() {
               <CardTitle className="text-sm">Open jobs on the platform</CardTitle>
               <CardDescription>Click any job to view details and apply</CardDescription>
             </div>
-            <Button variant="ghost" size="sm" onClick={() => go("recommended")}>
+            <Button variant="ghost" size="sm" onClick={() => go("recommended", { jobId: undefined })}>
               View all <ArrowRight className="h-3.5 w-3.5" />
             </Button>
           </CardHeader>
@@ -293,7 +293,7 @@ export function SeekerDashboard() {
                 icon={<Send className="h-5 w-5" />}
                 title="No applications yet"
                 description="Browse open jobs and apply to start tracking them here."
-                action={<Button size="sm" onClick={() => go("recommended")}>Browse jobs</Button>}
+                action={<Button size="sm" onClick={() => go("recommended", { jobId: undefined })}>Browse jobs</Button>}
               />
             ) : (
               applications.slice(0, 4).map((a: any) => (
@@ -2298,7 +2298,7 @@ export function SeekerJobDetail() {
   return (
     <PageContainer>
       <button
-        onClick={() => go("recommended")}
+        onClick={() => go("recommended", { jobId: undefined })}
         className="mb-4 inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
       >
         <ArrowLeft className="h-3.5 w-3.5" /> Back to recommendations
@@ -2777,7 +2777,7 @@ export function SeekerApplications() {
           icon={<Send className="h-5 w-5" />}
           title="No applications in this category"
           description="Apply to open jobs to start tracking them here."
-          action={<Button size="sm" onClick={() => go("recommended")}>Browse jobs</Button>}
+          action={<Button size="sm" onClick={() => go("recommended", { jobId: undefined })}>Browse jobs</Button>}
         />
       ) : (
         <div className="mt-6 space-y-3">
@@ -3307,7 +3307,7 @@ export function SeekerNotifications() {
                           </Button>
                         )}
                         {n.type === "match" && (
-                          <Button size="sm" variant="outline" onClick={() => go("recommended")}>
+                          <Button size="sm" variant="outline" onClick={() => go("recommended", { jobId: undefined })}>
                             <Target className="h-3.5 w-3.5" /> View recommended jobs
                           </Button>
                         )}
@@ -3317,7 +3317,7 @@ export function SeekerNotifications() {
                           </Button>
                         )}
                         {n.type === "job" && (
-                          <Button size="sm" variant="outline" onClick={() => go("recommended")}>
+                          <Button size="sm" variant="outline" onClick={() => go("recommended", { jobId: undefined })}>
                             <Briefcase className="h-3.5 w-3.5" /> Browse jobs
                           </Button>
                         )}
