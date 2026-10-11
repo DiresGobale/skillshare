@@ -97,6 +97,7 @@ import {
   Lock,
   ShieldCheck,
   ChevronRight,
+  ChevronDown,
   Mail,
   Phone,
   PhoneCall,
@@ -2629,9 +2630,11 @@ export function SeekerSkillGap() {
 // NOTIFICATIONS
 // ============================================================
 export function SeekerNotifications() {
+  const { go } = useApp();
   const { data, loading, refetch } = useFetch<any>("/api/notifications");
   const items: any[] = data?.notifications ?? [];
   const [filter, setFilter] = useState("all");
+  const [expandedId, setExpandedId] = useState<string | null>(null);
 
   const filtered = filter === "unread" ? items.filter((n) => !n.read) : items;
 
@@ -2653,11 +2656,56 @@ export function SeekerNotifications() {
     refetch();
   };
 
+  // When a notification is clicked, expand/zoom it (like FAQ) AND mark as read
+  const handleClick = (n: any) => {
+    const isExpanded = expandedId === n.id;
+    if (isExpanded) {
+      // Collapsing
+      setExpandedId(null);
+    } else {
+      // Expanding — also mark as read if unread
+      setExpandedId(n.id);
+      if (!n.read) {
+        toggleRead(n.id);
+      }
+    }
+  };
+
+  // Notification type metadata
+  const getNotifMeta = (type: string) => {
+    switch (type) {
+      case "interview":
+        return { icon: <Calendar className="h-4 w-4" />, bg: "bg-amber-100 text-amber-700", gradient: "from-amber-500 to-orange-500", label: "Interview" };
+      case "match":
+        return { icon: <Target className="h-4 w-4" />, bg: "bg-violet-100 text-violet-700", gradient: "from-violet-500 to-purple-500", label: "Job Match" };
+      case "application":
+        return { icon: <Send className="h-4 w-4" />, bg: "bg-blue-100 text-blue-700", gradient: "from-blue-500 to-cyan-500", label: "Application" };
+      case "message":
+        return { icon: <MessageSquare className="h-4 w-4" />, bg: "bg-emerald-100 text-emerald-700", gradient: "from-emerald-500 to-teal-500", label: "Message" };
+      case "job":
+        return { icon: <Briefcase className="h-4 w-4" />, bg: "bg-cyan-100 text-cyan-700", gradient: "from-cyan-500 to-blue-500", label: "Job Posted" };
+      default:
+        return { icon: <Bell className="h-4 w-4" />, bg: "bg-slate-100 text-slate-700", gradient: "from-slate-500 to-slate-600", label: "System" };
+    }
+  };
+
+  const formatFullDate = (iso: string) => {
+    const d = new Date(iso);
+    return d.toLocaleString(undefined, {
+      weekday: "long",
+      year: "numeric",
+      month: "long",
+      day: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+  };
+
   return (
     <PageContainer>
       <SectionHeader
         title="Notifications"
-        description={`${items.filter((n) => !n.read).length} unread`}
+        description={`${items.filter((n) => !n.read).length} unread · click any notification to expand details`}
         actions={
           <Button variant="outline" size="sm" onClick={markAllRead} disabled={items.filter((n) => !n.read).length === 0}>
             <Check className="h-3.5 w-3.5" /> Mark all read
@@ -2682,40 +2730,143 @@ export function SeekerNotifications() {
           description="You're all caught up. New activity will appear here."
         />
       ) : (
-        <div className="mt-4 space-y-2">
-          {filtered.map((n) => (
-            <button
-              key={n.id}
-              onClick={() => toggleRead(n.id)}
-              className={cn(
-                "flex w-full items-start gap-3 rounded-lg border bg-card p-3 text-left transition-colors hover:bg-accent",
-                !n.read ? "border-primary/30 bg-primary/5" : "border-border"
-              )}
-            >
-              <div className={cn(
-                "flex h-8 w-8 shrink-0 items-center justify-center rounded-full",
-                n.type === "interview" ? "bg-amber-100 text-amber-700" :
-                n.type === "match" ? "bg-violet-100 text-violet-700" :
-                n.type === "application" ? "bg-blue-100 text-blue-700" :
-                n.type === "message" ? "bg-emerald-100 text-emerald-700" :
-                "bg-slate-100 text-slate-700"
-              )}>
-                {n.type === "interview" ? <Calendar className="h-4 w-4" /> :
-                 n.type === "match" ? <Target className="h-4 w-4" /> :
-                 n.type === "application" ? <Send className="h-4 w-4" /> :
-                 n.type === "message" ? <MessageSquare className="h-4 w-4" /> :
-                 <Bell className="h-4 w-4" />}
-              </div>
-              <div className="min-w-0 flex-1">
-                <div className="flex items-start justify-between gap-2">
-                  <p className="text-sm font-semibold">{n.title}</p>
-                  <span className="text-[10px] text-muted-foreground">{timeAgo(n.createdAt)}</span>
+        <div className="mt-4 space-y-3">
+          {filtered.map((n, index) => {
+            const meta = getNotifMeta(n.type);
+            const isOpen = expandedId === n.id;
+            return (
+              <div
+                key={n.id}
+                className={cn(
+                  "lift-card overflow-hidden rounded-2xl border bg-card transition-all duration-300",
+                  isOpen ? "border-primary/40 shadow-md scale-[1.01]" : "border-border hover:border-primary/20",
+                  !n.read && !isOpen && "border-primary/30 bg-primary/5"
+                )}
+              >
+                {/* Clickable header (FAQ-style) */}
+                <button
+                  type="button"
+                  onClick={() => handleClick(n)}
+                  aria-expanded={isOpen}
+                  className="flex w-full items-center gap-4 p-4 text-left sm:p-5"
+                >
+                  {/* Icon tile — zooms/grows when open */}
+                  <div
+                    className={cn(
+                      "flex h-10 w-10 shrink-0 items-center justify-center rounded-xl transition-all duration-300",
+                      isOpen
+                        ? cn("bg-gradient-to-br text-white shadow-lg", meta.gradient)
+                        : meta.bg
+                    )}
+                  >
+                    {meta.icon}
+                  </div>
+
+                  {/* Title + preview */}
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2">
+                      <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                        {meta.label}
+                      </span>
+                      {!n.read && <span className="h-1.5 w-1.5 rounded-full bg-primary animate-pulse" />}
+                    </div>
+                    <p className={cn("mt-0.5 text-sm font-semibold transition-colors sm:text-base", isOpen && "text-primary")}>
+                      {n.title}
+                    </p>
+                    {/* Preview (only when collapsed) */}
+                    {!isOpen && (
+                      <p className="mt-0.5 truncate text-xs text-muted-foreground">{n.message}</p>
+                    )}
+                  </div>
+
+                  {/* Time + chevron */}
+                  <div className="flex shrink-0 flex-col items-end gap-1">
+                    <span className="text-[10px] text-muted-foreground">{timeAgo(n.createdAt)}</span>
+                    <div
+                      className={cn(
+                        "faq-chevron flex h-7 w-7 items-center justify-center rounded-full transition-colors",
+                        isOpen ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"
+                      )}
+                      aria-hidden="true"
+                    >
+                      <ChevronDown className={cn("h-3.5 w-3.5 faq-chevron", isOpen && "is-open")} />
+                    </div>
+                  </div>
+                </button>
+
+                {/* Expandable detail panel (FAQ-style grid-rows zoom) */}
+                <div
+                  className={cn(
+                    "grid transition-all duration-500 ease-[cubic-bezier(0.16,1,0.3,1)]",
+                    isOpen ? "grid-rows-[1fr] opacity-100" : "grid-rows-[0fr] opacity-0"
+                  )}
+                >
+                  <div className="overflow-hidden">
+                    <div className="border-t border-border/60 px-4 pb-4 pt-3 sm:px-5 sm:pb-5">
+                      {/* Full message */}
+                      <div className="rounded-xl bg-muted/40 p-4">
+                        <p className="whitespace-pre-wrap text-sm leading-relaxed text-foreground/90">{n.message}</p>
+                      </div>
+
+                      {/* Metadata row */}
+                      <div className="mt-3 flex flex-wrap items-center gap-3 text-[11px] text-muted-foreground">
+                        <span className="flex items-center gap-1">
+                          <Calendar className="h-3 w-3" /> {formatFullDate(n.createdAt)}
+                        </span>
+                        <span className={cn("flex items-center gap-1 rounded-full px-2 py-0.5 font-medium", meta.bg)}>
+                          {meta.label}
+                        </span>
+                        {n.read ? (
+                          <span className="flex items-center gap-1 text-emerald-600">
+                            <Check className="h-3 w-3" /> Read
+                          </span>
+                        ) : (
+                          <span className="flex items-center gap-1 text-primary">
+                            <span className="h-1.5 w-1.5 rounded-full bg-primary" /> Unread
+                          </span>
+                        )}
+                      </div>
+
+                      {/* Action buttons */}
+                      <div className="mt-3 flex flex-wrap gap-2">
+                        {!n.read && (
+                          <Button size="sm" variant="outline" onClick={() => toggleRead(n.id)}>
+                            <Check className="h-3.5 w-3.5" /> Mark as read
+                          </Button>
+                        )}
+                        {/* Context-aware action based on notification type */}
+                        {n.type === "application" && (
+                          <Button size="sm" variant="outline" onClick={() => go("applications")}>
+                            <Send className="h-3.5 w-3.5" /> View applications
+                          </Button>
+                        )}
+                        {n.type === "interview" && (
+                          <Button size="sm" variant="outline" onClick={() => go("applications")}>
+                            <Calendar className="h-3.5 w-3.5" /> View applications
+                          </Button>
+                        )}
+                        {n.type === "match" && (
+                          <Button size="sm" variant="outline" onClick={() => go("recommended")}>
+                            <Target className="h-3.5 w-3.5" /> View recommended jobs
+                          </Button>
+                        )}
+                        {n.type === "message" && (
+                          <Button size="sm" variant="outline" onClick={() => go("messages")}>
+                            <MessageSquare className="h-3.5 w-3.5" /> Open messages
+                          </Button>
+                        )}
+                        {n.type === "job" && (
+                          <Button size="sm" variant="outline" onClick={() => go("recommended")}>
+                            <Briefcase className="h-3.5 w-3.5" /> Browse jobs
+                          </Button>
+                        )}
+                      </div>
+                    </div>
+                  </div>
                 </div>
-                <p className="mt-0.5 text-xs text-muted-foreground">{n.message}</p>
               </div>
-              {!n.read && <span className="mt-1 h-2 w-2 shrink-0 rounded-full bg-primary" />}
-            </button>
-          ))}
+            );
+          })}
         </div>
       )}
     </PageContainer>

@@ -883,3 +883,57 @@ Stage Summary:
 - 8 automatic notifications sent at each stage transition with the exact messages specified.
 - All candidate status, results, dates, and recruitment progress saved to the database.
 - The system is ready for use.
+
+---
+Task ID: 20
+Agent: main (Super Z)
+Task: (1) Check each functionality in the job seeker dashboard sidebar. (2) Make notifications clickable with expand/zoom in-out behavior like the FAQ page.
+
+Work Log:
+
+PART 1 — Seeker sidebar audit:
+- Audited all 10 seeker sidebar items. Results:
+  1. Dashboard → SeekerDashboard → ✓ Working (fetches /api/profile, /api/applications, /api/notifications, /api/jobs)
+  2. My Profile → SeekerProfile → ✓ Working (GET/PUT /api/profile, POST /api/profile/experience, /api/profile/education)
+  3. Skills & Proficiency → SeekerSkills → ✓ Working (GET/POST /api/skills, DELETE /api/skills/[id])
+  4. Resume & AI Analysis → SeekerResume → ✓ Working (POST /api/ai/extract-resume)
+  5. Recommended Jobs → SeekerRecommended → ✓ Working (GET /api/jobs, POST /api/ai/recommend)
+  6. Applications → SeekerApplications → ✓ Working (GET/POST /api/applications, PATCH for withdraw)
+  7. Skill Gap Analysis → SeekerSkillGap → ⚠️ Uses mock data only (the /api/ai/skill-gap endpoint exists but is not called)
+  8. News & Updates → PublicNewsPage → ✓ Working (GET /api/news)
+  9. Messages → SeekerMessages → ⚠️ Uses mock data only (no messages API exists)
+  10. Notifications → SeekerNotifications → ✓ Working (GET/PATCH /api/notifications)
+- All 10 components exist, use PageContainer, and have no undefined references or broken handlers.
+- 8 of 10 are fully functional with real APIs. 2 (Skill Gap, Messages) use mock data — noted as medium-priority follow-ups.
+
+PART 2 — Notifications clickable with FAQ-style expand/zoom:
+- Examined the FAQ component's expand/collapse behavior in guest/views.tsx:
+  * Uses `grid-rows-[1fr]` ↔ `grid-rows-[0fr]` transition with `cubic-bezier(0.16,1,0.3,1)` easing (500ms)
+  * `.faq-chevron` CSS class rotates the chevron 180° when open
+  * Icon tile changes from muted background to gradient when open
+  * Card gets border highlight + shadow + scale when open
+- Replicated the exact same pattern for SeekerNotifications (seeker/views.tsx):
+  * Each notification is now a clickable card that expands/collapses with the same grid-rows zoom animation
+  * Icon tile transitions from colored background to gradient (e.g., amber→orange for interviews, blue→cyan for applications, violet→purple for matches)
+  * Card scales up slightly (scale-[1.01]) and gets shadow + border highlight when open
+  * Chevron rotates 180° when open (using the .faq-chevron CSS class)
+  * Collapsed state shows a truncated preview of the message; expanded state shows the full message in a muted box
+  * Expanded detail panel includes: full message, full date/time, type badge, read/unread indicator
+  * Context-aware action buttons appear when expanded:
+    - Application notifications → "View applications" button
+    - Interview notifications → "View applications" button
+    - Match notifications → "View recommended jobs" button
+    - Message notifications → "Open messages" button
+    - Job posted notifications → "Browse jobs" button
+  * Clicking an unread notification auto-marks it as read (in addition to expanding)
+  * "Mark as read" button still available in the expanded panel
+  * All/Unread filter tabs preserved
+  * "Mark all read" button preserved
+- Applied the exact same treatment to EmployerNotifications (employer/views.tsx) so both roles get the same expand/zoom behavior.
+- Added ChevronDown to the seeker imports (was already present in employer imports).
+- Added `go` from useApp() to both notification components (needed for the context-aware action buttons).
+- Verified: 0 TypeScript errors from new code, 0 runtime errors, pages compile and load successfully.
+
+Stage Summary:
+- Seeker sidebar: 8/10 items fully functional with real APIs; 2 (Skill Gap, Messages) use mock data — noted for future wiring.
+- Notifications: now fully clickable with FAQ-style expand/zoom behavior on both seeker and employer dashboards. Each notification expands to show full message, metadata, and context-aware action buttons. The same grid-rows zoom animation, chevron rotation, gradient icon transition, and card scale effect from the FAQ page are now applied to notifications.
