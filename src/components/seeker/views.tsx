@@ -110,6 +110,8 @@ import {
   PenSquare,
   Users,
   Trophy,
+  AlertTriangle,
+  Loader2,
 } from "lucide-react";
 
 // ============================================================
@@ -1143,258 +1145,478 @@ PostgreSQL (intermediate), Figma (beginner).`;
 
 export function SeekerResume() {
   const { go } = useApp();
-  const [showProcessing, setShowProcessing] = useState(false);
-  const [showError, setShowError] = useState(false);
-  const [showSuccess, setShowSuccess] = useState(false);
-  const [errorMsg, setErrorMsg] = useState<string>("We couldn't parse the file. It may be corrupted, password-protected, or in an unsupported format.");
-  const [processingStep, setProcessingStep] = useState(0);
-  const [fileName, setFileName] = useState<string | null>(null);
+  const { toast } = useToast();
+  const { data: resumeData, loading: resumeLoading, refetch } = useFetch<any>("/api/resume");
+  const resume = resumeData?.resume;
+
+  const [uploading, setUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
+  const [dragOver, setDragOver] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const fileInputRef = React.useRef<HTMLInputElement>(null);
 
-  // Step-through animation for the processing card
+  const progressSteps = [
+    "Uploading CV file",
+    "Extracting text from document",
+    "AI analyzing skills & experience",
+    "Identifying strengths & weaknesses",
+    "Detecting skill gaps",
+    "Saving results to database",
+  ];
+
+  // Progress animation during upload
   useEffect(() => {
-    if (!showProcessing) return;
+    if (!uploading) return;
     // eslint-disable-next-line react-hooks/set-state-in-effect
-    setProcessingStep(0);
+    setUploadProgress(0);
     const id = setInterval(() => {
-      setProcessingStep((s) => Math.min(s + 1, 4));
-    }, 500);
+      setUploadProgress((s) => Math.min(s + 1, progressSteps.length - 1));
+    }, 800);
     return () => clearInterval(id);
-  }, [showProcessing]);
+  }, [uploading]);
 
-  const runExtraction = async (text: string, label: string) => {
-    setShowError(false);
-    setShowSuccess(false);
-    setShowProcessing(true);
-    setFileName(label);
-    try {
-      const res = await fetch("/api/ai/extract-resume", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text }),
-      });
-      const data = await res.json();
-      // Give the animation a moment to complete
-      await new Promise((r) => setTimeout(r, 1200));
-      setShowProcessing(false);
-      if (!data.ok) {
-        setErrorMsg(data.error ?? "AI extraction failed.");
-        setShowError(true);
-        return;
-      }
-      setShowSuccess(true);
-      // Store the AI result so the analysis page can display it
-      try {
-        sessionStorage.setItem("skillmatch.last-extraction", JSON.stringify({ result: data.result, fileName: label }));
-      } catch { /* ignore */ }
-      setTimeout(() => go("resume-analysis"), 900);
-    } catch {
-      setShowProcessing(false);
-      setErrorMsg("Network error. Please try again.");
-      setShowError(true);
-    }
-  };
-
-  const runFileExtraction = async (file: File) => {
-    setShowError(false);
-    setShowSuccess(false);
-    setShowProcessing(true);
-    setFileName(file.name);
+  const handleFile = async (file: File) => {
+    setError(null);
+    setUploading(true);
     try {
       const formData = new FormData();
       formData.append("file", file);
-      const res = await fetch("/api/ai/extract-resume", {
+      const res = await fetch("/api/resume/upload", {
         method: "POST",
         body: formData,
       });
       const data = await res.json();
-      await new Promise((r) => setTimeout(r, 1200));
-      setShowProcessing(false);
-      if (!data.ok) {
-        setErrorMsg(data.error ?? "AI extraction failed.");
-        setShowError(true);
-        return;
+      // Ensure the progress animation completes
+      await new Promise((r) => setTimeout(r, 1000));
+      setUploading(false);
+      if (data.ok) {
+        toast({
+          title: "CV analyzed successfully!",
+          description: `${data.skillsAdded ?? 0} new skills added to your profile. AI analysis complete.`,
+        });
+        refetch();
+      } else {
+        setError(data.error ?? "Failed to analyze CV. Please try again.");
       }
-      setShowSuccess(true);
-      try {
-        sessionStorage.setItem("skillmatch.last-extraction", JSON.stringify({ result: data.result, fileName: file.name }));
-      } catch { /* ignore */ }
-      setTimeout(() => go("resume-analysis"), 900);
     } catch {
-      setShowProcessing(false);
-      setErrorMsg("Network error. Please try again.");
-      setShowError(true);
+      setUploading(false);
+      setError("Network error. Please try again.");
     }
   };
 
   const onFileSelected = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    // Upload the file to the server which uses pdf-parse for PDFs and
-    // text-decoding for .txt/.md files.
-    await runFileExtraction(file);
-    // Reset input so the same file can be re-selected
+    await handleFile(file);
     if (fileInputRef.current) fileInputRef.current.value = "";
   };
 
-  const startAnalysis = () => {
-    runExtraction(SAMPLE_RESUME_TEXT, "Amara_Okafor_Resume_2026.pdf");
+  const onDrop = async (e: React.DragEvent) => {
+    e.preventDefault();
+    setDragOver(false);
+    const file = e.dataTransfer.files?.[0];
+    if (file) await handleFile(file);
   };
 
-  const steps = [
-    "Uploading file",
-    "Extracting text (OCR)",
-    "Detecting skills (NLP)",
-    "Normalizing against skill ontology",
-    "Inferring proficiency levels",
-  ];
+  const analysis = resume?.analysis;
+  const hasResume = !!resume;
 
   return (
     <PageContainer>
       <SectionHeader
         title="Resume & AI Analysis"
-        description="Upload your resume and our AI will extract, normalize, and verify your skills."
+        description="Upload your CV and our AI (Gemini) will dynamically analyze your skills, strengths, weaknesses, experience, and skill gaps."
+        actions={
+          hasResume && !uploading ? (
+            <Button variant="outline" size="sm" onClick={() => fileInputRef.current?.click()}>
+              <RefreshCw className="h-3.5 w-3.5" /> Replace CV
+            </Button>
+          ) : undefined
+        }
       />
 
-      <div className="mt-6 grid gap-4 lg:grid-cols-3">
-        <div className="lg:col-span-2 space-y-4">
-          {/* Upload card */}
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept=".pdf,.txt,.md"
+        onChange={onFileSelected}
+        className="hidden"
+        aria-hidden="true"
+      />
+
+      {/* Upload zone — shown when no CV or uploading */}
+      {!hasResume && !uploading && (
+        <div className="mt-6">
+          <div
+            onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
+            onDragLeave={() => setDragOver(false)}
+            onDrop={onDrop}
+            className={cn(
+              "rounded-2xl border-2 border-dashed p-10 text-center transition-all",
+              dragOver ? "border-primary bg-primary/5 scale-[1.01]" : "border-border bg-muted/30"
+            )}
+          >
+            <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-primary/10 text-primary">
+              <Upload className="h-7 w-7" />
+            </div>
+            <p className="mt-4 text-base font-semibold">Drop your CV here</p>
+            <p className="text-xs text-muted-foreground">or click to browse — PDF, TXT, MD (max 5MB)</p>
+            <Button className="mt-5" onClick={() => fileInputRef.current?.click()}>
+              <Upload className="h-3.5 w-3.5" /> Choose CV file
+            </Button>
+            <div className="mt-4 flex items-center justify-center gap-4 text-[11px] text-muted-foreground">
+              <span className="flex items-center gap-1"><FileText className="h-3 w-3" /> PDF supported</span>
+              <span className="flex items-center gap-1"><CheckCircle2 className="h-3 w-3 text-emerald-500" /> AI-powered analysis</span>
+              <span className="flex items-center gap-1"><Lock className="h-3 w-3" /> Private & secure</span>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Upload progress */}
+      {uploading && (
+        <Card className="mt-6 border-primary/30">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-sm flex items-center gap-2">
+              <Loader2 className="h-4 w-4 text-primary animate-spin" /> AI is analyzing your CV…
+            </CardTitle>
+            <CardDescription>This usually takes 10–15 seconds. The AI dynamically reads your CV content.</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-2">
+            {progressSteps.map((label, i) => {
+              const done = i < uploadProgress;
+              const active = i === uploadProgress;
+              return (
+                <div key={label} className="flex items-center gap-2 text-xs">
+                  {done ? (
+                    <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" />
+                  ) : active ? (
+                    <Loader2 className="h-3.5 w-3.5 animate-spin text-primary" />
+                  ) : (
+                    <div className="h-3.5 w-3.5 rounded-full border-2 border-muted-foreground/30" />
+                  )}
+                  <span className={done || active ? "font-medium" : "text-muted-foreground"}>{label}</span>
+                </div>
+              );
+            })}
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Error */}
+      {error && !uploading && (
+        <div className="mt-6">
+          <ErrorState
+            title="CV analysis failed"
+            description={error}
+            action={<Button size="sm" variant="outline" onClick={() => { setError(null); fileInputRef.current?.click(); }}>Try again</Button>}
+          />
+        </div>
+      )}
+
+      {/* Loading existing resume */}
+      {resumeLoading && !uploading && (
+        <LoadingState label="Loading your CV analysis…" rows={3} />
+      )}
+
+      {/* ===== AI ANALYSIS RESULTS ===== */}
+      {hasResume && !uploading && analysis && !resumeLoading && (
+        <div className="mt-6 space-y-6">
+          {/* CV file info banner */}
+          <div className="flex items-center gap-3 rounded-xl border border-emerald-200 bg-emerald-50 p-4">
+            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-emerald-100 text-emerald-700">
+              <FileText className="h-5 w-5" />
+            </div>
+            <div className="min-w-0 flex-1">
+              <p className="text-sm font-semibold text-emerald-900">{resume.fileName}</p>
+              <p className="text-xs text-emerald-700">
+                Uploaded {timeAgo(resume.createdAt)} · Analyzed by AI {resume.analyzedAt ? timeAgo(resume.analyzedAt) : "—"}
+              </p>
+            </div>
+            <Badge variant="outline" className="bg-emerald-100 text-emerald-700 border-emerald-300">
+              <CheckCircle2 className="h-3 w-3 mr-1" /> Analyzed
+            </Badge>
+          </div>
+
+          {/* Summary + Career Level */}
           <Card>
             <CardHeader className="pb-3">
               <CardTitle className="text-sm flex items-center gap-2">
-                <Upload className="h-4 w-4 text-primary" /> Upload resume
+                <Sparkles className="h-4 w-4 text-primary" /> AI Summary
               </CardTitle>
-              <CardDescription>PDF, DOCX, or TXT up to 5MB. We'll process it locally before sending for AI analysis.</CardDescription>
             </CardHeader>
             <CardContent>
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept=".pdf,.docx,.txt,.md"
-                onChange={onFileSelected}
-                className="hidden"
-                aria-hidden="true"
-              />
-              <div className="rounded-xl border-2 border-dashed border-border bg-muted/30 p-8 text-center">
-                <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-primary/10 text-primary">
-                  <FileText className="h-6 w-6" />
-                </div>
-                <p className="mt-3 text-sm font-semibold">Drop your resume here</p>
-                <p className="text-xs text-muted-foreground">or click to browse</p>
-                <div className="mt-4 flex flex-wrap justify-center gap-2">
-                  <Button size="sm" onClick={() => fileInputRef.current?.click()}>
-                    <Upload className="h-3.5 w-3.5" /> Choose file
-                  </Button>
-                  <Button size="sm" variant="outline" onClick={startAnalysis}>
-                    <Sparkles className="h-3.5 w-3.5" /> Try with sample resume
-                  </Button>
-                </div>
+              <p className="text-sm leading-relaxed text-foreground/90">{analysis.summary}</p>
+              <div className="mt-4 flex flex-wrap gap-2">
+                <Badge variant="outline" className="bg-violet-50 text-violet-700 border-violet-200">
+                  <Award className="h-3 w-3 mr-1" /> {analysis.careerLevel}
+                </Badge>
+                <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200">
+                  <Briefcase className="h-3 w-3 mr-1" /> {analysis.yearsOfExperience} years experience
+                </Badge>
+                <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-200">
+                  <CheckCircle2 className="h-3 w-3 mr-1" /> {analysis.skills?.length ?? 0} skills detected
+                </Badge>
               </div>
+              {analysis.recommendedRoles?.length > 0 && (
+                <div className="mt-3">
+                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">Recommended Roles</p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {analysis.recommendedRoles.map((role: string, i: number) => (
+                      <Badge key={i} variant="outline" className="bg-cyan-50 text-cyan-700 border-cyan-200 text-xs">
+                        <Target className="h-3 w-3 mr-1" /> {role}
+                      </Badge>
+                    ))}
+                  </div>
+                </div>
+              )}
             </CardContent>
           </Card>
 
-          {/* Processing state */}
-          {showProcessing && (
-            <Card className="border-primary/30">
-              <CardHeader className="pb-3">
-                <CardTitle className="text-sm flex items-center gap-2">
-                  <Cpu className="h-4 w-4 text-primary animate-pulse" /> AI is analyzing {fileName ?? "your resume"}…
-                </CardTitle>
-                <CardDescription>This usually takes 5–10 seconds.</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-2">
-                {steps.map((label, i) => {
-                  const done = i < processingStep;
-                  const active = i === processingStep;
-                  return (
-                    <div key={label} className="flex items-center gap-2 text-xs">
-                      {done ? (
-                        <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" />
-                      ) : active ? (
-                        <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-primary border-t-transparent" />
-                      ) : (
-                        <div className="h-3.5 w-3.5 rounded-full border-2 border-muted-foreground/30" />
-                      )}
-                      <span className={done || active ? "font-medium" : "text-muted-foreground"}>{label}</span>
-                    </div>
-                  );
-                })}
-              </CardContent>
-            </Card>
-          )}
-
-          {/* Error state */}
-          {showError && (
-            <ErrorState
-              title="Resume processing failed"
-              description={errorMsg}
-              action={
-                <div className="flex gap-2">
-                  <Button variant="outline" size="sm" onClick={() => setShowError(false)}>Dismiss</Button>
-                  <Button size="sm" onClick={startAnalysis}>
-                    <RefreshCw className="h-3.5 w-3.5" /> Try with sample
-                  </Button>
-                </div>
-              }
-            />
-          )}
-
-          {/* Success state */}
-          {showSuccess && (
-            <SuccessBanner
-              title="Resume processed successfully"
-              description="AI extraction complete. Redirecting to your analysis…"
-              onClose={() => setShowSuccess(false)}
-            />
-          )}
-
-          {/* Existing resume */}
-          {!showProcessing && !showError && (
+          {/* Skills */}
+          {analysis.skills?.length > 0 && (
             <Card>
               <CardHeader className="pb-3">
-                <CardTitle className="text-sm">Current resume</CardTitle>
+                <CardTitle className="text-sm flex items-center gap-2">
+                  <Sparkles className="h-4 w-4 text-primary" /> Detected Skills ({analysis.skills.length})
+                </CardTitle>
+                <CardDescription>AI-extracted from your CV with proficiency levels and evidence</CardDescription>
               </CardHeader>
               <CardContent>
-                <div className="flex items-center gap-3 rounded-lg border border-border bg-card p-3">
-                  <div className="flex h-10 w-10 items-center justify-center rounded-md bg-rose-50 text-rose-600">
-                    <FileText className="h-5 w-5" />
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm font-semibold">{resumeAnalysis.fileName}</p>
-                    <p className="text-xs text-muted-foreground">
-                      {resumeAnalysis.fileSize} · uploaded {resumeAnalysis.uploadedAt}
-                    </p>
-                  </div>
-                  <Button variant="outline" size="sm" onClick={() => go("resume-analysis")}>
-                    View analysis
-                  </Button>
+                <div className="space-y-2">
+                  {analysis.skills.map((skill: any, i: number) => (
+                    <div key={i} className="flex items-start gap-3 rounded-lg border border-border bg-card p-3">
+                      <div className={cn(
+                        "flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-xs font-bold",
+                        skill.proficiency === "expert" ? "bg-emerald-100 text-emerald-700" :
+                        skill.proficiency === "advanced" ? "bg-blue-100 text-blue-700" :
+                        skill.proficiency === "intermediate" ? "bg-violet-100 text-violet-700" :
+                        "bg-slate-100 text-slate-700"
+                      )}>
+                        {skill.name.slice(0, 2).toUpperCase()}
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-2">
+                          <p className="text-sm font-semibold">{skill.name}</p>
+                          <Badge variant="outline" className="text-[10px] capitalize">{skill.proficiency}</Badge>
+                          <Badge variant="outline" className="text-[10px] bg-muted/50">{skill.category}</Badge>
+                          {skill.yearsOfExperience > 0 && (
+                            <span className="text-[10px] text-muted-foreground">{skill.yearsOfExperience}y exp</span>
+                          )}
+                        </div>
+                        {skill.evidence && (
+                          <p className="mt-0.5 text-xs text-muted-foreground">{skill.evidence}</p>
+                        )}
+                      </div>
+                    </div>
+                  ))}
                 </div>
               </CardContent>
             </Card>
           )}
-        </div>
 
-        <div className="space-y-4">
-          <Card>
-            <CardHeader className="pb-3">
-              <CardTitle className="text-sm flex items-center gap-2">
-                <Lightbulb className="h-4 w-4 text-primary" /> How AI analysis works
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-3 text-xs text-muted-foreground">
-              <p>1. <span className="font-medium text-foreground">Upload</span> — your file is processed for text extraction (OCR for scanned PDFs).</p>
-              <p>2. <span className="font-medium text-foreground">Extract</span> — an NLP model detects raw skill mentions, education, and experience.</p>
-              <p>3. <span className="font-medium text-foreground">Normalize</span> — raw skills are mapped to our skill ontology (e.g. "React.js" → "React").</p>
-              <p>4. <span className="font-medium text-foreground">Infer proficiency</span> — based on years of experience and contextual signals.</p>
-              <p>5. <span className="font-medium text-foreground">Review & edit</span> — you can correct any extraction before it's saved.</p>
-            </CardContent>
-          </Card>
+          {/* Strengths + Weaknesses — side by side */}
+          <div className="grid gap-4 lg:grid-cols-2">
+            {/* Strengths */}
+            {analysis.strengths?.length > 0 && (
+              <Card className="border-emerald-200">
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-sm flex items-center gap-2">
+                    <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-emerald-100 text-emerald-700">
+                      <Award className="h-4 w-4" />
+                    </div>
+                    Strengths ({analysis.strengths.length})
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  {analysis.strengths.map((s: any, i: number) => (
+                    <div key={i} className="rounded-lg border border-emerald-100 bg-emerald-50/50 p-3">
+                      <p className="text-sm font-semibold text-emerald-900">{s.title}</p>
+                      <p className="mt-1 text-xs text-emerald-800">{s.description}</p>
+                    </div>
+                  ))}
+                </CardContent>
+              </Card>
+            )}
 
+            {/* Weaknesses */}
+            {analysis.weaknesses?.length > 0 && (
+              <Card className="border-amber-200">
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-sm flex items-center gap-2">
+                    <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-amber-100 text-amber-700">
+                      <AlertTriangle className="h-4 w-4" />
+                    </div>
+                    Areas for Improvement ({analysis.weaknesses.length})
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  {analysis.weaknesses.map((w: any, i: number) => (
+                    <div key={i} className="rounded-lg border border-amber-100 bg-amber-50/50 p-3">
+                      <p className="text-sm font-semibold text-amber-900">{w.title}</p>
+                      <p className="mt-1 text-xs text-amber-800">{w.description}</p>
+                      {w.recommendation && (
+                        <div className="mt-2 flex items-start gap-1.5 rounded-md bg-amber-100/50 p-2">
+                          <Lightbulb className="h-3 w-3 shrink-0 text-amber-600 mt-0.5" />
+                          <p className="text-xs text-amber-800">{w.recommendation}</p>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </CardContent>
+              </Card>
+            )}
+          </div>
+
+          {/* Experience */}
+          {analysis.experience?.length > 0 && (
+            <Card>
+              <CardHeader className="pb-3">
+                <CardTitle className="text-sm flex items-center gap-2">
+                  <Briefcase className="h-4 w-4 text-primary" /> Work Experience ({analysis.experience.length})
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-4">
+                  {analysis.experience.map((exp: any, i: number) => (
+                    <div key={i} className="relative pl-6 border-l-2 border-border">
+                      <div className="absolute left-[-7px] top-1 h-3 w-3 rounded-full bg-primary" />
+                      <div className="flex items-start justify-between gap-2">
+                        <div>
+                          <p className="text-sm font-semibold">{exp.title}</p>
+                          <p className="text-xs text-muted-foreground">{exp.company}</p>
+                        </div>
+                        <div className="text-right">
+                          <p className="text-[11px] text-muted-foreground">{exp.startDate} — {exp.endDate}</p>
+                          {exp.duration && <p className="text-[10px] text-primary font-medium">{exp.duration}</p>}
+                        </div>
+                      </div>
+                      {exp.highlights?.length > 0 && (
+                        <ul className="mt-2 space-y-1">
+                          {exp.highlights.map((h: string, j: number) => (
+                            <li key={j} className="flex gap-2 text-xs text-muted-foreground">
+                              <Check className="h-3 w-3 shrink-0 text-emerald-600 mt-0.5" /> {h}
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Skill Gaps */}
+          {analysis.skillGaps?.length > 0 && (
+            <Card className="border-rose-200">
+              <CardHeader className="pb-3">
+                <CardTitle className="text-sm flex items-center gap-2">
+                  <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-rose-100 text-rose-700">
+                    <TrendingUp className="h-4 w-4" />
+                  </div>
+                  Skill Gaps ({analysis.skillGaps.length})
+                </CardTitle>
+                <CardDescription>Skills you're missing for your career level — with AI-recommended learning paths</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                {analysis.skillGaps.map((gap: any, i: number) => (
+                  <div key={i} className="rounded-lg border border-rose-100 bg-rose-50/50 p-3">
+                    <div className="flex items-center gap-2">
+                      <p className="text-sm font-semibold text-rose-900">{gap.skill}</p>
+                      <Badge variant="outline" className={cn(
+                        "text-[10px]",
+                        gap.importance === "critical" ? "bg-rose-100 text-rose-700 border-rose-300" :
+                        gap.importance === "recommended" ? "bg-amber-100 text-amber-700 border-amber-300" :
+                        "bg-slate-100 text-slate-600 border-slate-300"
+                      )}>
+                        {gap.importance}
+                      </Badge>
+                    </div>
+                    <p className="mt-1 text-xs text-rose-800">{gap.reason}</p>
+                    {gap.learningPath && (
+                      <div className="mt-2 flex items-start gap-1.5 rounded-md bg-white/60 p-2">
+                        <Lightbulb className="h-3 w-3 shrink-0 text-amber-600 mt-0.5" />
+                        <p className="text-xs text-foreground/80"><span className="font-medium">Learning path:</span> {gap.learningPath}</p>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Education */}
+          {analysis.education?.length > 0 && (
+            <Card>
+              <CardHeader className="pb-3">
+                <CardTitle className="text-sm flex items-center gap-2">
+                  <GraduationCap className="h-4 w-4 text-primary" /> Education ({analysis.education.length})
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-3">
+                  {analysis.education.map((edu: any, i: number) => (
+                    <div key={i} className="flex items-start gap-3 rounded-lg border border-border bg-card p-3">
+                      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-blue-100 text-blue-700">
+                        <GraduationCap className="h-4 w-4" />
+                      </div>
+                      <div>
+                        <p className="text-sm font-semibold">{edu.degree} in {edu.field}</p>
+                        <p className="text-xs text-muted-foreground">{edu.institution}</p>
+                        <p className="text-[11px] text-muted-foreground">{edu.startDate} — {edu.endDate}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Re-upload notice */}
           <InfoCallout>
-            <span className="font-medium">Privacy first.</span> Your resume is processed to extract skills and is never shared with employers. Only your verified skill profile is visible to them.
+            <span className="font-medium">Dynamic AI analysis:</span> If you upload a new CV, the AI will automatically re-analyze it and update all results — skills, strengths, weaknesses, experience, and skill gaps. Your previously extracted skills remain on your profile.
           </InfoCallout>
         </div>
-      </div>
+      )}
+
+      {/* Empty state when no resume and not uploading */}
+      {!hasResume && !uploading && !error && !resumeLoading && (
+        <div className="mt-6 grid gap-4 lg:grid-cols-3">
+          <div className="lg:col-span-2 space-y-4">
+            <Card>
+              <CardHeader className="pb-3">
+                <CardTitle className="text-sm flex items-center gap-2">
+                  <Lock className="h-4 w-4 text-primary" /> CV Required to Apply
+                </CardTitle>
+                <CardDescription>You must upload your CV before you can apply for jobs. The AI will analyze it automatically.</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800">
+                  <AlertTriangle className="h-4 w-4 inline mr-1" />
+                  <span className="font-medium">Important:</span> Upload your CV to unlock job applications. Our AI (Gemini) will dynamically extract your skills, identify your strengths and weaknesses, and recommend learning paths for skill gaps.
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+          <div className="space-y-4">
+            <Card>
+              <CardHeader className="pb-3">
+                <CardTitle className="text-sm flex items-center gap-2">
+                  <Lightbulb className="h-4 w-4 text-primary" /> How AI Analysis Works
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-2 text-xs text-muted-foreground">
+                <p>1. <span className="font-medium text-foreground">Upload</span> — your CV is processed to extract text.</p>
+                <p>2. <span className="font-medium text-foreground">AI Analysis</span> — Gemini AI reads your CV and dynamically identifies skills, strengths, weaknesses, and experience.</p>
+                <p>3. <span className="font-medium text-foreground">Skill Gaps</span> — the AI identifies missing skills for your career level and recommends learning paths.</p>
+                <p>4. <span className="font-medium text-foreground">Auto-update</span> — re-upload your CV anytime and the AI re-analyzes everything automatically.</p>
+                <p>5. <span className="font-medium text-foreground">DB Integration</span> — all results are saved to the database and linked to your profile.</p>
+              </CardContent>
+            </Card>
+          </div>
+        </div>
+      )}
     </PageContainer>
   );
 }

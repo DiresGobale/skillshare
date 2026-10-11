@@ -119,6 +119,18 @@ export async function POST(req: NextRequest) {
     const user = await db.user.findUnique({ where: { email: session.user.email } });
     if (!user) return NextResponse.json({ ok: false, error: "User not found" }, { status: 404 });
 
+    // CV requirement: seeker must have uploaded a CV before applying
+    const hasResume = await db.resume.findFirst({
+      where: { userId: user.id },
+      orderBy: { createdAt: "desc" },
+    });
+    if (!hasResume) {
+      return NextResponse.json({
+        ok: false,
+        error: "You must upload your CV before applying for jobs. Please go to Resume & AI Analysis to upload your CV.",
+      }, { status: 400 });
+    }
+
     const job = await db.job.findUnique({ where: { id: jobId } });
     if (!job) return NextResponse.json({ ok: false, error: "Job not found" }, { status: 404 });
     if (job.status !== "published") return NextResponse.json({ ok: false, error: "This job is no longer accepting applications." }, { status: 400 });

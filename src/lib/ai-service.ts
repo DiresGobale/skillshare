@@ -148,7 +148,188 @@ Normalization rules:
 }
 
 // ============================================================
-// 2. JOB / TALENT MATCHING
+// 1b. COMPREHENSIVE CV ANALYSIS — skills, strengths, weaknesses, experience, skill gaps
+// ============================================================
+export interface CVAnalysisResult {
+  // Detected skills with proficiency and category
+  skills: {
+    name: string;
+    category: string;
+    proficiency: ProficiencyLevel;
+    yearsOfExperience: number;
+    evidence: string; // why the AI assigned this proficiency
+  }[];
+  // Candidate strengths — what they excel at
+  strengths: { title: string; description: string }[];
+  // Candidate weaknesses — areas for improvement
+  weaknesses: { title: string; description: string; recommendation: string }[];
+  // Experience summary
+  experience: {
+    company: string;
+    title: string;
+    startDate: string;
+    endDate: string;
+    duration: string; // e.g. "2 years 3 months"
+    highlights: string[]; // key achievements
+  }[];
+  yearsOfExperience: number;
+  // Skill gaps — skills the candidate is missing for their apparent career level/role
+  skillGaps: {
+    skill: string;
+    importance: "critical" | "recommended" | "optional";
+    reason: string;
+    learningPath: string;
+  }[];
+  // Overall summary
+  summary: string;
+  // Career level assessment
+  careerLevel: string; // e.g. "Mid-level", "Senior", "Junior"
+  // Recommended roles based on the CV
+  recommendedRoles: string[];
+  // Education
+  education: {
+    institution: string;
+    degree: string;
+    field: string;
+    startDate: string;
+    endDate: string;
+  }[];
+}
+
+export async function analyzeResume(rawText: string): Promise<CVAnalysisResult> {
+  const system = `You are an expert AI career analyst and technical recruiter for a global recruitment platform.
+Analyze the candidate's CV/resume text provided and produce a comprehensive, dynamic analysis.
+All output MUST be in English.
+
+Return ONLY valid JSON (no markdown, no prose, no code fences) with this exact schema:
+{
+  "skills": [{
+    "name": "canonical skill name (e.g. React, TypeScript, PostgreSQL)",
+    "category": "Frontend | Backend | DevOps | Database | Mobile | Design | Soft Skills | Other",
+    "proficiency": "beginner | intermediate | advanced | expert",
+    "yearsOfExperience": number,
+    "evidence": "1 sentence explaining why this proficiency was assigned based on the CV content"
+  }],
+  "strengths": [{
+    "title": "short title (e.g. 'Strong full-stack experience')",
+    "description": "2-3 sentences explaining this strength with evidence from the CV"
+  }],
+  "weaknesses": [{
+    "title": "short title (e.g. 'Limited cloud experience')",
+    "description": "2-3 sentences explaining this weakness",
+    "recommendation": "1-2 sentences with actionable advice on how to improve"
+  }],
+  "experience": [{
+    "company": "company name",
+    "title": "job title",
+    "startDate": "YYYY-MM or year string",
+    "endDate": "YYYY-MM or 'Present'",
+    "duration": "human-readable duration (e.g. '2 years 3 months')",
+    "highlights": ["key achievement 1", "key achievement 2"]
+  }],
+  "yearsOfExperience": number,
+  "skillGaps": [{
+    "skill": "missing skill name",
+    "importance": "critical | recommended | optional",
+    "reason": "why this skill is important for the candidate's career level/role",
+    "learningPath": "suggested way to learn this skill (course, project, certification)"
+  }],
+  "summary": "3-4 sentence overall assessment of the candidate's profile, strengths, and market position",
+  "careerLevel": "Junior | Mid-level | Senior | Lead | Principal (based on experience and skills)",
+  "recommendedRoles": ["3-5 job titles this candidate is well-suited for"],
+  "education": [{
+    "institution": "school/university name",
+    "degree": "degree type (e.g. B.Sc., M.Sc., Diploma)",
+    "field": "field of study",
+    "startDate": "YYYY",
+    "endDate": "YYYY"
+  }]
+}
+
+Analysis rules:
+- Be dynamic: base all analysis on the actual CV content. Do NOT use predefined or static results.
+- Identify skills from explicit mentions AND contextual inference (e.g. "built a React app" → React skill).
+- Assign proficiency based on evidence: "led", "architected", "designed" → expert; "experience with", "worked on" → intermediate/advanced; "familiar", "learning" → beginner.
+- Identify strengths as areas where the candidate demonstrates depth, leadership, or impact.
+- Identify weaknesses as gaps between the candidate's current level and what's expected at their career level.
+- For skill gaps, consider what a professional at their career level should know but doesn't mention.
+- Calculate yearsOfExperience from the earliest experience date to the latest (or present).
+- Determine careerLevel from years of experience + skill depth + role seniority.
+- All text must be in English.
+- If the CV is very short or lacks detail, still provide your best analysis based on what's available.`;
+
+  try {
+    const zai = await getZai();
+    const completion = await zai.chat.completions.create({
+      messages: [
+        { role: "system", content: system },
+        { role: "user", content: `Analyze this CV/resume:\n\n${rawText}` },
+      ],
+      thinking: { type: "disabled" },
+    });
+    const content = completion.choices[0]?.message?.content ?? "{}";
+    const cleaned = content.replace(/```json\s*|\s*```/g, "").trim();
+    const parsed = JSON.parse(cleaned);
+
+    return {
+      skills: (parsed.skills ?? []).map((s: any) => ({
+        name: s.name ?? "Unknown",
+        category: s.category ?? "Other",
+        proficiency: (s.proficiency ?? "intermediate") as ProficiencyLevel,
+        yearsOfExperience: typeof s.yearsOfExperience === "number" ? s.yearsOfExperience : 0,
+        evidence: s.evidence ?? "",
+      })),
+      strengths: (parsed.strengths ?? []).map((s: any) => ({
+        title: s.title ?? "",
+        description: s.description ?? "",
+      })),
+      weaknesses: (parsed.weaknesses ?? []).map((w: any) => ({
+        title: w.title ?? "",
+        description: w.description ?? "",
+        recommendation: w.recommendation ?? "",
+      })),
+      experience: (parsed.experience ?? []).map((e: any) => ({
+        company: e.company ?? "",
+        title: e.title ?? "",
+        startDate: e.startDate ?? "",
+        endDate: e.endDate ?? "",
+        duration: e.duration ?? "",
+        highlights: e.highlights ?? [],
+      })),
+      yearsOfExperience: typeof parsed.yearsOfExperience === "number" ? parsed.yearsOfExperience : 0,
+      skillGaps: (parsed.skillGaps ?? []).map((g: any) => ({
+        skill: g.skill ?? "",
+        importance: (g.importance ?? "recommended") as "critical" | "recommended" | "optional",
+        reason: g.reason ?? "",
+        learningPath: g.learningPath ?? "",
+      })),
+      summary: parsed.summary ?? "",
+      careerLevel: parsed.careerLevel ?? "Mid-level",
+      recommendedRoles: parsed.recommendedRoles ?? [],
+      education: (parsed.education ?? []).map((e: any) => ({
+        institution: e.institution ?? "",
+        degree: e.degree ?? "",
+        field: e.field ?? "",
+        startDate: e.startDate ?? "",
+        endDate: e.endDate ?? "",
+      })),
+    };
+  } catch (err) {
+    // Graceful fallback — return a minimal structure so the UI doesn't crash
+    return {
+      skills: [],
+      strengths: [],
+      weaknesses: [],
+      experience: [],
+      yearsOfExperience: 0,
+      skillGaps: [],
+      summary: "Unable to complete AI analysis at this time. Please try re-uploading your CV.",
+      careerLevel: "Unknown",
+      recommendedRoles: [],
+      education: [],
+    };
+  }
+}
 // ============================================================
 export interface MatchInput {
   candidate: {

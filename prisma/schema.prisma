@@ -41,6 +41,7 @@ model User {
   notifications Notification[]
   auditLogs    AuditLog[]
   news         News[]     @relation("NewsAuthor")
+  resumes      Resume[]
 
   // 2FA
   twoFactorSecretHash String?
@@ -320,4 +321,26 @@ model News {
   @@index([status])
   @@index([category])
   @@index([publishedAt])
+}
+
+// ============================================================
+// RESUME / CV — uploaded CVs with AI analysis results
+// ============================================================
+model Resume {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  fileName    String                        // original uploaded filename
+  rawText     String                        // extracted text from the CV
+  fileSize    Int                           // file size in bytes
+  mimeType    String   @default("application/pdf")
+  // AI analysis result stored as JSON string:
+  // { skills, strengths, weaknesses, experience, skillGaps, summary, yearsOfExperience, ... }
+  analysis    String   @default("{}")
+  analyzedAt  DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([userId])
+  @@index([createdAt])
 }
