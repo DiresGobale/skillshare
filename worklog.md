@@ -845,3 +845,41 @@ Stage Summary:
 - RecruitmentPipeline visual component shows progress on both seeker and employer sides.
 - All data (status, scores, dates, notes, job assignment, rejection info) persisted to the database.
 - 0 TypeScript errors in new code (1 pre-existing error in unrelated code).
+
+---
+Task ID: 19
+Agent: main (Super Z)
+Task: (Re-verification) Confirm the 7-step recruitment pipeline is fully functional — all 7 steps, strict no-skip ordering, auto-notifications, DB persistence.
+
+Work Log:
+- Verified dev server is running and all key files exist: recruitment.ts, recruitment-pipeline.tsx, applications/route.ts, exam-schedule/route.ts, interview-schedule/route.ts.
+- Re-ran the full 7-step pipeline end-to-end on a fresh application:
+  1. ✅ Step 1: Seeker applied with cover letter (min 50 chars enforced) → status="applied"
+  2. ✅ Step 2: Employer started review → "reviewing" → passed review → "review_passed"
+  3. ✅ Step 3: Employer scheduled exam → 1 candidate auto-notified with exam date/time/location/instructions → status="exam_notified"
+  4. ✅ Step 4: Employer entered exam score (85/100, passed) → status="exam_passed"
+  5. ✅ Step 5: Employer scheduled interview → 1 candidate auto-notified → entered oral=88 + practical=82 → overall=85 → status="interview_passed"
+  6. ✅ Step 6: Employer selected candidate → status="selected"
+  7. ✅ Step 7: Employer finalized hiring with job assignment text → status="hired"
+- Verified 8 automatic notifications sent to the seeker at each transition:
+  1. "Application submitted" (Step 1)
+  2. "Application selected!" (Step 2 — "Congratulations! Your application has been selected. Please prepare for the next stage.")
+  3. "Written exam notification" (Step 3 — exam date, time, location, instructions)
+  4. "Written exam passed!" (Step 4 — "Congratulations! You have passed the written examination. Please prepare for the next interview stage.")
+  5. "Interview scheduled" (Step 5 — interview date, time, format, instructions)
+  6. "Interview passed!" (Step 5 — oral/practical/overall scores)
+  7. "Congratulations! You have been selected!" (Step 6 — "You have successfully completed the recruitment process. You have been selected for this position.")
+  8. "Welcome to the team!" (Step 7 — job assignment details)
+- Verified skip prevention on a fresh application:
+  * applied → hire (skip 6 steps): BLOCKED "Cannot move to hired from applied. Required prerequisite: selected."
+  * applied → interview_complete (skip 4 steps): BLOCKED "Required prerequisite: interview_notified."
+  * applied → select (skip 5 steps): BLOCKED "Required prerequisite: interview_passed."
+  * Application remained at Step 1 after all skip attempts — no skip succeeded.
+- Verified all data persisted to DB: coverLetter, examScore, oralScore, practicalScore, interviewOverallScore, selectedAt, hiredAt, jobAssignment, reviewNotes, examNotes, interviewNotes, examSchedule, interviewSchedule.
+
+Stage Summary:
+- The 7-step recruitment pipeline built in Task 18 is fully operational and verified.
+- All 7 steps work in order with no skipping allowed.
+- 8 automatic notifications sent at each stage transition with the exact messages specified.
+- All candidate status, results, dates, and recruitment progress saved to the database.
+- The system is ready for use.
