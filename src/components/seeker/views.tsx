@@ -1716,48 +1716,97 @@ export function SeekerResumeAnalysis() {
 // ============================================================
 // RECOMMENDED JOBS LIST
 // ============================================================
+// RECOMMENDED JOBS — clean, standard, fully DB-integrated
+// ============================================================
 export function SeekerRecommended() {
-  const { go } = useApp();
+  const { go, selectedJobId } = useApp();
+  const { toast } = useToast();
   const { data, loading, refetch } = useFetch<any>("/api/jobs");
-  const [sortBy, setSortBy] = useState("recent");
-  const [filter, setFilter] = useState("all");
+  const { data: profileData } = useFetch<any>("/api/profile");
+
+  // Filters + search + sort state
+  const [search, setSearch] = useState("");
+  const [filterRemote, setFilterRemote] = useState<string>("all");
+  const [filterType, setFilterType] = useState<string>("all");
+  const [filterCategory, setFilterCategory] = useState<string>("all");
+  const [sortBy, setSortBy] = useState<string>("recent");
   const [aiLoading, setAiLoading] = useState(false);
+  const [aiResult, setAiResult] = useState<any>(null);
   const [aiError, setAiError] = useState<string | null>(null);
-  const [aiReranked, setAiReranked] = useState(false);
 
-  const dbJobs: any[] = data?.jobs ?? [];
+  const allJobs: any[] = data?.jobs ?? [];
+  const profile = profileData?.profile;
 
-  // Re-rank jobs using the AI recommendation endpoint
+  // Build filter option lists from DB data
+  const categories = Array.from(new Set(allJobs.map((j) => j.category).filter(Boolean)));
+  const types = Array.from(new Set(allJobs.map((j) => j.type).filter(Boolean)));
+  const remoteOptions = Array.from(new Set(allJobs.map((j) => j.remote).filter(Boolean)));
+
+  // Apply search + filters
+  let filtered = [...allJobs];
+  if (search.trim()) {
+    const q = search.toLowerCase();
+    filtered = filtered.filter((j) =>
+      j.title?.toLowerCase().includes(q) ||
+      j.company?.toLowerCase().includes(q) ||
+      j.location?.toLowerCase().includes(q) ||
+      j.description?.toLowerCase().includes(q)
+    );
+  }
+  if (filterRemote !== "all") filtered = filtered.filter((j) => j.remote === filterRemote);
+  if (filterType !== "all") filtered = filtered.filter((j) => j.type === filterType);
+  if (filterCategory !== "all") filtered = filtered.filter((j) => j.category === filterCategory);
+
+  // Sort
+  if (sortBy === "recent") {
+    filtered.sort((a, b) => new Date(b.postedAt).getTime() - new Date(a.postedAt).getTime());
+  } else if (sortBy === "salary-high") {
+    filtered.sort((a, b) => (b.salaryMax || 0) - (a.salaryMax || 0));
+  } else if (sortBy === "salary-low") {
+    filtered.sort((a, b) => (a.salaryMin || 999999) - (b.salaryMin || 999999));
+  } else if (sortBy === "title") {
+    filtered.sort((a, b) => (a.title || "").localeCompare(b.title || ""));
+  }
+
+  // Stats
+  const stats = {
+    total: allJobs.length,
+    remote: allJobs.filter((j) => j.remote === "remote").length,
+    hybrid: allJobs.filter((j) => j.remote === "hybrid").length,
+    onsite: allJobs.filter((j) => j.remote === "onsite").length,
+  };
+
+  // AI re-rank using the REAL seeker profile
   const refreshWithAI = async () => {
     setAiLoading(true);
     setAiError(null);
+    setAiResult(null);
     try {
+      const candidate = {
+        name: profile?.name || "Candidate",
+        title: profile?.title || "",
+        skills: (profile?.skills ?? []).map((s: any) => ({
+          name: s.name,
+          proficiency: s.proficiency,
+          verified: s.verified === "verified",
+        })),
+        experienceYears: profile?.experienceYears ?? 0,
+        education: profile?.education?.[0]?.institution ?? "",
+        location: profile?.location ?? "",
+        preferences: "Open to remote and hybrid roles",
+      };
       const res = await fetch("/api/ai/recommend", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          candidate: {
-            name: "Amara Okafor",
-            title: "Senior Frontend Engineer",
-            skills: seekerSkills.map((s) => ({
-              name: s.name,
-              proficiency: s.proficiency,
-              verified: s.verified === "verified",
-            })),
-            experienceYears: 6,
-            education: "B.Sc. Computer Science · University of Nairobi",
-            location: "Nairobi, Kenya",
-            preferences: "Open to remote and hybrid roles across Africa",
-          },
-        }),
+        body: JSON.stringify({ candidate }),
       });
       const aiData = await res.json();
       if (!aiData.ok) {
         setAiError(aiData.error ?? "AI recommendation failed.");
-        return;
+      } else {
+        setAiResult(aiData);
+        toast({ title: "AI re-ranking complete", description: "Jobs re-evaluated against your profile." });
       }
-      setAiReranked(true);
-      refetch();
     } catch {
       setAiError("Network error. Please try again.");
     } finally {
@@ -1765,37 +1814,44 @@ export function SeekerRecommended() {
     }
   };
 
-  let filtered = [...dbJobs];
-  if (filter === "remote") filtered = filtered.filter((j) => j.remote === "remote");
-  if (sortBy === "recent") filtered.sort((a, b) => new Date(b.postedAt).getTime() - new Date(a.postedAt).getTime());
+  // Format salary for display
+  const formatSalary = (j: any) => {
+    const min = Number(j.salaryMin || 0);
+    const max = Number(j.salaryMax || 0);
+    const cur = j.currency || "USD";
+    const period = j.salaryPeriod || "month";
+    const sym = cur === "USD" ? "$" : cur === "KES" ? "KSh " : cur === "NGN" ? "₦" : cur + " ";
+    return `${sym}${min.toLocaleString()}–${sym}${max.toLocaleString()} / ${period}`;
+  };
+
+  // If a job is selected, show the detail view
+  if (selectedJobId) {
+    return <SeekerJobDetail />;
+  }
 
   return (
     <PageContainer>
       <SectionHeader
-        title="Open Jobs"
-        description="Browse all open jobs on the platform. Click any job to view details and apply."
+        title="Recommended Jobs"
+        description={`${allJobs.length} open positions matching your profile. Click any job to view details and apply.`}
         actions={
-          <Button variant="outline" size="sm" onClick={refreshWithAI} disabled={aiLoading}>
+          <Button variant="outline" size="sm" onClick={refreshWithAI} disabled={aiLoading || !profile}>
             {aiLoading ? (
-              <>
-                <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-primary border-t-transparent" />
-                Re-ranking…
-              </>
+              <><span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-primary border-t-transparent" /> Re-ranking…</>
             ) : (
-              <>
-                <Sparkles className="h-3.5 w-3.5" /> Re-rank with AI
-              </>
+              <><Sparkles className="h-3.5 w-3.5" /> Re-rank with AI</>
             )}
           </Button>
         }
       />
 
-      {aiReranked && !aiError && (
+      {/* AI result banner */}
+      {aiResult && !aiError && (
         <div className="mt-4">
           <SuccessBanner
             title="Recommendations re-ranked by AI"
-            description="We re-evaluated all jobs against your profile, skills, and preferences."
-            onClose={() => setAiReranked(false)}
+            description="We re-evaluated all jobs against your real profile, skills, and preferences."
+            onClose={() => setAiResult(null)}
           />
         </div>
       )}
@@ -1805,80 +1861,195 @@ export function SeekerRecommended() {
         </div>
       )}
 
-      <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <Tabs value={filter} onValueChange={setFilter}>
-          <TabsList>
-            <TabsTrigger value="all">All ({dbJobs.length})</TabsTrigger>
-            <TabsTrigger value="remote">Remote ({dbJobs.filter(j => j.remote === "remote").length})</TabsTrigger>
-          </TabsList>
-        </Tabs>
-        <div className="flex items-center gap-2 text-xs">
-          <span className="text-muted-foreground">Sort by</span>
-          <Select value={sortBy} onValueChange={setSortBy}>
-            <SelectTrigger className="h-8 w-36">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="recent">Most recent</SelectItem>
-            </SelectContent>
-          </Select>
+      {/* Stats row */}
+      <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
+        <StatCard label="Total Jobs" value={stats.total.toString()} icon={<Briefcase className="h-3 w-3" />} />
+        <StatCard label="Remote" value={stats.remote.toString()} icon={<Target className="h-3 w-3" />} />
+        <StatCard label="Hybrid" value={stats.hybrid.toString()} icon={<Users className="h-3 w-3" />} />
+        <StatCard label="On-site" value={stats.onsite.toString()} icon={<MapPin className="h-3 w-3" />} />
+      </div>
+
+      {/* Search + Filters bar */}
+      <div className="mt-6 rounded-xl border border-border bg-card p-4">
+        <div className="flex flex-col gap-3">
+          {/* Search */}
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              placeholder="Search by job title, company, location, or keyword…"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="h-10 pl-10"
+            />
+          </div>
+          {/* Filters + sort */}
+          <div className="flex flex-wrap items-center gap-2">
+            <Select value={filterRemote} onValueChange={setFilterRemote}>
+              <SelectTrigger className="h-9 w-[130px]"><SelectValue placeholder="Work mode" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All modes</SelectItem>
+                <SelectItem value="remote">Remote</SelectItem>
+                <SelectItem value="hybrid">Hybrid</SelectItem>
+                <SelectItem value="onsite">On-site</SelectItem>
+              </SelectContent>
+            </Select>
+            <Select value={filterType} onValueChange={setFilterType}>
+              <SelectTrigger className="h-9 w-[130px]"><SelectValue placeholder="Job type" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All types</SelectItem>
+                {types.map((t) => (
+                  <SelectItem key={t} value={t} className="capitalize">{t}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Select value={filterCategory} onValueChange={setFilterCategory}>
+              <SelectTrigger className="h-9 w-[150px]"><SelectValue placeholder="Category" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All categories</SelectItem>
+                {categories.map((c) => (
+                  <SelectItem key={c} value={c}>{c}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <div className="ml-auto flex items-center gap-2 text-xs">
+              <span className="text-muted-foreground">Sort by</span>
+              <Select value={sortBy} onValueChange={setSortBy}>
+                <SelectTrigger className="h-9 w-[150px]"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="recent">Most recent</SelectItem>
+                  <SelectItem value="salary-high">Salary: High to Low</SelectItem>
+                  <SelectItem value="salary-low">Salary: Low to High</SelectItem>
+                  <SelectItem value="title">Title: A to Z</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          {/* Active filter count + clear */}
+          {(search || filterRemote !== "all" || filterType !== "all" || filterCategory !== "all") && (
+            <div className="flex items-center gap-2 text-xs">
+              <span className="text-muted-foreground">
+                Showing {filtered.length} of {allJobs.length} jobs
+              </span>
+              <Button
+                size="sm"
+                variant="ghost"
+                className="h-7 text-xs"
+                onClick={() => { setSearch(""); setFilterRemote("all"); setFilterType("all"); setFilterCategory("all"); }}
+              >
+                <X className="h-3 w-3" /> Clear filters
+              </Button>
+            </div>
+          )}
         </div>
       </div>
 
+      {/* Job list */}
       {loading ? (
         <LoadingState label="Loading jobs…" rows={3} />
       ) : filtered.length === 0 ? (
         <EmptyState
           className="mt-6"
-          icon={<Target className="h-5 w-5" />}
-          title="No open jobs yet"
-          description="Check back soon — employers are posting new roles."
+          icon={<Briefcase className="h-5 w-5" />}
+          title={allJobs.length === 0 ? "No open jobs yet" : "No jobs match your filters"}
+          description={allJobs.length === 0 ? "Check back soon — employers are posting new roles." : "Try clearing some filters to see more jobs."}
+          action={allJobs.length === 0 ? undefined : <Button size="sm" variant="outline" onClick={() => { setSearch(""); setFilterRemote("all"); setFilterType("all"); setFilterCategory("all"); }}>Clear all filters</Button>}
         />
       ) : (
-        <div className="mt-4 space-y-3">
+        <div className="mt-4 grid gap-4 lg:grid-cols-2">
           {filtered.map((j) => (
-            <Card key={j.id} className="overflow-hidden">
-              <CardContent className="p-4">
-                <div className="flex flex-col gap-3 sm:flex-row sm:items-start">
-                  <CompanyLogo initials={j.companyLogo || j.company?.slice(0, 2).toUpperCase() || "CO"} size="lg" />
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="min-w-0 flex-1">
-                        <button
-                          onClick={() => go("job-detail", { jobId: j.id })}
-                          className="text-left text-base font-semibold tracking-tight hover:text-primary"
-                        >
-                          {j.title}
-                        </button>
-                        <p className="text-sm text-muted-foreground">{j.company}</p>
-                        <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
-                          <span className="flex items-center gap-1"><MapPin className="h-3 w-3" />{j.location}</span>
-                          <span className="flex items-center gap-1"><Briefcase className="h-3 w-3" />{j.type}</span>
-                          <span className="flex items-center gap-1"><Clock className="h-3 w-3" />{timeAgo(j.postedAt)}</span>
-                          <span className="font-medium text-foreground">${j.salaryMin.toLocaleString()}–${j.salaryMax.toLocaleString()}/{j.salaryPeriod}</span>
-                        </div>
-                      </div>
-                      {j.expiresAt && <JobExpiryBadge expiresAt={j.expiresAt} status={j.status} />}
-                    </div>
-
-                    <p className="mt-2 line-clamp-2 text-xs text-muted-foreground">{j.description}</p>
-
-                    <div className="mt-3 flex flex-wrap items-center gap-2">
-                      <Button size="sm" onClick={() => go("job-detail", { jobId: j.id })}>
-                        View details <ArrowRight className="h-3.5 w-3.5" />
-                      </Button>
-                      <Button size="sm" variant="outline" onClick={() => go("match-explanation", { jobId: j.id })}>
-                        <Sparkles className="h-3.5 w-3.5" /> Why this match?
-                      </Button>
-                    </div>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
+            <JobCard
+              key={j.id}
+              job={j}
+              onOpen={() => go("job-detail", { jobId: j.id })}
+              formatSalary={formatSalary}
+            />
           ))}
         </div>
       )}
     </PageContainer>
+  );
+}
+
+// ============================================================
+// JOB CARD — clean, standard, reusable card for the jobs grid
+// ============================================================
+function JobCard({ job, onOpen, formatSalary }: {
+  job: any;
+  onOpen: () => void;
+  formatSalary: (j: any) => string;
+}) {
+  return (
+    <Card className="group flex flex-col overflow-hidden transition-all hover:-translate-y-0.5 hover:shadow-card-soft">
+      <CardContent className="flex flex-1 flex-col p-5">
+        {/* Header: logo + title + expiry */}
+        <div className="flex items-start gap-3">
+          <CompanyLogo
+            initials={job.companyLogo || job.company?.slice(0, 2).toUpperCase() || "CO"}
+            size="md"
+          />
+          <div className="min-w-0 flex-1">
+            <button
+              onClick={onOpen}
+              className="text-left text-base font-semibold tracking-tight hover:text-primary line-clamp-1"
+            >
+              {job.title}
+            </button>
+            <p className="text-sm text-muted-foreground line-clamp-1">{job.company}</p>
+          </div>
+          {job.expiresAt && <JobExpiryBadge expiresAt={job.expiresAt} status={job.status} />}
+        </div>
+
+        {/* Meta row: location, type, posted */}
+        <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
+          <span className="flex items-center gap-1"><MapPin className="h-3 w-3" />{job.location || "—"}</span>
+          <span className="flex items-center gap-1"><Briefcase className="h-3 w-3" />{job.type || "full-time"}</span>
+          <span className="flex items-center gap-1"><Clock className="h-3 w-3" />{job.postedAt ? timeAgo(job.postedAt) : "recently"}</span>
+        </div>
+
+        {/* Badges: category + remote */}
+        <div className="mt-2 flex flex-wrap gap-1.5">
+          <Badge variant="outline" className="bg-violet-50 text-violet-700 border-violet-200 text-[10px]">
+            {job.category || "General"}
+          </Badge>
+          <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200 text-[10px] capitalize">
+            {job.remote || "onsite"}
+          </Badge>
+        </div>
+
+        {/* Description preview */}
+        <p className="mt-3 line-clamp-2 text-xs text-muted-foreground">
+          {job.description || "No description provided."}
+        </p>
+
+        {/* Salary */}
+        <div className="mt-3 rounded-lg bg-emerald-50 px-3 py-1.5 text-xs font-semibold text-emerald-700">
+          {formatSalary(job)}
+        </div>
+
+        {/* Actions */}
+        <div className="mt-auto flex items-center gap-2 pt-4">
+          <Button size="sm" className="flex-1" onClick={onOpen}>
+            View & Apply <ArrowRight className="h-3.5 w-3.5" />
+          </Button>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => {
+              try {
+                const saved = JSON.parse(localStorage.getItem("skillmatch.savedJobs") || "[]");
+                if (!saved.includes(job.id)) {
+                  saved.push(job.id);
+                  localStorage.setItem("skillmatch.savedJobs", JSON.stringify(saved));
+                }
+              } catch { /* ignore */ }
+            }}
+            title="Save for later"
+          >
+            <Star className="h-3.5 w-3.5" />
+          </Button>
+        </div>
+      </CardContent>
+    </Card>
   );
 }
 

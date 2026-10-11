@@ -937,3 +937,49 @@ PART 2 — Notifications clickable with FAQ-style expand/zoom:
 Stage Summary:
 - Seeker sidebar: 8/10 items fully functional with real APIs; 2 (Skill Gap, Messages) use mock data — noted for future wiring.
 - Notifications: now fully clickable with FAQ-style expand/zoom behavior on both seeker and employer dashboards. Each notification expands to show full message, metadata, and context-aware action buttons. The same grid-rows zoom animation, chevron rotation, gradient icon transition, and card scale effect from the FAQ page are now applied to notifications.
+
+---
+Task ID: 21
+Agent: main (Super Z)
+Task: Redesign the Recommended Jobs page with a standard, clean, easy-to-use design that's fully integrated with the database.
+
+Work Log:
+- Completely rewrote the SeekerRecommended component (src/components/seeker/views.tsx) with a clean, standard layout:
+
+  NEW FEATURES:
+  - Search bar: search by job title, company, location, or keyword (real-time client-side filter)
+  - 3 filter dropdowns: Work mode (remote/hybrid/onsite), Job type (full-time/part-time/etc — populated from DB), Category (populated from DB)
+  - 4 sort options: Most recent, Salary: High to Low, Salary: Low to High, Title: A to Z
+  - "Clear filters" button that appears when any filter/search is active
+  - "Showing X of Y jobs" counter
+  - 4 stats cards at top: Total Jobs, Remote, Hybrid, On-site counts
+  - Responsive 2-column grid layout (lg:grid-cols-2) for job cards
+  - Job cards with: company logo, title, company name, location, type, posted time, category badge, remote badge, description preview, salary in emerald box, "View & Apply" button, "Save for later" star button, expiry badge
+  - Hover effects: card lifts up with shadow
+
+  DB INTEGRATION:
+  - Fetches real published jobs from GET /api/jobs (no mock data)
+  - Fetches real seeker profile from GET /api/profile (for AI re-rank)
+  - AI re-rank now sends the REAL seeker profile (name, title, skills, location, education) to POST /api/ai/recommend instead of hardcoded mock data ("Amara Okafor", "Senior Frontend Engineer", etc.)
+  - Filter dropdowns (categories, types) are populated dynamically from the actual job data in the DB
+  - Salary formatting handles multiple currencies (USD, KES, NGN) and periods
+  - All fields null-safe (no crashes if salaryMin/salaryMax/postedAt/etc. are missing)
+
+  JOB CARD COMPONENT:
+  - Extracted a reusable JobCard component with clean layout:
+    * Header: company logo + clickable title + expiry badge
+    * Meta row: location, type, posted time with icons
+    * Badges: category (violet) + remote mode (blue)
+    * Description preview (line-clamp-2)
+    * Salary in emerald highlight box
+    * Actions: "View & Apply" (primary, flex-1) + "Save" (outline, star icon)
+
+- Verified: 0 new TypeScript errors, 0 runtime errors, pages compile and load successfully.
+- Verified: /api/jobs returns 4 published jobs with all fields (title, company, location, salary, type, category, remote, expiresAt, postedAt, description).
+- Verified: /api/profile returns the real seeker profile (Amara Okafor, 8 skills, Nairobi) which is used for AI re-rank.
+
+Stage Summary:
+- Recommended Jobs page completely redesigned with a standard, clean, easy-to-use layout.
+- Fully DB-integrated: real jobs from /api/jobs, real profile from /api/profile for AI re-rank.
+- Search + 3 filters + 4 sort options + stats cards + responsive 2-column job card grid.
+- All null-safe — no more crashes from missing fields.
