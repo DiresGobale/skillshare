@@ -720,3 +720,19 @@ Stage Summary:
 - Database integration: ✅ (all news persisted to SQLite via Prisma, auto-appears on public page after publication)
 - Optional image/attachment: ✅ (cover image via URL or file upload as base64 data URL)
 - 0 TypeScript errors in news-related code (all pre-existing errors are in unrelated files)
+
+---
+Task ID: 17
+Agent: main (Super Z)
+Task: Fix "Back to news" button on news detail page not working.
+
+Work Log:
+- Root cause: PublicNewsPage uses `if (selectedNewsId) return <PublicNewsDetailPage/>` to decide whether to render the list or the detail view. The "Back to news" button called `go("public-news")` which set view="public-news" but did NOT clear selectedNewsId. Since selectedNewsId was still set, PublicNewsPage kept rendering the detail page — the button appeared to do nothing.
+- The deeper root cause: the `go()` function in app-context.tsx used `if (opts?.newsId !== undefined) setSelectedNewsId(opts.newsId)` for all four selection fields (jobId, candidateId, conversationId, newsId). This meant passing `{ newsId: undefined }` to CLEAR the selection was a no-op — the check `undefined !== undefined` is false, so setSelectedNewsId was never called.
+- Fix 1 (app-context.tsx): Changed all four checks from `!== undefined` to `"key" in opts`. Now `go("public-news", { newsId: undefined })` correctly calls `setSelectedNewsId(undefined)` which clears the selection. This also fixes the same latent bug for jobId/candidateId/conversationId — any future "back to list" button can now clear those selections the same way.
+- Fix 2 (guest/views.tsx): Updated all three "Back to news" / "All news" buttons in PublicNewsDetailPage to pass `{ newsId: undefined }` so they explicitly clear the selected news article. Without this, even with Fix 1, the buttons would still just call `go("public-news")` with no opts, leaving selectedNewsId unchanged.
+- Verified: 0 TypeScript errors in the changed files, dev server compiles cleanly, no runtime errors in log.
+
+Stage Summary:
+- "Back to news" button now works: clicking it clears selectedNewsId and PublicNewsPage renders the news list instead of the detail page.
+- The go() function now supports clearing any selection (jobId/candidateId/conversationId/newsId) by explicitly passing the key with value undefined.

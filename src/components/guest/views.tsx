@@ -3253,7 +3253,7 @@ export function PublicNewsDetailPage({ newsId }: { newsId: string }) {
       <main className="flex-1 bg-muted/20">
         <div className="mx-auto max-w-3xl px-4 py-8 sm:px-6 lg:px-8">
           <button
-            onClick={() => go("public-news")}
+            onClick={() => go("public-news", { newsId: undefined })}
             className="mb-4 inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
           >
             <ArrowLeft className="h-3.5 w-3.5" /> Back to news
@@ -3270,7 +3270,7 @@ export function PublicNewsDetailPage({ newsId }: { newsId: string }) {
             <div className="mx-auto max-w-md rounded-xl border border-rose-200 bg-rose-50 p-6 text-center">
               <AlertCircle className="mx-auto h-8 w-8 text-rose-600" />
               <p className="mt-2 text-sm font-medium text-rose-700">{error}</p>
-              <Button size="sm" variant="outline" className="mt-4" onClick={() => go("public-news")}>
+              <Button size="sm" variant="outline" className="mt-4" onClick={() => go("public-news", { newsId: undefined })}>
                 Back to news
               </Button>
             </div>
@@ -3338,7 +3338,7 @@ export function PublicNewsDetailPage({ newsId }: { newsId: string }) {
                 </div>
 
                 <div className="mt-8 flex items-center justify-between border-t border-border pt-6">
-                  <Button variant="outline" size="sm" onClick={() => go("public-news")}>
+                  <Button variant="outline" size="sm" onClick={() => go("public-news", { newsId: undefined })}>
                     <ArrowLeft className="mr-1 h-3.5 w-3.5" /> All news
                   </Button>
                   <span className="text-xs text-muted-foreground">Last updated {formatNewsDate(item.updatedAt)}</span>

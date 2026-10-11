@@ -156,10 +156,12 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const go = useCallback<AppState["go"]>((v, opts) => {
-    if (opts?.jobId !== undefined) setSelectedJobId(opts.jobId);
-    if (opts?.candidateId !== undefined) setSelectedCandidateId(opts.candidateId);
-    if (opts?.conversationId !== undefined) setSelectedConversationId(opts.conversationId);
-    if (opts?.newsId !== undefined) setSelectedNewsId(opts.newsId);
+    // Use "key" in opts (not !== undefined) so that explicitly passing
+    // { newsId: undefined } clears the selection instead of being a no-op.
+    if (opts && "jobId" in opts) setSelectedJobId(opts.jobId);
+    if (opts && "candidateId" in opts) setSelectedCandidateId(opts.candidateId);
+    if (opts && "conversationId" in opts) setSelectedConversationId(opts.conversationId);
+    if (opts && "newsId" in opts) setSelectedNewsId(opts.newsId);
     setView(v);
     if (typeof window !== "undefined") {
       // The authenticated app shell scrolls inside #app-main-scroll (not the window).
