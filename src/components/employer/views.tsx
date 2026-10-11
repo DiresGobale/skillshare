@@ -1739,7 +1739,7 @@ export function EmployerApplications() {
 
                         {/* Step 2 → 3: Schedule exam (per-job, bulk notify) */}
                         {a.status === "review_passed" && (
-                          <Button size="sm" className="btn-blue" onClick={() => setExamScheduleDialog(a.job.id)}>
+                          <Button size="sm" className="btn-blue" onClick={() => setExamScheduleDialog(a.job?.id ?? "")}>
                             <PenSquare className="h-3.5 w-3.5" /> Schedule Written Exam
                           </Button>
                         )}
@@ -1753,7 +1753,7 @@ export function EmployerApplications() {
 
                         {/* Step 4 → 5: Schedule interview (per-job, bulk notify) */}
                         {a.status === "exam_passed" && (
-                          <Button size="sm" className="btn-blue" onClick={() => setInterviewScheduleDialog(a.job.id)}>
+                          <Button size="sm" className="btn-blue" onClick={() => setInterviewScheduleDialog(a.job?.id ?? "")}>
                             <Users className="h-3.5 w-3.5" /> Schedule Interview
                           </Button>
                         )}
@@ -2498,21 +2498,29 @@ export function EmployerNotifications() {
   const filtered = filter === "unread" ? items.filter((n) => !n.read) : items;
 
   const markAllRead = async () => {
-    await fetch("/api/notifications", {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ markAllRead: true }),
-    });
-    refetch();
+    try {
+      await fetch("/api/notifications", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ markAllRead: true }),
+      });
+      refetch();
+    } catch {
+      /* non-fatal */
+    }
   };
 
   const toggleRead = async (id: string) => {
-    await fetch("/api/notifications", {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ id }),
-    });
-    refetch();
+    try {
+      await fetch("/api/notifications", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id }),
+      });
+      refetch();
+    } catch {
+      /* non-fatal */
+    }
   };
 
   const handleClick = (n: any) => {
@@ -2656,9 +2664,9 @@ export function EmployerNotifications() {
 
 export function EmployerMessages() {
   const [conversations, setConversations] = useState<Conversation[]>(employerConversations);
-  const [activeId, setActiveId] = useState<string>(conversations[0].id);
+  const [activeId, setActiveId] = useState<string>(conversations[0]?.id ?? "");
   const [draft, setDraft] = useState("");
-  const active = conversations.find((c) => c.id === activeId)!;
+  const active = conversations.find((c) => c.id === activeId);
 
   const send = () => {
     if (!draft.trim()) return;
@@ -2716,6 +2724,8 @@ export function EmployerMessages() {
 
         <Card className="lg:col-span-2 overflow-hidden flex flex-col">
           <CardContent className="p-0 flex flex-1 flex-col">
+            {active ? (
+            <>
             <div className="flex items-center gap-3 border-b border-border p-3">
               <Avatar initials={active.participantInitials} color={active.participantColor} size="sm" />
               <div className="min-w-0 flex-1">
@@ -2757,6 +2767,12 @@ export function EmployerMessages() {
                 <SendIcon className="h-4 w-4" />
               </Button>
             </div>
+            </>
+            ) : (
+              <div className="flex flex-1 items-center justify-center p-8 text-center">
+                <p className="text-sm text-muted-foreground">Select a conversation to start messaging.</p>
+              </div>
+            )}
           </CardContent>
         </Card>
       </div>
@@ -2825,7 +2841,7 @@ export function EmployerAIReport() {
           </Card>
 
           {/* Sections */}
-          {report.sections.map((section: any, i: number) => (
+          {(report.sections ?? []).map((section: any, i: number) => (
             <Card key={i}>
               <CardHeader className="pb-3">
                 <CardTitle className="text-sm">{section.heading}</CardTitle>
@@ -2855,7 +2871,7 @@ export function EmployerAIReport() {
             </CardHeader>
             <CardContent>
               <ul className="space-y-2">
-                {report.recommendations.map((rec: string, i: number) => (
+                {(report.recommendations ?? []).map((rec: string, i: number) => (
                   <li key={i} className="flex items-start gap-2 text-sm text-muted-foreground">
                     <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-emerald-100 text-emerald-700 text-[10px] font-bold">{i + 1}</span>
                     {rec}

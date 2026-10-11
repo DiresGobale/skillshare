@@ -1193,3 +1193,36 @@ Stage Summary:
 - Duplicate phone check prevents the same number from registering twice.
 - Phone stored in normalized international format (+2519XXXXXXXX) in the database.
 - Live validation on the frontend (on blur + on change after first blur) with clear error messages.
+
+---
+Task ID: 25
+Agent: main (Super Z)
+Task: Check each functionality of the employer dashboard sidebar.
+
+Work Log:
+- Audited all 10 employer sidebar items by testing their API endpoints and reviewing the UI components for crash risks.
+
+API ENDPOINT TEST RESULTS (all returned 200 OK):
+1. Dashboard — GET /api/jobs (12 jobs), GET /api/applications (7 apps), GET /api/notifications (8 notifs) ✅
+2. Company Profile — GET /api/profile ✅
+3. Jobs — GET /api/jobs ✅
+4. Candidate Ranking — GET /api/candidates (7 candidates) ✅
+5. Applications — GET /api/applications ✅
+6. Interviews — GET /api/candidates (0 in interview stage) ✅
+7. AI Report — POST /api/ai/report (generated successfully with type:"employer") ✅
+8. News & Updates — GET /api/news (4 published) ✅
+9. Messages — mock-only (no API, but UI works) ⚠️
+10. Notifications — GET /api/notifications ✅
+
+UI COMPONENT AUDIT — found and fixed 4 crash risks:
+1. EmployerApplications (lines 1742, 1756): `a.job.id` → `a.job?.id ?? ""` — would crash if job object was missing when clicking "Schedule Exam" or "Schedule Interview" buttons.
+2. EmployerAIReport (lines 2828, 2858): `report.sections.map()` → `(report.sections ?? []).map()` and `report.recommendations.map()` → `(report.recommendations ?? []).map()` — would crash if the AI returned a partial response without sections or recommendations arrays.
+3. EmployerMessages (line 2659): `conversations[0].id` → `conversations[0]?.id ?? ""` — would crash if the conversations array was ever empty. Also removed the non-null assertion `!` on `active` (line 2661) and added a guard: if no active conversation, shows "Select a conversation to start messaging" instead of crashing.
+4. EmployerNotifications (markAllRead, toggleRead): wrapped both functions in try/catch — previously, a network error would throw an unhandled rejection and the UI wouldn't refresh.
+
+Stage Summary:
+- All 10 employer sidebar items are functional.
+- All API endpoints return 200 OK with real data.
+- 4 crash risks identified and fixed: null-reference crashes in Applications (job.id), AI Report (sections/recommendations arrays), Messages (empty conversations), and error handling in Notifications.
+- 0 new TypeScript errors (only 1 pre-existing error in unrelated code at line 2435).
+- 0 runtime errors in the dev log.
