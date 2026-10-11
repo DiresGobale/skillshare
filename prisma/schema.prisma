@@ -142,6 +142,8 @@ model Job {
   updatedAt   DateTime @updatedAt
 
   applications Application[]
+  examSchedules ExamSchedule[]
+  interviewSchedules InterviewSchedule[]
 
   @@index([employerId])
   @@index([status])
@@ -149,18 +151,98 @@ model Job {
 }
 
 model Application {
-  id        String   @id @default(cuid())
-  jobId     String
-  job       Job      @relation(fields: [jobId], references: [id], onDelete: Cascade)
-  userId    String
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  status    String   @default("submitted") // submitted | screening | shortlisted | interview | offer | rejected | withdrawn
-  matchScore Int?
-  appliedAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id          String   @id @default(cuid())
+  jobId       String
+  job         Job      @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  status      String   @default("applied")
+  // 7-step recruitment pipeline status:
+  //   applied → reviewing → review_passed → exam_notified → exam_completed →
+  //   exam_passed → interview_notified → interview_completed → interview_passed →
+  //   selected → hired
+  //   (rejected at any stage)
+  matchScore  Int?
+  appliedAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Step 1: Application — professional application letter
+  coverLetter String?
+
+  // Step 2: Application Review
+  reviewedAt      DateTime?
+  reviewPassed    Boolean?
+  reviewNotes     String?
+
+  // Step 3 & 4: Written Examination
+  examNotifiedAt  DateTime?
+  examCompletedAt DateTime?
+  examScore       Int?      // 0-100
+  examPassed      Boolean?
+  examNotes       String?
+
+  // Step 5: Interview (oral + practical)
+  interviewNotifiedAt   DateTime?
+  interviewCompletedAt  DateTime?
+  oralScore             Int?      // 0-100
+  practicalScore        Int?      // 0-100
+  interviewOverallScore Int?      // 0-100 (computed)
+  interviewPassed       Boolean?
+  interviewNotes        String?
+
+  // Step 6: Final Selection
+  selectedAt      DateTime?
+  selectionNotes  String?
+
+  // Step 7: Final Call & Job Assignment
+  hiredAt         DateTime?
+  jobAssignment   String?   // responsibilities, work location, starting date, etc.
+  finalCallNotes  String?
+
+  // Rejection (can happen at any stage)
+  rejectedAt      DateTime?
+  rejectionStage  String?   // which step the candidate was rejected at
+  rejectionReason String?
 
   @@index([jobId])
   @@index([userId])
+  @@index([status])
+}
+
+// ============================================================
+// EXAM SCHEDULE — per-job written exam configuration (Step 3 & 4)
+// ============================================================
+model ExamSchedule {
+  id          String   @id @default(cuid())
+  jobId       String
+  job         Job      @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  scheduledAt DateTime              // when the exam takes place
+  duration    Int      @default(60) // duration in minutes
+  location    String   @default("Online")
+  format      String   @default("written") // written | online | practical
+  instructions String?              // what to prepare, what to bring, etc.
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([jobId])
+}
+
+// ============================================================
+// INTERVIEW SCHEDULE — per-job interview configuration (Step 5)
+// ============================================================
+model InterviewSchedule {
+  id              String   @id @default(cuid())
+  jobId           String
+  job             Job      @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  scheduledAt     DateTime              // when the interview takes place
+  duration        Int      @default(60) // duration in minutes
+  location        String   @default("Online")
+  format          String   @default("both") // oral | practical | both
+  instructions    String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([jobId])
 }
 
 // ============================================================

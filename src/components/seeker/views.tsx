@@ -43,6 +43,7 @@ import {
   InfoCallout,
   JobExpiryBadge,
 } from "@/components/shared/ui";
+import { RecruitmentPipeline } from "@/components/shared/recruitment-pipeline";
 import {
   recommendedJobs,
   seekerSkills,
@@ -98,12 +99,16 @@ import {
   ChevronRight,
   Mail,
   Phone,
+  PhoneCall,
   GraduationCap,
   Award,
   Zap,
   Lightbulb,
   RefreshCw,
   X,
+  PenSquare,
+  Users,
+  Trophy,
 } from "lucide-react";
 
 // ============================================================
@@ -1890,6 +1895,8 @@ export function SeekerJobDetail() {
   const job = apiJob ?? mockJob;
   const [applied, setApplied] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
+  const [coverLetter, setCoverLetter] = useState("");
+  const [submitting, setSubmitting] = useState(false);
 
   // If the job is expired, show a prominent expired banner
   const isExpired = apiJob?.status === "expired" || (apiJob?.expiresAt && new Date(apiJob.expiresAt).getTime() <= Date.now());
@@ -2014,10 +2021,10 @@ export function SeekerJobDetail() {
               {applied ? (
                 <SuccessBanner
                   title="Application submitted!"
-                  description="You'll receive a notification when the employer responds."
+                  description="Your professional application letter has been sent. You'll receive a notification at each stage of the recruitment process."
                 />
               ) : (
-                <Dialog open={confirmOpen} onOpenChange={setConfirmOpen}>
+                <Dialog open={confirmOpen} onOpenChange={(o) => { setConfirmOpen(o); if (!o) setCoverLetter(""); }}>
                   <DialogTrigger asChild>
                     <Button className="w-full h-10" disabled={isExpired}>
                       {isExpired ? (
@@ -2027,30 +2034,80 @@ export function SeekerJobDetail() {
                       )}
                     </Button>
                   </DialogTrigger>
-                  <DialogContent>
+                  <DialogContent className="max-w-2xl">
                     <DialogHeader>
-                      <DialogTitle>Confirm application</DialogTitle>
+                      <DialogTitle>Apply to {job.title}</DialogTitle>
                       <DialogDescription>
-                        You're applying to <span className="font-medium text-foreground">{job.title}</span> at {job.company}. Your profile, skills, and most recent resume will be shared.
+                        You're applying to <span className="font-medium text-foreground">{job.title}</span> at {job.company}. Write a professional application letter below — this is Step 1 of the 7-step recruitment process.
                       </DialogDescription>
                     </DialogHeader>
-                    <div className="space-y-2 py-2">
+                    <div className="space-y-3 py-2 max-h-[60vh] overflow-y-auto">
                       <div className="flex items-center justify-between rounded-md border border-border bg-muted/30 px-3 py-2 text-xs">
                         <span>Match score</span>
-                        <span className="font-semibold text-primary">{job.matchScore}%</span>
+                        <span className="font-semibold text-primary">{job.matchScore || 0}%</span>
                       </div>
-                      <div className="flex items-center justify-between rounded-md border border-border bg-muted/30 px-3 py-2 text-xs">
-                        <span>Resume</span>
-                        <span className="font-medium">Amara_Okafor_Resume_2026.pdf</span>
+                      <div className="space-y-1.5">
+                        <Label htmlFor="cover-letter">Professional application letter *</Label>
+                        <Textarea
+                          id="cover-letter"
+                          rows={8}
+                          placeholder={`Dear Hiring Manager,\n\nI am writing to express my strong interest in the ${job.title} position at ${job.company}. With my background in [your skills/experience], I believe I would be a great fit for this role...\n\nPlease describe:\n• Why you're interested in this role\n• Your relevant skills and experience\n• What makes you a strong candidate`}
+                          value={coverLetter}
+                          onChange={(e) => setCoverLetter(e.target.value)}
+                          className="resize-y"
+                        />
+                        <div className="flex items-center justify-between text-[11px]">
+                          <span className="text-muted-foreground">Minimum 50 characters</span>
+                          <span className={coverLetter.trim().length < 50 ? "text-amber-600" : "text-emerald-600"}>
+                            {coverLetter.trim().length} chars
+                          </span>
+                        </div>
                       </div>
                       <InfoCallout>
-                        Your contact information stays private until the employer shortlists you and you accept their interview request.
+                        Your contact information stays private until the employer reviews your application and advances you to the next stage.
                       </InfoCallout>
                     </div>
                     <DialogFooter>
-                      <Button variant="outline" onClick={() => setConfirmOpen(false)}>Cancel</Button>
-                      <Button onClick={() => { setApplied(true); setConfirmOpen(false); }}>
-                        Submit application
+                      <Button variant="outline" onClick={() => { setConfirmOpen(false); setCoverLetter(""); }}>Cancel</Button>
+                      <Button
+                        onClick={async () => {
+                          if (coverLetter.trim().length < 50) {
+                            toast({ title: "Application letter too short", description: "Please write at least 50 characters in your application letter." });
+                            return;
+                          }
+                          setSubmitting(true);
+                          try {
+                            const res = await fetch("/api/applications", {
+                              method: "POST",
+                              headers: { "Content-Type": "application/json" },
+                              body: JSON.stringify({
+                                jobId: job.id,
+                                matchScore: job.matchScore || 0,
+                                coverLetter: coverLetter.trim(),
+                              }),
+                            });
+                            const data = await res.json();
+                            if (data.ok) {
+                              setApplied(true);
+                              setConfirmOpen(false);
+                              setCoverLetter("");
+                              toast({ title: "Application submitted!", description: "Your application letter has been sent to the employer." });
+                            } else {
+                              toast({ title: "Application failed", description: data.error ?? "Please try again." });
+                            }
+                          } catch {
+                            toast({ title: "Network error", description: "Please try again." });
+                          } finally {
+                            setSubmitting(false);
+                          }
+                        }}
+                        disabled={submitting || coverLetter.trim().length < 50}
+                      >
+                        {submitting ? (
+                          <><span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-primary-foreground border-t-transparent" /> Submitting…</>
+                        ) : (
+                          <><Send className="h-3.5 w-3.5" /> Submit application</>
+                        )}
                       </Button>
                     </DialogFooter>
                   </DialogContent>
@@ -2247,28 +2304,74 @@ export function SeekerMatchExplanation() {
 // ============================================================
 export function SeekerApplications() {
   const { go } = useApp();
+  const { toast } = useToast();
   const { data, loading } = useFetch<any>("/api/applications");
   const [filter, setFilter] = useState("all");
+  const [expandedApp, setExpandedApp] = useState<string | null>(null);
 
   const allApps: any[] = data?.applications ?? [];
   let apps = [...allApps];
-  if (filter !== "all") apps = apps.filter((a) => a.status === filter);
+  if (filter !== "all") {
+    if (filter === "active") {
+      apps = apps.filter((a) => a.status !== "rejected" && a.status !== "hired");
+    } else if (filter === "rejected") {
+      apps = apps.filter((a) => a.status === "rejected");
+    } else if (filter === "hired") {
+      apps = apps.filter((a) => a.status === "hired");
+    } else {
+      apps = apps.filter((a) => a.status === filter);
+    }
+  }
+
+  // Count by pipeline stage
+  const stepCounts = {
+    step1: allApps.filter(a => a.status === "applied").length,
+    step2: allApps.filter(a => a.status === "reviewing" || a.status === "review_passed").length,
+    step3: allApps.filter(a => a.status === "exam_notified").length,
+    step4: allApps.filter(a => a.status === "exam_completed" || a.status === "exam_passed").length,
+    step5: allApps.filter(a => a.status === "interview_notified" || a.status === "interview_completed" || a.status === "interview_passed").length,
+    step6: allApps.filter(a => a.status === "selected").length,
+    step7: allApps.filter(a => a.status === "hired").length,
+    rejected: allApps.filter(a => a.status === "rejected").length,
+  };
 
   return (
     <PageContainer>
       <SectionHeader
         title="My Applications"
-        description="Track every application from submission to decision."
+        description="Track every application through the 7-step recruitment process — from submission to job assignment."
       />
+
+      <div className="mt-4">
+        <InfoCallout>
+          <span className="font-medium">7-Step Recruitment Process:</span> Apply → Application Review → Written Exam Notification → Written Examination → Interview (Oral + Practical) → Final Selection → Final Call & Job Assignment. You must pass each stage to advance to the next. You'll receive a notification at every step.
+        </InfoCallout>
+      </div>
+
+      {/* Stage stats */}
+      <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-8">
+        <StatCard label="Applied" value={stepCounts.step1.toString()} icon={<Send className="h-3 w-3" />} />
+        <StatCard label="Review" value={stepCounts.step2.toString()} icon={<CheckCircle2 className="h-3 w-3" />} />
+        <StatCard label="Exam Notified" value={stepCounts.step3.toString()} icon={<Mail className="h-3 w-3" />} />
+        <StatCard label="Exam" value={stepCounts.step4.toString()} icon={<PenSquare className="h-3 w-3" />} />
+        <StatCard label="Interview" value={stepCounts.step5.toString()} icon={<Users className="h-3 w-3" />} />
+        <StatCard label="Selected" value={stepCounts.step6.toString()} icon={<Trophy className="h-3 w-3" />} />
+        <StatCard label="Hired" value={stepCounts.step7.toString()} icon={<PhoneCall className="h-3 w-3" />} />
+        <StatCard label="Rejected" value={stepCounts.rejected.toString()} icon={<X className="h-3 w-3" />} />
+      </div>
 
       <Tabs value={filter} onValueChange={setFilter} className="mt-6">
         <TabsList className="overflow-x-auto">
           <TabsTrigger value="all">All ({allApps.length})</TabsTrigger>
-          <TabsTrigger value="submitted">Submitted ({allApps.filter(a=>a.status==="submitted").length})</TabsTrigger>
-          <TabsTrigger value="screening">Screening ({allApps.filter(a=>a.status==="screening").length})</TabsTrigger>
-          <TabsTrigger value="shortlisted">Shortlisted ({allApps.filter(a=>a.status==="shortlisted").length})</TabsTrigger>
-          <TabsTrigger value="interview">Interview ({allApps.filter(a=>a.status==="interview").length})</TabsTrigger>
-          <TabsTrigger value="rejected">Closed ({allApps.filter(a=>a.status==="rejected").length})</TabsTrigger>
+          <TabsTrigger value="active">Active ({allApps.filter(a => a.status !== "rejected" && a.status !== "hired").length})</TabsTrigger>
+          <TabsTrigger value="applied">Applied ({stepCounts.step1})</TabsTrigger>
+          <TabsTrigger value="review_passed">Review Passed ({stepCounts.step2})</TabsTrigger>
+          <TabsTrigger value="exam_notified">Exam Notified ({stepCounts.step3})</TabsTrigger>
+          <TabsTrigger value="exam_passed">Exam Passed ({stepCounts.step4})</TabsTrigger>
+          <TabsTrigger value="interview_passed">Interview ({stepCounts.step5})</TabsTrigger>
+          <TabsTrigger value="selected">Selected ({stepCounts.step6})</TabsTrigger>
+          <TabsTrigger value="hired">Hired ({stepCounts.step7})</TabsTrigger>
+          <TabsTrigger value="rejected">Closed ({stepCounts.rejected})</TabsTrigger>
         </TabsList>
       </Tabs>
 
@@ -2284,45 +2387,155 @@ export function SeekerApplications() {
         />
       ) : (
         <div className="mt-6 space-y-3">
-          {apps.map((a) => (
-            <Card key={a.id}>
-              <CardContent className="p-4">
-                <div className="flex flex-col gap-3 sm:flex-row sm:items-start">
-                  <CompanyLogo initials={a.job?.companyLogo || "CO"} size="md" />
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-start justify-between gap-2">
-                      <div>
-                        <p className="text-sm font-semibold">{a.job?.title}</p>
-                        <p className="text-xs text-muted-foreground">{a.job?.company} · {a.job?.location}</p>
+          {apps.map((a) => {
+            const isExpanded = expandedApp === a.id;
+            const isRejected = a.status === "rejected";
+            const currentStep = a.currentStep || (isRejected ? parseInt(a.rejectionStage || "1", 10) : 1);
+            return (
+              <Card key={a.id} className={cn(isRejected && "opacity-80")}>
+                <CardContent className="p-4">
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-start">
+                    <CompanyLogo initials={a.job?.companyLogo || "CO"} size="md" />
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-start justify-between gap-2">
+                        <div>
+                          <p className="text-sm font-semibold">{a.job?.title}</p>
+                          <p className="text-xs text-muted-foreground">{a.job?.company} · {a.job?.location}</p>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <Badge variant="outline" className={cn(
+                            "text-[10px]",
+                            isRejected ? "bg-rose-50 text-rose-700 border-rose-200" :
+                            a.status === "hired" ? "bg-emerald-50 text-emerald-700 border-emerald-200" :
+                            "bg-violet-50 text-violet-700 border-violet-200"
+                          )}>
+                            {isRejected ? "Rejected" : a.status === "hired" ? "Hired" : `Step ${currentStep}/7`}
+                          </Badge>
+                        </div>
                       </div>
-                      <ApplicationStatusBadge status={a.status} />
-                    </div>
 
-                    <div className="mt-2 flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
-                      <span>Applied {timeAgo(a.appliedAt)}</span>
-                      <span>Updated {timeAgo(a.updatedAt)}</span>
-                      {a.matchScore && (
-                        <span className="flex items-center gap-1">
-                          <Sparkles className="h-3 w-3 text-primary" /> Match score: <span className="font-semibold text-foreground">{a.matchScore}%</span>
-                        </span>
+                      <div className="mt-2 flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
+                        <span>Applied {timeAgo(a.appliedAt)}</span>
+                        <span>Updated {timeAgo(a.updatedAt)}</span>
+                        {a.matchScore && (
+                          <span className="flex items-center gap-1">
+                            <Sparkles className="h-3 w-3 text-primary" /> Match: <span className="font-semibold text-foreground">{a.matchScore}%</span>
+                          </span>
+                        )}
+                      </div>
+
+                      {/* Compact pipeline */}
+                      <div className="mt-3">
+                        <RecruitmentPipeline
+                          currentStep={currentStep}
+                          rejected={isRejected}
+                          rejectionStage={a.rejectionStage ? parseInt(a.rejectionStage, 10) : undefined}
+                          rejectionReason={a.rejectionReason}
+                          scores={{
+                            examScore: a.examScore,
+                            oralScore: a.oralScore,
+                            practicalScore: a.practicalScore,
+                            interviewOverallScore: a.interviewOverallScore,
+                          }}
+                          dates={{
+                            appliedAt: a.appliedAt,
+                            reviewedAt: a.reviewedAt,
+                            examNotifiedAt: a.examNotifiedAt,
+                            examCompletedAt: a.examCompletedAt,
+                            interviewNotifiedAt: a.interviewNotifiedAt,
+                            interviewCompletedAt: a.interviewCompletedAt,
+                            selectedAt: a.selectedAt,
+                            hiredAt: a.hiredAt,
+                          }}
+                          compact
+                        />
+                      </div>
+
+                      {/* Expandable details */}
+                      {isExpanded && (
+                        <div className="mt-4 space-y-3 border-t border-border pt-3">
+                          {a.coverLetter && (
+                            <div>
+                              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1">Your Application Letter</p>
+                              <div className="rounded-lg border border-border bg-muted/30 p-3 text-xs whitespace-pre-wrap text-foreground/80 max-h-40 overflow-y-auto">
+                                {a.coverLetter}
+                              </div>
+                            </div>
+                          )}
+                          {a.jobAssignment && a.status === "hired" && (
+                            <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-3">
+                              <p className="text-xs font-semibold text-emerald-700 uppercase tracking-wide mb-1">Job Assignment Details</p>
+                              <p className="text-xs text-emerald-800 whitespace-pre-wrap">{a.jobAssignment}</p>
+                            </div>
+                          )}
+                          {a.examNotifiedAt && a.examSchedule && (
+                            <div className="rounded-lg border border-blue-200 bg-blue-50 p-3">
+                              <p className="text-xs font-semibold text-blue-700 uppercase tracking-wide mb-1">Written Exam Details</p>
+                              <p className="text-xs text-blue-800">
+                                Date: {new Date(a.examSchedule.scheduledAt).toLocaleString()} · Duration: {a.examSchedule.duration} min · Location: {a.examSchedule.location}
+                              </p>
+                              {a.examSchedule.instructions && <p className="text-xs text-blue-700 mt-1">{a.examSchedule.instructions}</p>}
+                            </div>
+                          )}
+                          {a.interviewNotifiedAt && a.interviewSchedule && (
+                            <div className="rounded-lg border border-amber-200 bg-amber-50 p-3">
+                              <p className="text-xs font-semibold text-amber-700 uppercase tracking-wide mb-1">Interview Details</p>
+                              <p className="text-xs text-amber-800">
+                                Date: {new Date(a.interviewSchedule.scheduledAt).toLocaleString()} · Duration: {a.interviewSchedule.duration} min · Location: {a.interviewSchedule.location} · Format: {a.interviewSchedule.format}
+                              </p>
+                              {a.interviewSchedule.instructions && <p className="text-xs text-amber-700 mt-1">{a.interviewSchedule.instructions}</p>}
+                            </div>
+                          )}
+                        </div>
                       )}
-                    </div>
 
-                    <div className="mt-3 flex flex-wrap gap-2">
-                      <Button size="sm" variant="outline" onClick={() => go("messages")}>
-                        <MessageSquare className="h-3.5 w-3.5" /> Message
-                      </Button>
+                      <div className="mt-3 flex flex-wrap gap-2">
+                        <Button size="sm" variant="outline" onClick={() => setExpandedApp(isExpanded ? null : a.id)}>
+                          {isExpanded ? "Hide details" : "View details"}
+                        </Button>
+                        <Button size="sm" variant="outline" onClick={() => go("messages")}>
+                          <MessageSquare className="h-3.5 w-3.5" /> Message
+                        </Button>
+                        {!isRejected && a.status !== "hired" && (
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="text-rose-600"
+                            onClick={async () => {
+                              if (!confirm("Withdraw this application? This cannot be undone.")) return;
+                              try {
+                                const res = await fetch("/api/applications", {
+                                  method: "PATCH",
+                                  headers: { "Content-Type": "application/json" },
+                                  body: JSON.stringify({ applicationId: a.id, action: "withdraw" }),
+                                });
+                                const data = await res.json();
+                                if (data.ok) {
+                                  toast({ title: "Application withdrawn", description: "Your application has been withdrawn." });
+                                  window.location.reload();
+                                } else {
+                                  toast({ title: "Failed", description: data.error ?? "Please try again." });
+                                }
+                              } catch {
+                                toast({ title: "Network error", description: "Please try again." });
+                              }
+                            }}
+                          >
+                            Withdraw
+                          </Button>
+                        )}
+                      </div>
                     </div>
+                    {a.matchScore && (
+                      <div className="sm:pl-2">
+                        <MatchScore score={a.matchScore} size="md" />
+                      </div>
+                    )}
                   </div>
-                  {a.matchScore && (
-                    <div className="sm:pl-2">
-                      <MatchScore score={a.matchScore} size="md" />
-                    </div>
-                  )}
-                </div>
-              </CardContent>
-            </Card>
-          ))}
+                </CardContent>
+              </Card>
+            );
+          })}
         </div>
       )}
     </PageContainer>

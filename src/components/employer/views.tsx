@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from "react";
 import { cn } from "@/lib/utils";
 import { useApp } from "@/lib/app-context";
+import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -39,6 +40,7 @@ import {
   PrivacyLock,
   TableToolbar,
 } from "@/components/shared/ui";
+import { RecruitmentPipeline } from "@/components/shared/recruitment-pipeline";
 import {
   employerJobs,
   candidates,
@@ -94,6 +96,13 @@ import {
   Save,
   Send as SendIcon,
   CalendarClock,
+  PenSquare,
+  Trophy,
+  PhoneCall,
+  ClipboardCheck,
+  FileText,
+  ChevronDown,
+  Loader2,
 } from "lucide-react";
 
 function PageContainer({ children, className }: { children: React.ReactNode; className?: string }) {
@@ -1453,65 +1462,944 @@ export function EmployerCandidateDetail() {
 // ============================================================
 export function EmployerApplications() {
   const { go } = useApp();
-  const { data, loading } = useFetch<any>("/api/applications");
+  const { toast } = useToast();
+  const { data, loading, refetch } = useFetch<any>("/api/applications");
   const applications: any[] = data?.applications ?? [];
+
+  const [filterJob, setFilterJob] = useState<string>("all");
+  const [filterStep, setFilterStep] = useState<string>("all");
+  const [search, setSearch] = useState("");
+  const [expandedApp, setExpandedApp] = useState<string | null>(null);
+
+  // Dialog state for each step action
+  const [reviewDialog, setReviewDialog] = useState<any | null>(null);
+  const [examScheduleDialog, setExamScheduleDialog] = useState<string | null>(null); // jobId
+  const [examCompleteDialog, setExamCompleteDialog] = useState<any | null>(null);
+  const [interviewScheduleDialog, setInterviewScheduleDialog] = useState<string | null>(null); // jobId
+  const [interviewCompleteDialog, setInterviewCompleteDialog] = useState<any | null>(null);
+  const [selectDialog, setSelectDialog] = useState<any | null>(null);
+  const [hireDialog, setHireDialog] = useState<any | null>(null);
+  const [rejectDialog, setRejectDialog] = useState<any | null>(null);
+  const [acting, setActing] = useState(false);
+
+  // Get unique jobs for the filter dropdown
+  const jobMap = new Map<string, any>();
+  for (const a of applications) {
+    if (a.job?.id && !jobMap.has(a.job.id)) jobMap.set(a.job.id, a.job);
+  }
+  const jobs: any[] = Array.from(jobMap.values());
+
+  // Filter applications
+  let filtered = applications;
+  if (filterJob !== "all") filtered = filtered.filter((a) => a.job?.id === filterJob);
+  if (filterStep !== "all") {
+    if (filterStep === "active") {
+      filtered = filtered.filter((a) => a.status !== "rejected" && a.status !== "hired");
+    } else {
+      filtered = filtered.filter((a) => a.status === filterStep);
+    }
+  }
+  if (search.trim()) {
+    const q = search.toLowerCase();
+    filtered = filtered.filter((a) =>
+      a.candidate?.name?.toLowerCase().includes(q) ||
+      a.job?.title?.toLowerCase().includes(q)
+    );
+  }
+
+  // Group by step for stats
+  const stepStats = {
+    applied: applications.filter(a => a.status === "applied").length,
+    reviewing: applications.filter(a => a.status === "reviewing" || a.status === "review_passed").length,
+    exam: applications.filter(a => a.status === "exam_notified" || a.status === "exam_completed" || a.status === "exam_passed").length,
+    interview: applications.filter(a => a.status === "interview_notified" || a.status === "interview_completed" || a.status === "interview_passed").length,
+    selected: applications.filter(a => a.status === "selected").length,
+    hired: applications.filter(a => a.status === "hired").length,
+    rejected: applications.filter(a => a.status === "rejected").length,
+  };
+
+  // Generic PATCH helper
+  const patchApplication = async (applicationId: string, action: string, payload: any = {}) => {
+    setActing(true);
+    try {
+      const res = await fetch("/api/applications", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ applicationId, action, ...payload }),
+      });
+      const data = await res.json();
+      if (data.ok) {
+        return data;
+      } else {
+        toast({ title: "Action failed", description: data.error ?? "Please try again." });
+        return null;
+      }
+    } catch {
+      toast({ title: "Network error", description: "Please try again." });
+      return null;
+    } finally {
+      setActing(false);
+    }
+  };
+
+  // Schedule exam (notifies all review_passed candidates for the job)
+  const scheduleExam = async (jobId: string, payload: any) => {
+    setActing(true);
+    try {
+      const res = await fetch(`/api/jobs/${jobId}/exam-schedule`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      const data = await res.json();
+      if (data.ok) {
+        toast({ title: "Exam scheduled", description: data.message ?? "Candidates notified." });
+        setExamScheduleDialog(null);
+        refetch();
+      } else {
+        toast({ title: "Failed", description: data.error ?? "Please try again." });
+      }
+    } catch {
+      toast({ title: "Network error", description: "Please try again." });
+    } finally {
+      setActing(false);
+    }
+  };
+
+  // Schedule interview (notifies all exam_passed candidates for the job)
+  const scheduleInterview = async (jobId: string, payload: any) => {
+    setActing(true);
+    try {
+      const res = await fetch(`/api/jobs/${jobId}/interview-schedule`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      const data = await res.json();
+      if (data.ok) {
+        toast({ title: "Interview scheduled", description: data.message ?? "Candidates notified." });
+        setInterviewScheduleDialog(null);
+        refetch();
+      } else {
+        toast({ title: "Failed", description: data.error ?? "Please try again." });
+      }
+    } catch {
+      toast({ title: "Network error", description: "Please try again." });
+    } finally {
+      setActing(false);
+    }
+  };
 
   return (
     <PageContainer>
       <SectionHeader
-        title="Applications"
-        description="All applications across your active jobs."
+        title="Recruitment Pipeline"
+        description="Manage every application through the 7-step recruitment process. Advance candidates step by step — no skipping allowed."
+        icon={<ClipboardCheck className="h-4 w-4" />}
       />
+
+      <div className="mt-4">
+        <InfoCallout>
+          <span className="font-medium">7-Step Process:</span> 1. Application → 2. Application Review → 3. Written Exam Notification → 4. Written Examination → 5. Interview (Oral + Practical) → 6. Final Selection → 7. Final Call & Job Assignment. Each candidate must pass a step to advance. Notifications are sent automatically at every transition.
+        </InfoCallout>
+      </div>
+
+      {/* Step stats */}
+      <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-7">
+        <StatCard label="Step 1: Applied" value={stepStats.applied.toString()} icon={<FileText className="h-3 w-3" />} />
+        <StatCard label="Step 2: Review" value={stepStats.reviewing.toString()} icon={<ClipboardCheck className="h-3 w-3" />} />
+        <StatCard label="Step 3-4: Exam" value={stepStats.exam.toString()} icon={<PenSquare className="h-3 w-3" />} />
+        <StatCard label="Step 5: Interview" value={stepStats.interview.toString()} icon={<Users className="h-3 w-3" />} />
+        <StatCard label="Step 6: Selected" value={stepStats.selected.toString()} icon={<Trophy className="h-3 w-3" />} />
+        <StatCard label="Step 7: Hired" value={stepStats.hired.toString()} icon={<PhoneCall className="h-3 w-3" />} />
+        <StatCard label="Rejected" value={stepStats.rejected.toString()} icon={<X className="h-3 w-3" />} />
+      </div>
+
+      {/* Toolbar */}
+      <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:items-center">
+        <div className="relative flex-1 max-w-sm">
+          <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+          <Input placeholder="Search candidates or jobs…" value={search} onChange={(e) => setSearch(e.target.value)} className="h-9 pl-8" />
+        </div>
+        <Select value={filterJob} onValueChange={setFilterJob}>
+          <SelectTrigger className="h-9 w-full sm:w-[200px]"><SelectValue placeholder="All jobs" /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All jobs</SelectItem>
+            {jobs.map((j) => (
+              <SelectItem key={j.id} value={j.id}>{j.title}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <Select value={filterStep} onValueChange={setFilterStep}>
+          <SelectTrigger className="h-9 w-full sm:w-[180px]"><SelectValue placeholder="All stages" /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All stages</SelectItem>
+            <SelectItem value="active">Active (in progress)</SelectItem>
+            <SelectItem value="applied">Step 1: Applied</SelectItem>
+            <SelectItem value="reviewing">Step 2: Under Review</SelectItem>
+            <SelectItem value="review_passed">Step 2: Review Passed</SelectItem>
+            <SelectItem value="exam_notified">Step 3: Exam Notified</SelectItem>
+            <SelectItem value="exam_completed">Step 4: Exam Completed</SelectItem>
+            <SelectItem value="exam_passed">Step 4: Exam Passed</SelectItem>
+            <SelectItem value="interview_notified">Step 5: Interview Notified</SelectItem>
+            <SelectItem value="interview_completed">Step 5: Interview Completed</SelectItem>
+            <SelectItem value="interview_passed">Step 5: Interview Passed</SelectItem>
+            <SelectItem value="selected">Step 6: Selected</SelectItem>
+            <SelectItem value="hired">Step 7: Hired</SelectItem>
+            <SelectItem value="rejected">Rejected</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+
+      {/* Applications list */}
       {loading ? (
         <LoadingState label="Loading applications…" rows={3} />
-      ) : applications.length === 0 ? (
-        <EmptyState className="mt-6" icon={<Send className="h-5 w-5" />} title="No applications yet" description="Once candidates apply to your jobs, they'll appear here." />
+      ) : filtered.length === 0 ? (
+        <EmptyState className="mt-6" icon={<Send className="h-5 w-5" />} title="No applications found" description={applications.length === 0 ? "Once candidates apply to your jobs, they'll appear here." : "Try adjusting your filters."} />
       ) : (
-        <div className="mt-6 overflow-hidden rounded-lg border border-border">
-          <table className="w-full text-sm">
-            <thead className="bg-muted/50 text-[11px] uppercase tracking-wide text-muted-foreground">
-              <tr>
-                <th className="px-4 py-2.5 text-left font-medium">Candidate</th>
-                <th className="hidden px-4 py-2.5 text-left font-medium sm:table-cell">Job</th>
-                <th className="hidden px-4 py-2.5 text-left font-medium md:table-cell">Match</th>
-                <th className="px-4 py-2.5 text-left font-medium">Status</th>
-                <th className="hidden px-4 py-2.5 text-left font-medium lg:table-cell">Applied</th>
-                <th className="px-4 py-2.5 text-right font-medium">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-border bg-card">
-              {applications.map((a) => (
-                <tr key={a.id} className="hover:bg-accent/30">
-                  <td className="px-4 py-3">
-                    <div className="flex items-center gap-2.5">
-                      <Avatar initials={a.candidate?.initials ?? a.candidate?.name?.slice(0,2).toUpperCase() ?? "?"} color={a.candidate?.avatarColor ?? "oklch(0.55 0.22 285)"} size="sm" />
-                      <div className="min-w-0">
-                        <p className="truncate text-sm font-semibold">{a.candidate?.name ?? "—"}</p>
-                        <p className="truncate text-xs text-muted-foreground">{a.candidate?.title ?? ""}</p>
+        <div className="mt-6 space-y-3">
+          {filtered.map((a) => {
+            const isExpanded = expandedApp === a.id;
+            const isRejected = a.status === "rejected";
+            const currentStep = a.currentStep || (isRejected ? parseInt(a.rejectionStage || "1", 10) : 1);
+            const jobHasExamSchedule = a.examSchedule;
+            const jobHasInterviewSchedule = a.interviewSchedule;
+            return (
+              <Card key={a.id} className={cn(isRejected && "opacity-75")}>
+                <CardContent className="p-4">
+                  {/* Header row */}
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-start">
+                    <Avatar
+                      initials={a.candidate?.initials ?? a.candidate?.name?.slice(0, 2).toUpperCase() ?? "?"}
+                      color={a.candidate?.avatarColor ?? "oklch(0.55 0.22 285)"}
+                      size="md"
+                    />
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-start justify-between gap-2">
+                        <div>
+                          <p className="text-sm font-semibold">{a.candidate?.name ?? "—"}</p>
+                          <p className="text-xs text-muted-foreground">{a.candidate?.title ?? ""} · {a.job?.title ?? "—"}</p>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <Badge variant="outline" className={cn(
+                            "text-[10px]",
+                            isRejected ? "bg-rose-50 text-rose-700 border-rose-200" :
+                            a.status === "hired" ? "bg-emerald-50 text-emerald-700 border-emerald-200" :
+                            a.status === "selected" ? "bg-amber-50 text-amber-700 border-amber-200" :
+                            "bg-violet-50 text-violet-700 border-violet-200"
+                          )}>
+                            {isRejected ? "Rejected" : a.status === "hired" ? "Hired ✓" : `Step ${currentStep}/7`}
+                          </Badge>
+                          {a.matchScore != null && (
+                            <span className="text-xs text-muted-foreground">Match: <span className="font-semibold text-foreground">{a.matchScore}%</span></span>
+                          )}
+                        </div>
                       </div>
+
+                      {/* Pipeline visual */}
+                      <div className="mt-3">
+                        <RecruitmentPipeline
+                          currentStep={currentStep}
+                          rejected={isRejected}
+                          rejectionStage={a.rejectionStage ? parseInt(a.rejectionStage, 10) : undefined}
+                          rejectionReason={a.rejectionReason}
+                          scores={{
+                            examScore: a.examScore,
+                            oralScore: a.oralScore,
+                            practicalScore: a.practicalScore,
+                            interviewOverallScore: a.interviewOverallScore,
+                          }}
+                          dates={{
+                            appliedAt: a.appliedAt,
+                            reviewedAt: a.reviewedAt,
+                            examNotifiedAt: a.examNotifiedAt,
+                            examCompletedAt: a.examCompletedAt,
+                            interviewNotifiedAt: a.interviewNotifiedAt,
+                            interviewCompletedAt: a.interviewCompletedAt,
+                            selectedAt: a.selectedAt,
+                            hiredAt: a.hiredAt,
+                          }}
+                          compact
+                        />
+                      </div>
+
+                      {/* Action buttons based on current step */}
+                      <div className="mt-3 flex flex-wrap gap-2">
+                        {/* Step 1 → 2: Review */}
+                        {a.status === "applied" && (
+                          <Button size="sm" className="btn-blue" onClick={() => setReviewDialog(a)}>
+                            <ClipboardCheck className="h-3.5 w-3.5" /> Start Review
+                          </Button>
+                        )}
+                        {a.status === "reviewing" && (
+                          <Button size="sm" className="btn-green" onClick={() => setReviewDialog(a)}>
+                            <Check className="h-3.5 w-3.5" /> Complete Review
+                          </Button>
+                        )}
+
+                        {/* Step 2 → 3: Schedule exam (per-job, bulk notify) */}
+                        {a.status === "review_passed" && (
+                          <Button size="sm" className="btn-blue" onClick={() => setExamScheduleDialog(a.job.id)}>
+                            <PenSquare className="h-3.5 w-3.5" /> Schedule Written Exam
+                          </Button>
+                        )}
+
+                        {/* Step 3 → 4: Enter exam results */}
+                        {(a.status === "exam_notified" || a.status === "exam_completed") && (
+                          <Button size="sm" className="btn-blue" onClick={() => setExamCompleteDialog(a)}>
+                            <Check className="h-3.5 w-3.5" /> Enter Exam Results
+                          </Button>
+                        )}
+
+                        {/* Step 4 → 5: Schedule interview (per-job, bulk notify) */}
+                        {a.status === "exam_passed" && (
+                          <Button size="sm" className="btn-blue" onClick={() => setInterviewScheduleDialog(a.job.id)}>
+                            <Users className="h-3.5 w-3.5" /> Schedule Interview
+                          </Button>
+                        )}
+
+                        {/* Step 5: Enter interview results */}
+                        {(a.status === "interview_notified" || a.status === "interview_completed") && (
+                          <Button size="sm" className="btn-blue" onClick={() => setInterviewCompleteDialog(a)}>
+                            <Check className="h-3.5 w-3.5" /> Enter Interview Results
+                          </Button>
+                        )}
+
+                        {/* Step 6: Final selection */}
+                        {a.status === "interview_passed" && (
+                          <Button size="sm" className="btn-green" onClick={() => setSelectDialog(a)}>
+                            <Trophy className="h-3.5 w-3.5" /> Select Candidate
+                          </Button>
+                        )}
+
+                        {/* Step 7: Hire */}
+                        {a.status === "selected" && (
+                          <Button size="sm" className="btn-rainbow" onClick={() => setHireDialog(a)}>
+                            <PhoneCall className="h-3.5 w-3.5" /> Finalize Hiring
+                          </Button>
+                        )}
+
+                        {/* Reject (at any active stage) */}
+                        {!isRejected && a.status !== "hired" && (
+                          <Button size="sm" variant="outline" className="text-rose-600" onClick={() => setRejectDialog(a)}>
+                            <X className="h-3.5 w-3.5" /> Reject
+                          </Button>
+                        )}
+
+                        {/* View details toggle */}
+                        <Button size="sm" variant="ghost" onClick={() => setExpandedApp(isExpanded ? null : a.id)}>
+                          {isExpanded ? "Hide" : "Details"} <ChevronDown className={cn("h-3.5 w-3.5 transition-transform", isExpanded && "rotate-180")} />
+                        </Button>
+                      </div>
+
+                      {/* Expanded details */}
+                      {isExpanded && (
+                        <div className="mt-4 space-y-3 border-t border-border pt-3">
+                          {a.coverLetter && (
+                            <div>
+                              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1">Application Letter</p>
+                              <div className="rounded-lg border border-border bg-muted/30 p-3 text-xs whitespace-pre-wrap text-foreground/80 max-h-48 overflow-y-auto">
+                                {a.coverLetter}
+                              </div>
+                            </div>
+                          )}
+                          {a.reviewNotes && (
+                            <div>
+                              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1">Review Notes</p>
+                              <p className="text-xs text-foreground/80">{a.reviewNotes}</p>
+                            </div>
+                          )}
+                          {a.examSchedule && (
+                            <div className="rounded-lg border border-blue-200 bg-blue-50 p-3">
+                              <p className="text-xs font-semibold text-blue-700 uppercase tracking-wide mb-1">Exam Schedule</p>
+                              <p className="text-xs text-blue-800">
+                                {new Date(a.examSchedule.scheduledAt).toLocaleString()} · {a.examSchedule.duration} min · {a.examSchedule.location} · {a.examSchedule.format}
+                              </p>
+                              {a.examSchedule.instructions && <p className="text-xs text-blue-700 mt-1">{a.examSchedule.instructions}</p>}
+                            </div>
+                          )}
+                          {a.examScore != null && (
+                            <div className="grid grid-cols-2 gap-2 text-xs">
+                              <div className="rounded-lg border border-border bg-card p-2">
+                                <span className="text-muted-foreground">Exam Score:</span> <span className="font-semibold">{a.examScore}/100</span>
+                                <span className={cn("ml-2 font-medium", a.examPassed ? "text-emerald-600" : "text-rose-600")}>{a.examPassed ? "Passed" : "Failed"}</span>
+                              </div>
+                              {a.examNotes && <div className="rounded-lg border border-border bg-card p-2 col-span-2"><span className="text-muted-foreground">Notes:</span> {a.examNotes}</div>}
+                            </div>
+                          )}
+                          {a.interviewSchedule && (
+                            <div className="rounded-lg border border-amber-200 bg-amber-50 p-3">
+                              <p className="text-xs font-semibold text-amber-700 uppercase tracking-wide mb-1">Interview Schedule</p>
+                              <p className="text-xs text-amber-800">
+                                {new Date(a.interviewSchedule.scheduledAt).toLocaleString()} · {a.interviewSchedule.duration} min · {a.interviewSchedule.location} · {a.interviewSchedule.format}
+                              </p>
+                              {a.interviewSchedule.instructions && <p className="text-xs text-amber-700 mt-1">{a.interviewSchedule.instructions}</p>}
+                            </div>
+                          )}
+                          {a.oralScore != null && (
+                            <div className="grid grid-cols-3 gap-2 text-xs">
+                              <div className="rounded-lg border border-border bg-card p-2">
+                                <span className="text-muted-foreground">Oral:</span> <span className="font-semibold">{a.oralScore}/100</span>
+                              </div>
+                              <div className="rounded-lg border border-border bg-card p-2">
+                                <span className="text-muted-foreground">Practical:</span> <span className="font-semibold">{a.practicalScore}/100</span>
+                              </div>
+                              <div className="rounded-lg border border-border bg-card p-2">
+                                <span className="text-muted-foreground">Overall:</span> <span className="font-semibold">{a.interviewOverallScore}/100</span>
+                              </div>
+                              {a.interviewNotes && <div className="rounded-lg border border-border bg-card p-2 col-span-3"><span className="text-muted-foreground">Notes:</span> {a.interviewNotes}</div>}
+                            </div>
+                          )}
+                          {a.jobAssignment && (
+                            <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-3">
+                              <p className="text-xs font-semibold text-emerald-700 uppercase tracking-wide mb-1">Job Assignment</p>
+                              <p className="text-xs text-emerald-800 whitespace-pre-wrap">{a.jobAssignment}</p>
+                            </div>
+                          )}
+                          <Button size="sm" variant="outline" onClick={() => go("candidate-detail", { candidateId: a.candidate?.id })}>
+                            View full profile <ArrowRight className="h-3 w-3" />
+                          </Button>
+                        </div>
+                      )}
                     </div>
-                  </td>
-                  <td className="hidden px-4 py-3 sm:table-cell">
-                    <p className="text-sm">{a.job?.title ?? "—"}</p>
-                    <p className="text-xs text-muted-foreground">{a.job?.company ?? ""}</p>
-                  </td>
-                  <td className="hidden px-4 py-3 md:table-cell">
-                    {a.matchScore && <MatchScore score={a.matchScore} size="sm" showLabel={false} />}
-                  </td>
-                  <td className="px-4 py-3"><ApplicationStatusBadge status={a.status} /></td>
-                  <td className="hidden px-4 py-3 text-xs text-muted-foreground lg:table-cell">{timeAgo(a.appliedAt)}</td>
-                  <td className="px-4 py-3 text-right">
-                    <Button size="sm" variant="outline" onClick={() => go("candidate-detail", { candidateId: a.candidate?.id })}>
-                      Review
-                    </Button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+                  </div>
+                </CardContent>
+              </Card>
+            );
+          })}
         </div>
       )}
+
+      {/* ===== STEP 2: REVIEW DIALOG ===== */}
+      {reviewDialog && (
+        <ReviewDialog
+          application={reviewDialog}
+          acting={acting}
+          onClose={() => setReviewDialog(null)}
+          onSubmit={async (passed, notes) => {
+            const result = await patchApplication(reviewDialog.id, "review", { passed, notes });
+            if (result) {
+              toast({
+                title: passed ? "Review passed" : "Under review",
+                description: passed
+                  ? `${reviewDialog.candidate?.name} has passed the application review. They'll be notified to prepare for the written exam.`
+                  : `${reviewDialog.candidate?.name} is now under review.`,
+              });
+              setReviewDialog(null);
+              refetch();
+            }
+          }}
+        />
+      )}
+
+      {/* ===== STEP 3: EXAM SCHEDULE DIALOG ===== */}
+      {examScheduleDialog && (
+        <ScheduleDialog
+          title="Schedule Written Examination (Step 3)"
+          description="All candidates who passed the application review will be automatically notified with the exam date, time, and instructions."
+          acting={acting}
+          onClose={() => setExamScheduleDialog(null)}
+          onSubmit={(payload) => scheduleExam(examScheduleDialog, payload)}
+        />
+      )}
+
+      {/* ===== STEP 4: EXAM COMPLETE DIALOG ===== */}
+      {examCompleteDialog && (
+        <ExamResultDialog
+          application={examCompleteDialog}
+          acting={acting}
+          onClose={() => setExamCompleteDialog(null)}
+          onSubmit={async (score, passed, notes) => {
+            const result = await patchApplication(examCompleteDialog.id, "exam_complete", { score, passed, notes });
+            if (result) {
+              toast({
+                title: passed ? "Exam passed!" : "Exam not passed",
+                description: passed
+                  ? `${examCompleteDialog.candidate?.name} has passed the written exam (${score}/100). They'll be notified to prepare for the interview.`
+                  : `${examCompleteDialog.candidate?.name} did not pass the written exam (${score}/100). Rejection notification sent.`,
+              });
+              setExamCompleteDialog(null);
+              refetch();
+            }
+          }}
+        />
+      )}
+
+      {/* ===== STEP 5: INTERVIEW SCHEDULE DIALOG ===== */}
+      {interviewScheduleDialog && (
+        <ScheduleDialog
+          title="Schedule Interview (Step 5)"
+          description="All candidates who passed the written exam will be automatically notified with the interview date, time, and instructions. The interview includes oral and practical components."
+          acting={acting}
+          onClose={() => setInterviewScheduleDialog(null)}
+          onSubmit={(payload) => scheduleInterview(interviewScheduleDialog, payload)}
+          isInterview
+        />
+      )}
+
+      {/* ===== STEP 5: INTERVIEW COMPLETE DIALOG ===== */}
+      {interviewCompleteDialog && (
+        <InterviewResultDialog
+          application={interviewCompleteDialog}
+          acting={acting}
+          onClose={() => setInterviewCompleteDialog(null)}
+          onSubmit={async (oralScore, practicalScore, passed, notes) => {
+            const result = await patchApplication(interviewCompleteDialog.id, "interview_complete", { oralScore, practicalScore, passed, notes });
+            if (result) {
+              toast({
+                title: passed ? "Interview passed!" : "Interview not passed",
+                description: passed
+                  ? `${interviewCompleteDialog.candidate?.name} has passed the interview (oral: ${oralScore}, practical: ${practicalScore}). They're now eligible for final selection.`
+                  : `${interviewCompleteDialog.candidate?.name} did not pass the interview. Rejection notification sent.`,
+              });
+              setInterviewCompleteDialog(null);
+              refetch();
+            }
+          }}
+        />
+      )}
+
+      {/* ===== STEP 6: SELECT DIALOG ===== */}
+      {selectDialog && (
+        <SelectDialog
+          application={selectDialog}
+          acting={acting}
+          onClose={() => setSelectDialog(null)}
+          onSubmit={async (notes) => {
+            const result = await patchApplication(selectDialog.id, "select", { notes });
+            if (result) {
+              toast({
+                title: "Candidate selected! 🎉",
+                description: `${selectDialog.candidate?.name} has been selected. Congratulations notification sent. Proceed to finalize hiring (Step 7).`,
+              });
+              setSelectDialog(null);
+              refetch();
+            }
+          }}
+        />
+      )}
+
+      {/* ===== STEP 7: HIRE DIALOG ===== */}
+      {hireDialog && (
+        <HireDialog
+          application={hireDialog}
+          acting={acting}
+          onClose={() => setHireDialog(null)}
+          onSubmit={async (jobAssignment, notes) => {
+            const result = await patchApplication(hireDialog.id, "hire", { jobAssignment, notes });
+            if (result) {
+              toast({
+                title: "Candidate hired! 🎉",
+                description: `${hireDialog.candidate?.name} has been hired. Welcome aboard message sent with job assignment details.`,
+              });
+              setHireDialog(null);
+              refetch();
+            }
+          }}
+        />
+      )}
+
+      {/* ===== REJECT DIALOG ===== */}
+      {rejectDialog && (
+        <RejectDialog
+          application={rejectDialog}
+          acting={acting}
+          onClose={() => setRejectDialog(null)}
+          onSubmit={async (reason) => {
+            const result = await patchApplication(rejectDialog.id, "reject", { reason });
+            if (result) {
+              toast({
+                title: "Candidate rejected",
+                description: `${rejectDialog.candidate?.name} has been rejected. Appropriate rejection notification sent.`,
+              });
+              setRejectDialog(null);
+              refetch();
+            }
+          }}
+        />
+      )}
     </PageContainer>
+  );
+}
+
+// ============================================================
+// RECRUITMENT DIALOG COMPONENTS
+// ============================================================
+function ReviewDialog({ application, acting, onClose, onSubmit }: {
+  application: any;
+  acting: boolean;
+  onClose: () => void;
+  onSubmit: (passed: boolean, notes: string) => void;
+}) {
+  const [notes, setNotes] = useState("");
+  const isUnderReview = application.status === "reviewing";
+  return (
+    <Dialog open onOpenChange={(o) => { if (!o) onClose(); }}>
+      <DialogContent className="max-w-2xl">
+        <DialogHeader>
+          <DialogTitle>{isUnderReview ? "Complete Application Review (Step 2)" : "Start Application Review (Step 2)"}</DialogTitle>
+          <DialogDescription>
+            Reviewing <span className="font-medium text-foreground">{application.candidate?.name}</span> for <span className="font-medium text-foreground">{application.job?.title}</span>.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="space-y-3 py-2 max-h-[60vh] overflow-y-auto">
+          {application.coverLetter && (
+            <div>
+              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1">Application Letter</p>
+              <div className="rounded-lg border border-border bg-muted/30 p-3 text-xs whitespace-pre-wrap text-foreground/80 max-h-48 overflow-y-auto">
+                {application.coverLetter}
+              </div>
+            </div>
+          )}
+          <div className="space-y-1.5">
+            <Label htmlFor="review-notes">Review notes (optional)</Label>
+            <Textarea
+              id="review-notes"
+              rows={3}
+              placeholder="Add your review notes about this candidate…"
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+              className="resize-none"
+            />
+          </div>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose}>Cancel</Button>
+          {isUnderReview ? (
+            <>
+              <Button variant="outline" className="text-rose-600" disabled={acting} onClick={() => onSubmit(false, notes)}>
+                <X className="h-3.5 w-3.5" /> Reject
+              </Button>
+              <Button className="btn-green" disabled={acting} onClick={() => onSubmit(true, notes)}>
+                <Check className="h-3.5 w-3.5" /> Pass review
+              </Button>
+            </>
+          ) : (
+            <Button className="btn-blue" disabled={acting} onClick={() => onSubmit(false, notes)}>
+              {acting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <ClipboardCheck className="h-3.5 w-3.5" />}
+              Start review
+            </Button>
+          )}
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function ScheduleDialog({ title, description, acting, onClose, onSubmit, isInterview }: {
+  title: string;
+  description: string;
+  acting: boolean;
+  onClose: () => void;
+  onSubmit: (payload: any) => void;
+  isInterview?: boolean;
+}) {
+  const [scheduledAt, setScheduledAt] = useState("");
+  const [duration, setDuration] = useState("60");
+  const [location, setLocation] = useState("Online");
+  const [format, setFormat] = useState(isInterview ? "both" : "written");
+  const [instructions, setInstructions] = useState("");
+
+  return (
+    <Dialog open onOpenChange={(o) => { if (!o) onClose(); }}>
+      <DialogContent className="max-w-2xl">
+        <DialogHeader>
+          <DialogTitle>{title}</DialogTitle>
+          <DialogDescription>{description}</DialogDescription>
+        </DialogHeader>
+        <div className="space-y-3 py-2 max-h-[60vh] overflow-y-auto">
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div className="space-y-1.5">
+              <Label htmlFor="sched-date">Date & Time *</Label>
+              <Input
+                id="sched-date"
+                type="datetime-local"
+                value={scheduledAt}
+                onChange={(e) => setScheduledAt(e.target.value)}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="sched-duration">Duration (minutes)</Label>
+              <Input id="sched-duration" type="number" min="15" value={duration} onChange={(e) => setDuration(e.target.value)} />
+            </div>
+          </div>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div className="space-y-1.5">
+              <Label htmlFor="sched-location">Location</Label>
+              <Input id="sched-location" value={location} onChange={(e) => setLocation(e.target.value)} placeholder="Online / Office address" />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="sched-format">Format</Label>
+              <Select value={format} onValueChange={setFormat}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {isInterview ? (
+                    <>
+                      <SelectItem value="both">Oral + Practical</SelectItem>
+                      <SelectItem value="oral">Oral only</SelectItem>
+                      <SelectItem value="practical">Practical only</SelectItem>
+                    </>
+                  ) : (
+                    <>
+                      <SelectItem value="written">Written</SelectItem>
+                      <SelectItem value="online">Online</SelectItem>
+                      <SelectItem value="practical">Practical</SelectItem>
+                    </>
+                  )}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="sched-instructions">Instructions (optional)</Label>
+            <Textarea
+              id="sched-instructions"
+              rows={3}
+              placeholder={isInterview ? "What to prepare, what to bring, interview format details…" : "What to study, what to bring, exam topics…"}
+              value={instructions}
+              onChange={(e) => setInstructions(e.target.value)}
+              className="resize-none"
+            />
+          </div>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose}>Cancel</Button>
+          <Button
+            className="btn-blue"
+            disabled={acting || !scheduledAt}
+            onClick={() => onSubmit({ scheduledAt: new Date(scheduledAt).toISOString(), duration: parseInt(duration, 10), location, format, instructions: instructions || undefined })}
+          >
+            {acting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Calendar className="h-3.5 w-3.5" />}
+            Schedule & notify candidates
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function ExamResultDialog({ application, acting, onClose, onSubmit }: {
+  application: any;
+  acting: boolean;
+  onClose: () => void;
+  onSubmit: (score: number, passed: boolean, notes: string) => void;
+}) {
+  const [score, setScore] = useState("");
+  const [notes, setNotes] = useState("");
+  return (
+    <Dialog open onOpenChange={(o) => { if (!o) onClose(); }}>
+      <DialogContent className="max-w-lg">
+        <DialogHeader>
+          <DialogTitle>Enter Written Exam Results (Step 4)</DialogTitle>
+          <DialogDescription>
+            <span className="font-medium text-foreground">{application.candidate?.name}</span> · {application.job?.title}
+          </DialogDescription>
+        </DialogHeader>
+        <div className="space-y-3 py-2">
+          <div className="space-y-1.5">
+            <Label htmlFor="exam-score">Exam Score (0-100) *</Label>
+            <Input id="exam-score" type="number" min="0" max="100" value={score} onChange={(e) => setScore(e.target.value)} placeholder="e.g. 85" />
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="exam-notes">Notes (optional)</Label>
+            <Textarea id="exam-notes" rows={2} value={notes} onChange={(e) => setNotes(e.target.value)} className="resize-none" placeholder="Comments on performance…" />
+          </div>
+          <InfoCallout>
+            If the candidate passes, they'll receive: "Congratulations! You have passed the written examination. Please prepare for the next interview stage." If they fail, a rejection notification is sent.
+          </InfoCallout>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose}>Cancel</Button>
+          <Button variant="outline" className="text-rose-600" disabled={acting || !score} onClick={() => onSubmit(parseInt(score, 10), false, notes)}>
+            <X className="h-3.5 w-3.5" /> Did not pass
+          </Button>
+          <Button className="btn-green" disabled={acting || !score} onClick={() => onSubmit(parseInt(score, 10), true, notes)}>
+            <Check className="h-3.5 w-3.5" /> Passed
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function InterviewResultDialog({ application, acting, onClose, onSubmit }: {
+  application: any;
+  acting: boolean;
+  onClose: () => void;
+  onSubmit: (oralScore: number, practicalScore: number, passed: boolean, notes: string) => void;
+}) {
+  const [oralScore, setOralScore] = useState("");
+  const [practicalScore, setPracticalScore] = useState("");
+  const [notes, setNotes] = useState("");
+  const overall = oralScore && practicalScore ? Math.round((parseInt(oralScore, 10) + parseInt(practicalScore, 10)) / 2) : null;
+  return (
+    <Dialog open onOpenChange={(o) => { if (!o) onClose(); }}>
+      <DialogContent className="max-w-lg">
+        <DialogHeader>
+          <DialogTitle>Enter Interview Results (Step 5)</DialogTitle>
+          <DialogDescription>
+            <span className="font-medium text-foreground">{application.candidate?.name}</span> · {application.job?.title} · Oral + Practical
+          </DialogDescription>
+        </DialogHeader>
+        <div className="space-y-3 py-2">
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1.5">
+              <Label htmlFor="oral-score">Oral Interview Score (0-100) *</Label>
+              <Input id="oral-score" type="number" min="0" max="100" value={oralScore} onChange={(e) => setOralScore(e.target.value)} placeholder="e.g. 80" />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="practical-score">Practical Test Score (0-100) *</Label>
+              <Input id="practical-score" type="number" min="0" max="100" value={practicalScore} onChange={(e) => setPracticalScore(e.target.value)} placeholder="e.g. 75" />
+            </div>
+          </div>
+          {overall != null && (
+            <div className="rounded-md border border-border bg-muted/30 px-3 py-2 text-xs">
+              Overall Score: <span className="font-semibold text-primary">{overall}/100</span>
+            </div>
+          )}
+          <div className="space-y-1.5">
+            <Label htmlFor="interview-notes">Notes (optional)</Label>
+            <Textarea id="interview-notes" rows={2} value={notes} onChange={(e) => setNotes(e.target.value)} className="resize-none" placeholder="Comments on interview performance…" />
+          </div>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose}>Cancel</Button>
+          <Button variant="outline" className="text-rose-600" disabled={acting || !oralScore || !practicalScore} onClick={() => onSubmit(parseInt(oralScore, 10), parseInt(practicalScore, 10), false, notes)}>
+            <X className="h-3.5 w-3.5" /> Did not pass
+          </Button>
+          <Button className="btn-green" disabled={acting || !oralScore || !practicalScore} onClick={() => onSubmit(parseInt(oralScore, 10), parseInt(practicalScore, 10), true, notes)}>
+            <Check className="h-3.5 w-3.5" /> Passed
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function SelectDialog({ application, acting, onClose, onSubmit }: {
+  application: any;
+  acting: boolean;
+  onClose: () => void;
+  onSubmit: (notes: string) => void;
+}) {
+  const [notes, setNotes] = useState("");
+  return (
+    <Dialog open onOpenChange={(o) => { if (!o) onClose(); }}>
+      <DialogContent className="max-w-lg">
+        <DialogHeader>
+          <DialogTitle>Final Selection (Step 6) 🎉</DialogTitle>
+          <DialogDescription>
+            You're selecting <span className="font-medium text-foreground">{application.candidate?.name}</span> for <span className="font-medium text-foreground">{application.job?.title}</span>. A congratulations message will be sent automatically.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="space-y-3 py-2">
+          <div className="rounded-md border border-emerald-200 bg-emerald-50 p-3 text-xs text-emerald-800">
+            The candidate will receive: "Congratulations! You have successfully completed the recruitment process. We are pleased to inform you that you have been selected for this position and are now officially joining our workplace."
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="select-notes">Selection notes (optional)</Label>
+            <Textarea id="select-notes" rows={2} value={notes} onChange={(e) => setNotes(e.target.value)} className="resize-none" placeholder="Why this candidate was selected…" />
+          </div>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose}>Cancel</Button>
+          <Button className="btn-green" disabled={acting} onClick={() => onSubmit(notes)}>
+            <Trophy className="h-3.5 w-3.5" /> Select this candidate
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function HireDialog({ application, acting, onClose, onSubmit }: {
+  application: any;
+  acting: boolean;
+  onClose: () => void;
+  onSubmit: (jobAssignment: string, notes: string) => void;
+}) {
+  const [jobAssignment, setJobAssignment] = useState("");
+  const [notes, setNotes] = useState("");
+  return (
+    <Dialog open onOpenChange={(o) => { if (!o) onClose(); }}>
+      <DialogContent className="max-w-2xl">
+        <DialogHeader>
+          <DialogTitle>Final Call & Job Assignment (Step 7) 🎉</DialogTitle>
+          <DialogDescription>
+            Finalize hiring for <span className="font-medium text-foreground">{application.candidate?.name}</span>. The job assignment details below will be sent to the candidate in the welcome notification.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="space-y-3 py-2 max-h-[60vh] overflow-y-auto">
+          <div className="rounded-md border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800">
+            After this step, the candidate will receive: "Welcome to the team! You have successfully completed the entire recruitment process. Here are your job assignment details: [details below]. Welcome aboard!"
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="job-assignment">Job Assignment Details *</Label>
+            <Textarea
+              id="job-assignment"
+              rows={6}
+              placeholder={"Include:\n• Responsibilities and role description\n• Work location (office address or remote)\n• Starting date\n• Work schedule / hours\n• Reporting manager\n• Any other relevant information"}
+              value={jobAssignment}
+              onChange={(e) => setJobAssignment(e.target.value)}
+              className="resize-y"
+            />
+            <p className="text-[11px] text-muted-foreground">This information will be sent to the candidate in the welcome notification.</p>
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="hire-notes">Internal notes (optional)</Label>
+            <Textarea id="hire-notes" rows={2} value={notes} onChange={(e) => setNotes(e.target.value)} className="resize-none" placeholder="Internal notes about the hire (not sent to candidate)…" />
+          </div>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose}>Cancel</Button>
+          <Button className="btn-rainbow" disabled={acting || !jobAssignment.trim()} onClick={() => onSubmit(jobAssignment.trim(), notes)}>
+            {acting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <PhoneCall className="h-3.5 w-3.5" />}
+            Finalize hiring
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function RejectDialog({ application, acting, onClose, onSubmit }: {
+  application: any;
+  acting: boolean;
+  onClose: () => void;
+  onSubmit: (reason: string) => void;
+}) {
+  const [reason, setReason] = useState("");
+  const currentStep = application.currentStep || 1;
+  return (
+    <Dialog open onOpenChange={(o) => { if (!o) onClose(); }}>
+      <DialogContent className="max-w-lg">
+        <DialogHeader>
+          <DialogTitle>Reject Application</DialogTitle>
+          <DialogDescription>
+            Rejecting <span className="font-medium text-foreground">{application.candidate?.name}</span> at Step {currentStep}. An appropriate rejection notification will be sent based on the current stage.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="space-y-3 py-2">
+          <div className="space-y-1.5">
+            <Label htmlFor="reject-reason">Reason (optional)</Label>
+            <Textarea id="reject-reason" rows={3} value={reason} onChange={(e) => setReason(e.target.value)} className="resize-none" placeholder="Reason for rejection…" />
+          </div>
+          <div className="rounded-md border border-rose-200 bg-rose-50 p-3 text-xs text-rose-700">
+            {currentStep <= 2
+              ? "Candidate will receive: \"Thank you for your application. Unfortunately, your application was not selected at this stage.\""
+              : currentStep <= 4
+              ? "Candidate will receive: \"Thank you for participating in the written examination. Unfortunately, you did not pass the written exam at this stage.\""
+              : "Candidate will receive: \"Thank you for completing the interview. Unfortunately, you were not selected at this stage.\""}
+          </div>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose}>Cancel</Button>
+          <Button variant="outline" className="text-rose-600 border-rose-300" disabled={acting} onClick={() => onSubmit(reason)}>
+            <X className="h-3.5 w-3.5" /> Reject candidate
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
 

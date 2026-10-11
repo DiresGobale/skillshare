@@ -736,3 +736,112 @@ Work Log:
 Stage Summary:
 - "Back to news" button now works: clicking it clears selectedNewsId and PublicNewsPage renders the news list instead of the detail page.
 - The go() function now supports clearing any selection (jobId/candidateId/conversationId/newsId) by explicitly passing the key with value undefined.
+
+---
+Task ID: 18
+Agent: main (Super Z)
+Task: Build a 7-step job recruitment process: Apply → Application Review → Written Exam Notification → Written Examination → Interview (Oral+Practical) → Final Selection → Final Call & Job Assignment. Strict step ordering, auto-notifications at each stage, all data in DB.
+
+Work Log:
+
+DATABASE (prisma/schema.prisma):
+- Extended Application model with 20+ new fields: coverLetter, reviewedAt, reviewPassed, reviewNotes, examNotifiedAt, examCompletedAt, examScore, examPassed, examNotes, interviewNotifiedAt, interviewCompletedAt, oralScore, practicalScore, interviewOverallScore, interviewPassed, interviewNotes, selectedAt, selectionNotes, hiredAt, jobAssignment, finalCallNotes, rejectedAt, rejectionStage, rejectionReason.
+- New status flow: applied → reviewing → review_passed → exam_notified → exam_completed → exam_passed → interview_notified → interview_completed → interview_passed → selected → hired (rejected at any stage).
+- Added ExamSchedule model (per-job: scheduledAt, duration, location, format, instructions).
+- Added InterviewSchedule model (per-job: scheduledAt, duration, location, format [oral|practical|both], instructions).
+- Added relations on Job model: examSchedules, interviewSchedules.
+- Ran prisma db push + prisma generate. Migrated old applications (submitted/screening/shortlisted/interview) to "applied" status.
+
+SHARED LIBRARY (src/lib/recruitment.ts):
+- PIPELINE_STEPS: 7-step definition with step number, name, description, status.
+- STATUS_TO_STEP: maps each status to its step number (1-7).
+- STATUS_PREREQUISITES: defines which status must come BEFORE each target — enforces strict ordering, no skipping.
+- canTransitionTo(): validates that a status transition is allowed; returns error if prerequisite not met.
+- sendNotification() / sendNotifications(): helper functions for creating DB notifications.
+- audit(): helper for creating audit log entries.
+
+API (src/app/api/applications/route.ts):
+- GET: returns applications with all pipeline fields + currentStep computed + examSchedule/interviewSchedule per job.
+- POST (Step 1): requires coverLetter (min 50 chars). Creates application with status="applied". Sends confirmation to seeker + notification to employer.
+- PATCH with action-based dispatch:
+  * action="review" (Step 2): applied→reviewing→review_passed (or reject). Sends "Congratulations! Your application has been selected. Please prepare for the next stage."
+  * action="exam_complete" (Step 4): enters score + passed/failed. Pass → "Congratulations! You have passed the written examination. Please prepare for the next interview stage." Fail → rejection with appropriate message.
+  * action="interview_complete" (Step 5): enters oralScore + practicalScore + passed. Computes overall. Sends pass/fail notification.
+  * action="select" (Step 6): moves to "selected". Sends "Congratulations! You have successfully completed the recruitment process. You have been selected for this position."
+  * action="hire" (Step 7): requires jobAssignment text. Sends "Welcome to the team! Here are your job assignment details: [details]."
+  * action="reject": works at any stage. Sends stage-appropriate rejection message.
+  * action="withdraw": seeker can withdraw their own application.
+- All transitions validated via canTransitionTo() — cannot skip steps.
+
+API (src/app/api/jobs/[id]/exam-schedule/route.ts):
+- POST (Step 3): employer schedules exam for a job. Creates/updates ExamSchedule. Auto-notifies ALL candidates with status="review_passed" — moves them to "exam_notified". Notification includes exam date, time, duration, location, format, instructions.
+- GET: fetches the exam schedule for a job.
+
+API (src/app/api/jobs/[id]/interview-schedule/route.ts):
+- POST (Step 5): employer schedules interview for a job. Creates/updates InterviewSchedule. Auto-notifies ALL candidates with status="exam_passed" — moves them to "interview_notified". Notification includes interview date, time, duration, location, format (oral/practical/both), instructions.
+- GET: fetches the interview schedule for a job.
+
+UI COMPONENT (src/components/shared/recruitment-pipeline.tsx):
+- RecruitmentPipeline: visual 7-step progress bar (horizontal on desktop, vertical on mobile).
+- Shows each step with icon, name, description. Completed steps = green check. Current = violet pulse. Rejected = red X. Future = grey.
+- Displays step-specific details (dates, scores) inline.
+- Compact mode for cards, full mode for detail views.
+
+SEEKER UI (src/components/seeker/views.tsx):
+- SeekerJobDetail: apply dialog now requires a professional application letter (Textarea, min 50 chars). Submits to POST /api/applications with coverLetter. Shows success banner on submission.
+- SeekerApplications: completely rewritten with:
+  * 8 stat cards (Applied, Review, Exam Notified, Exam, Interview, Selected, Hired, Rejected)
+  * 10 filter tabs (All, Active, Applied, Review Passed, Exam Notified, Exam Passed, Interview, Selected, Hired, Closed)
+  * Each application card shows the compact RecruitmentPipeline visual
+  * Expandable details: cover letter, exam schedule, interview schedule, scores, job assignment
+  * Withdraw button for active applications
+
+EMPLOYER UI (src/components/employer/views.tsx):
+- EmployerApplications: completely rewritten as a full recruitment pipeline management page with:
+  * 7 stat cards by step (Applied, Review, Exam, Interview, Selected, Hired, Rejected)
+  * Search + filter by job + filter by stage
+  * Each application card shows compact RecruitmentPipeline + step-appropriate action buttons:
+    - Step 1: "Start Review" button → ReviewDialog
+    - Step 2 (reviewing): "Complete Review" button → ReviewDialog (pass/reject)
+    - Step 2 (review_passed): "Schedule Written Exam" button → ScheduleDialog (bulk notifies all review_passed candidates)
+    - Step 3-4: "Enter Exam Results" button → ExamResultDialog (score + pass/fail)
+    - Step 4 (exam_passed): "Schedule Interview" button → ScheduleDialog (bulk notifies all exam_passed candidates)
+    - Step 5: "Enter Interview Results" button → InterviewResultDialog (oral + practical scores + pass/fail)
+    - Step 5 (interview_passed): "Select Candidate" button → SelectDialog
+    - Step 6 (selected): "Finalize Hiring" button → HireDialog (job assignment text)
+    - Any active stage: "Reject" button → RejectDialog
+  * 7 dialog components: ReviewDialog, ScheduleDialog, ExamResultDialog, InterviewResultDialog, SelectDialog, HireDialog, RejectDialog
+  * Each dialog shows the exact notification message the candidate will receive
+
+END-TO-END TEST RESULTS (all passed):
+1. ✅ Step 1: Seeker applies with cover letter → status="applied", step=1
+2. ✅ Validation: Apply without cover letter → 400 "A professional application letter is required"
+3. ✅ Validation: Apply with <50 char cover letter → 400 "must be at least 50 characters"
+4. ✅ Skip prevention: Try to jump from Step 1 to Step 5 → 400 "Cannot move to interview_completed from applied. Required prerequisite: interview_notified"
+5. ✅ Skip prevention: Try to hire directly → 400 "Cannot move to hired from applied. Required prerequisite: selected"
+6. ✅ Step 2: Start review → status="reviewing" → Pass review → status="review_passed"
+7. ✅ Step 3: Schedule exam → 1 candidate notified, ExamSchedule created
+8. ✅ Step 4: Enter exam score (85, passed) → status="exam_passed"
+9. ✅ Step 5: Schedule interview → 1 candidate notified, InterviewSchedule created
+10. ✅ Step 5: Enter interview scores (oral=88, practical=82, overall=85, passed) → status="interview_passed"
+11. ✅ Step 6: Select candidate → status="selected"
+12. ✅ Step 7: Hire with job assignment → status="hired"
+13. ✅ Rejection: Reject at Step 1 → status="rejected", rejectionStage="1", appropriate rejection message sent
+14. ✅ 7 notifications sent automatically at each transition:
+    - "Application selected!" (Step 2 passed)
+    - "Written exam notification" (Step 3 scheduled)
+    - "Written exam passed!" (Step 4 passed)
+    - "Interview scheduled" (Step 5 scheduled)
+    - "Interview passed!" (Step 5 passed)
+    - "Congratulations! You have been selected!" (Step 6)
+    - "Welcome to the team!" (Step 7, with job assignment details)
+15. ✅ All data persisted to DB: scores, dates, notes, job assignment, rejection reason/stage
+
+Stage Summary:
+- Complete 7-step recruitment pipeline implemented end-to-end.
+- Strict step ordering enforced by canTransitionTo() — no skipping allowed.
+- Automatic notifications sent at every stage transition with the exact messages specified by the user.
+- ExamSchedule and InterviewSchedule models support per-job scheduling with bulk notification of eligible candidates.
+- RecruitmentPipeline visual component shows progress on both seeker and employer sides.
+- All data (status, scores, dates, notes, job assignment, rejection info) persisted to the database.
+- 0 TypeScript errors in new code (1 pre-existing error in unrelated code).
