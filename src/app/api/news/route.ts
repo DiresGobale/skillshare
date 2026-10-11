@@ -33,22 +33,27 @@ export async function GET(req: NextRequest) {
     },
   });
 
-  const result = news.map((n) => ({
-    id: n.id,
-    title: n.title,
-    content: n.content,
-    excerpt: n.excerpt,
-    category: n.category,
-    imageUrl: n.imageUrl,
-    status: n.status,
-    pinned: n.pinned,
-    publishedAt: n.publishedAt.toISOString(),
-    createdAt: n.createdAt.toISOString(),
-    updatedAt: n.updatedAt.toISOString(),
-    author: n.author?.name ?? "Admin",
-    authorInitials: n.author?.initials ?? "AD",
-    authorColor: n.author?.avatarColor ?? "oklch(0.65 0.2 330)",
-  }));
+  const result = news.map((n) => {
+    let attachments: any[] = [];
+    try { attachments = JSON.parse(n.attachments || "[]"); } catch { /* ignore */ }
+    return {
+      id: n.id,
+      title: n.title,
+      content: n.content,
+      excerpt: n.excerpt,
+      category: n.category,
+      imageUrl: n.imageUrl,
+      attachments,
+      status: n.status,
+      pinned: n.pinned,
+      publishedAt: n.publishedAt.toISOString(),
+      createdAt: n.createdAt.toISOString(),
+      updatedAt: n.updatedAt.toISOString(),
+      author: n.author?.name ?? "Admin",
+      authorInitials: n.author?.initials ?? "AD",
+      authorColor: n.author?.avatarColor ?? "oklch(0.65 0.2 330)",
+    };
+  });
 
   return NextResponse.json({ ok: true, news: result });
 }
@@ -62,7 +67,7 @@ export async function POST(req: NextRequest) {
 
   try {
     const body = await req.json();
-    const { title, content, excerpt, category, imageUrl, status, pinned } = body;
+    const { title, content, excerpt, category, imageUrl, attachments, status, pinned } = body;
 
     if (!title?.trim()) return NextResponse.json({ ok: false, error: "Title is required." }, { status: 400 });
     if (!content?.trim()) return NextResponse.json({ ok: false, error: "Content is required." }, { status: 400 });
@@ -76,6 +81,7 @@ export async function POST(req: NextRequest) {
         excerpt: excerpt?.trim() || null,
         category: category || "Update",
         imageUrl: imageUrl || null,
+        attachments: JSON.stringify(attachments ?? []),
         status: status || "published",
         pinned: Boolean(pinned),
         authorId: user?.id,
@@ -121,6 +127,7 @@ export async function PATCH(req: NextRequest) {
     if (updates.excerpt !== undefined) data.excerpt = updates.excerpt?.trim() || null;
     if (updates.category !== undefined) data.category = String(updates.category);
     if (updates.imageUrl !== undefined) data.imageUrl = updates.imageUrl || null;
+    if (updates.attachments !== undefined) data.attachments = JSON.stringify(updates.attachments ?? []);
     if (updates.status !== undefined) data.status = String(updates.status);
     if (updates.pinned !== undefined) data.pinned = Boolean(updates.pinned);
 

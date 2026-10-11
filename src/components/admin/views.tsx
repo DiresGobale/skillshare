@@ -74,6 +74,7 @@ import {
   X,
   Calendar,
   Image as ImageIcon,
+  FileText,
   Eye,
   EyeOff,
   ArrowUp,
@@ -2595,6 +2596,7 @@ interface AdminNewsItem {
   excerpt: string | null;
   category: string;
   imageUrl: string | null;
+  attachments?: { fileName: string; fileData: string; mimeType: string }[];
   status: string;
   pinned: boolean;
   publishedAt: string;
@@ -2632,12 +2634,13 @@ export function AdminNews() {
   const [excerpt, setExcerpt] = useState("");
   const [category, setCategory] = useState("Update");
   const [imageUrl, setImageUrl] = useState("");
+  const [attachments, setAttachments] = useState<{ fileName: string; fileData: string; mimeType: string }[]>([]);
   const [status, setStatus] = useState("published");
   const [pinned, setPinned] = useState(false);
 
   const resetForm = () => {
     setTitle(""); setContent(""); setExcerpt("");
-    setCategory("Update"); setImageUrl(""); setStatus("published"); setPinned(false);
+    setCategory("Update"); setImageUrl(""); setAttachments([]); setStatus("published"); setPinned(false);
     setEditing(null);
   };
 
@@ -2650,6 +2653,7 @@ export function AdminNews() {
     setExcerpt(item.excerpt ?? "");
     setCategory(item.category);
     setImageUrl(item.imageUrl ?? "");
+    setAttachments((item as any).attachments ?? []);
     setStatus(item.status);
     setPinned(item.pinned);
     setAddOpen(true);
@@ -2669,6 +2673,35 @@ export function AdminNews() {
     reader.readAsDataURL(file);
   };
 
+  // PDF / document attachment upload — supports PDF and DOC/DOCX files
+  const handleAttachmentUpload = (file: File) => {
+    const validTypes = ["application/pdf", "application/msword", "application/vnd.openxmlformats-officedocument.wordprocessingml.document"];
+    const validExts = [".pdf", ".doc", ".docx"];
+    const ext = file.name.toLowerCase().substring(file.name.lastIndexOf("."));
+    if (!validTypes.includes(file.type) && !validExts.includes(ext)) {
+      toast({ title: "Invalid file type", description: "Only PDF, DOC, and DOCX files are allowed." });
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      toast({ title: "File too large", description: "Max 5MB for document attachments." });
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => {
+      setAttachments((prev) => [...prev, {
+        fileName: file.name,
+        fileData: reader.result as string,
+        mimeType: file.type || (ext === ".pdf" ? "application/pdf" : ext === ".doc" ? "application/msword" : "application/vnd.openxmlformats-officedocument.wordprocessingml.document"),
+      }]);
+      toast({ title: "File attached", description: `${file.name} has been added.` });
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const removeAttachment = (index: number) => {
+    setAttachments((prev) => prev.filter((_, i) => i !== index));
+  };
+
   const save = async () => {
     if (!title.trim()) {
       toast({ title: "Title is required", description: "Please enter a title for the news article." });
@@ -2686,6 +2719,7 @@ export function AdminNews() {
         excerpt: excerpt.trim() || null,
         category,
         imageUrl: imageUrl || null,
+        attachments,
         status,
         pinned,
       };
@@ -2866,6 +2900,16 @@ export function AdminNews() {
                         <Pin className="mr-1 h-2.5 w-2.5" /> Pinned
                       </Badge>
                     )}
+                    {item.imageUrl && (
+                      <Badge variant="outline" className="text-[10px] bg-violet-50 text-violet-700 border-violet-200">
+                        <ImageIcon className="mr-1 h-2.5 w-2.5" /> Photo
+                      </Badge>
+                    )}
+                    {(item as any).attachments?.length > 0 && (
+                      <Badge variant="outline" className="text-[10px] bg-rose-50 text-rose-700 border-rose-200">
+                        <FileText className="mr-1 h-2.5 w-2.5" /> {(item as any).attachments.length} file(s)
+                      </Badge>
+                    )}
                     <span className="flex items-center gap-1 text-[10px] text-muted-foreground">
                       <Calendar className="h-2.5 w-2.5" /> {new Date(item.publishedAt).toLocaleDateString()}
                     </span>
@@ -3017,6 +3061,50 @@ export function AdminNews() {
                   <img src={imageUrl} alt="Cover preview" className="h-32 w-full object-cover" />
                 </div>
               )}
+            </div>
+
+            {/* PDF / Document Attachments */}
+            <div className="space-y-1.5">
+              <Label htmlFor="news-attachments">Document attachments — PDF, DOC, DOCX (optional)</Label>
+              <div className="flex items-center gap-2">
+                <input
+                  type="file"
+                  accept=".pdf,.doc,.docx,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                  id="news-attachment-file"
+                  className="hidden"
+                  onChange={(e) => { const f = e.target.files?.[0]; if (f) handleAttachmentUpload(f); e.target.value = ""; }}
+                />
+                <Button type="button" variant="outline" size="sm" onClick={() => document.getElementById("news-attachment-file")?.click()}>
+                  <FileText className="h-3.5 w-3.5" /> Attach PDF/DOC file (max 5MB)
+                </Button>
+              </div>
+              {attachments.length > 0 && (
+                <div className="mt-2 space-y-2">
+                  {attachments.map((att, i) => (
+                    <div key={i} className="flex items-center gap-2 rounded-lg border border-border bg-muted/30 p-2.5">
+                      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-rose-100 text-rose-700">
+                        <FileText className="h-4 w-4" />
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-xs font-medium">{att.fileName}</p>
+                        <p className="text-[10px] text-muted-foreground">{att.mimeType}</p>
+                      </div>
+                      <Button
+                        type="button"
+                        size="icon"
+                        variant="ghost"
+                        className="h-7 w-7 text-rose-600"
+                        onClick={() => removeAttachment(i)}
+                      >
+                        <X className="h-3.5 w-3.5" />
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              )}
+              <p className="text-[11px] text-muted-foreground">
+                You can attach multiple PDF or DOC files. All content types (text, photo, documents) are optional — submit any combination.
+              </p>
             </div>
 
             <div className="flex items-center justify-between rounded-lg border border-border p-3">

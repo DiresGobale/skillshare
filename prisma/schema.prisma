@@ -326,6 +326,7 @@ model News {
   excerpt      String?
   category     String   @default("Update") // Update | Announcement | Event | Release | Maintenance
   imageUrl     String?  // optional cover image (URL path or base64 data URL)
+  attachments  String   @default("[]")     // JSON array of { fileName, fileData, mimeType } for PDF/DOC files
   status       String   @default("published") // published | draft
   pinned       Boolean  @default(false) // pinned items appear first
   authorId     String?
