@@ -82,10 +82,11 @@ import {
   Tag,
   Pin,
   Loader2,
+  Phone,
 } from "lucide-react";
 import { Textarea } from "@/components/ui/textarea";
 import { useScrollReveal } from "@/hooks/use-scroll-reveal";
-import { validateName, validateEmail, validatePassword } from "@/lib/validation";
+import { validateName, validateEmail, validatePassword, validateEthiopianPhone, sanitizePhone } from "@/lib/validation";
 
 // ============================================================
 // Public top nav (guest header)
@@ -2171,6 +2172,7 @@ export function Register() {
   });
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
+  const [phone, setPhone] = useState("");
   const [password, setPassword] = useState("");
   const [agree, setAgree] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -2187,6 +2189,9 @@ export function Register() {
       if (!c.ok) err = c.error ?? "";
     } else if (field === "email") {
       const c = validateEmail(value);
+      if (!c.ok) err = c.error ?? "";
+    } else if (field === "phone") {
+      const c = validateEthiopianPhone(value);
       if (!c.ok) err = c.error ?? "";
     } else if (field === "password") {
       const c = validatePassword(value);
@@ -2210,6 +2215,13 @@ export function Register() {
     if (touched.email) validateField("email", value);
   };
 
+  const handlePhoneChange = (value: string) => {
+    // Sanitize: keep only digits and + at the start
+    const cleaned = sanitizePhone(value);
+    setPhone(cleaned);
+    if (touched.phone) validateField("phone", cleaned);
+  };
+
   const handlePasswordChange = (value: string) => {
     setPassword(value);
     if (touched.password) validateField("password", value);
@@ -2220,7 +2232,7 @@ export function Register() {
     setServerError(null);
 
     // Mark all fields as touched so errors show
-    setTouched({ name: true, email: true, password: true, terms: true });
+    setTouched({ name: true, email: true, phone: true, password: true, terms: true });
 
     // Full validation
     const next: Record<string, string> = {};
@@ -2228,6 +2240,8 @@ export function Register() {
     if (!nameCheck.ok) next.name = nameCheck.error!;
     const emailCheck = validateEmail(email);
     if (!emailCheck.ok) next.email = emailCheck.error!;
+    const phoneCheck = validateEthiopianPhone(phone);
+    if (!phoneCheck.ok) next.phone = phoneCheck.error!;
     const passCheck = validatePassword(password);
     if (!passCheck.ok) next.password = passCheck.error!;
     if (!agree) next.terms = "You must accept the terms to continue.";
@@ -2239,7 +2253,7 @@ export function Register() {
       const res = await fetch("/api/auth/register", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: name.trim(), email: email.trim(), password, role }),
+        body: JSON.stringify({ name: name.trim(), email: email.trim(), phone, password, role }),
       });
       const data = await res.json();
       if (!data.ok) {
@@ -2326,6 +2340,29 @@ export function Register() {
                 autoComplete="email"
               />
               {errors.email && <p className="text-xs text-rose-600">{errors.email}</p>}
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="phone">Ethiopian phone number</Label>
+              <div className="relative">
+                <Phone className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                <Input
+                  id="phone"
+                  type="tel"
+                  placeholder="0912345678"
+                  value={phone}
+                  onChange={(e) => handlePhoneChange(e.target.value)}
+                  onBlur={() => { setTouched((t) => ({ ...t, phone: true })); validateField("phone", phone); }}
+                  className={cn("pl-9", errors.phone && "border-rose-400 focus-visible:ring-rose-200")}
+                  autoComplete="tel"
+                />
+              </div>
+              {errors.phone ? (
+                <p className="text-xs text-rose-600">{errors.phone}</p>
+              ) : (
+                <p className="text-[11px] text-muted-foreground">
+                  Ethiopian format: 09XXXXXXXX or +2519XXXXXXXX (digits must match Ethiopian phone numbers)
+                </p>
+              )}
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="password">Password</Label>

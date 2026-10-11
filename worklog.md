@@ -1128,3 +1128,68 @@ Stage Summary:
 - The example scenario (CS graduate blocked from Social Work position) works as expected.
 - The eligibility check considers BOTH manually-entered profile data AND AI-extracted CV data — so even if the seeker didn't manually add their education, the CV analysis fills the gap.
 - File/image attachment support is in the schema and API (stored as base64 JSON arrays). The employer UI form for uploading attachments and the seeker UI for displaying them are next steps.
+
+---
+Task ID: 24
+Agent: main (Super Z)
+Task: Add Ethiopian phone number field to the sign-up form with validation — digits must match Ethiopian phone number format.
+
+Work Log:
+
+DATABASE (prisma/schema.prisma):
+- Added `phone String?` field to the User model. Stores the phone in normalized international format (+2519XXXXXXXX).
+- Ran prisma db push + prisma generate.
+
+VALIDATION (src/lib/validation.ts):
+- Added `validateEthiopianPhone(phone)` — validates Ethiopian phone numbers:
+  * Accepts formats: 09XXXXXXXX (local mobile), 9XXXXXXXX (without leading 0), +2519XXXXXXXX (international), 2519XXXXXXXX (without +), with spaces/dashes
+  * Strips whitespace, dashes, parentheses before validation
+  * Normalizes +251 and 251 prefixes to 0 prefix
+  * Validates exactly 9 digits after the prefix
+  * Checks the mobile prefix: valid prefixes are 91-99 and 70-79 (Ethiopian mobile)
+  * Also accepts landline numbers starting with 1 (area codes like 11 for Addis Ababa)
+  * Returns clear error messages: "Phone number is required", "Please enter a valid Ethiopian phone number (e.g. 0912345678 or +251912345678)", "Ethiopian phone numbers must start with 09, 07, or +251", "Invalid Ethiopian phone prefix"
+- Added `normalizeEthiopianPhone(phone)` — converts any valid format to +2519XXXXXXXX for DB storage
+- Added `sanitizePhone(value)` — keeps only digits and + (at the start) for live input sanitization
+
+API (src/app/api/auth/register/route.ts):
+- Added `phone` to the destructured request body
+- Added `validateEthiopianPhone(phone)` check — returns 400 if invalid
+- Added duplicate phone check — returns 409 if the phone is already registered
+- Normalizes the phone to international format (+2519XXXXXXXX) before saving to DB
+- Saves the normalized phone to the User record
+
+UI (src/components/guest/views.tsx — Register component):
+- Added `phone` state variable
+- Added `handlePhoneChange` — sanitizes input (keeps only digits and +) and runs live validation on touched fields
+- Added phone to the `validateField` function — runs `validateEthiopianPhone`
+- Added phone to the submit validation and payload
+- Added phone input field UI between Email and Password:
+  * Label: "Ethiopian phone number"
+  * Phone icon inside the input (left-aligned)
+  * Placeholder: "0912345678"
+  * type="tel" with autoComplete="tel"
+  * Red border when invalid
+  * Helper text: "Ethiopian format: 09XXXXXXXX or +2519XXXXXXXX (digits must match Ethiopian phone numbers)"
+  * Error message in red below the field
+- Added `Phone` icon to lucide-react imports
+
+END-TO-END TEST RESULTS:
+1. ✅ Valid: 0912345678 → accepted, stored as +251912345678
+2. ✅ Valid: +251912345678 → accepted (duplicate check caught the second attempt)
+3. ✅ Valid: 0712345678 → accepted (07 is a valid Ethiopian Safaricom prefix), stored as +251712345678
+4. ✅ Invalid: 0812345678 → rejected: "Ethiopian phone numbers must start with 09, 07, or +251"
+5. ✅ Invalid: 09123 (too short) → rejected: "Please enter a valid Ethiopian phone number"
+6. ✅ Invalid: missing phone → rejected: "Phone number is required"
+7. ✅ Invalid: duplicate phone → rejected: "An account with this phone number already exists"
+8. ✅ All phones stored in DB in normalized international format (+2519XXXXXXXX)
+9. ✅ 0 TypeScript errors
+
+Stage Summary:
+- Ethiopian phone number field added to the sign-up form with full validation.
+- Accepts all valid Ethiopian formats: 09XXXXXXXX, 07XXXXXXXX, +2519XXXXXXXX, 2519XXXXXXXX, with spaces/dashes.
+- Validates: correct length (9 digits after prefix), valid mobile prefix (91-99, 70-79), or valid landline prefix (1X).
+- Rejects: wrong prefixes (08...), too short/long, missing, non-Ethiopian formats.
+- Duplicate phone check prevents the same number from registering twice.
+- Phone stored in normalized international format (+2519XXXXXXXX) in the database.
+- Live validation on the frontend (on blur + on change after first blur) with clear error messages.

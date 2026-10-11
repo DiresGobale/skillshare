@@ -1,13 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
 import { db } from "@/lib/db";
-import { validateName, validateEmail, validatePassword } from "@/lib/validation";
+import { validateName, validateEmail, validatePassword, validateEthiopianPhone, normalizeEthiopianPhone } from "@/lib/validation";
 
 // POST /api/auth/register
-// Body: { name, email, password, role }
+// Body: { name, email, password, role, phone }
 export async function POST(req: NextRequest) {
   try {
-    const { name, email, password, role } = await req.json();
+    const { name, email, password, role, phone } = await req.json();
 
     // ---------- BACKEND VALIDATION ----------
     const nameCheck = validateName(name ?? "", "Name");
@@ -19,6 +19,10 @@ export async function POST(req: NextRequest) {
     const passCheck = validatePassword(password ?? "");
     if (!passCheck.ok) return NextResponse.json({ ok: false, error: passCheck.error }, { status: 400 });
 
+    // Ethiopian phone number validation (required)
+    const phoneCheck = validateEthiopianPhone(phone ?? "");
+    if (!phoneCheck.ok) return NextResponse.json({ ok: false, error: phoneCheck.error }, { status: 400 });
+
     if (!["seeker", "employer"].includes(role)) {
       return NextResponse.json({ ok: false, error: "Invalid role. Only seeker or employer can self-register." }, { status: 400 });
     }
@@ -26,6 +30,13 @@ export async function POST(req: NextRequest) {
     const existing = await db.user.findUnique({ where: { email: email.toLowerCase().trim() } });
     if (existing) {
       return NextResponse.json({ ok: false, error: "An account with this email already exists." }, { status: 409 });
+    }
+
+    // Check for duplicate phone number
+    const normalizedPhone = normalizeEthiopianPhone(phone);
+    const existingPhone = await db.user.findFirst({ where: { phone: normalizedPhone } });
+    if (existingPhone) {
+      return NextResponse.json({ ok: false, error: "An account with this phone number already exists." }, { status: 409 });
     }
 
     const passwordHash = await bcrypt.hash(password, 10);
@@ -43,6 +54,7 @@ export async function POST(req: NextRequest) {
         avatarColor,
         initials,
         status: "active",
+        phone: normalizedPhone,
       },
     });
 

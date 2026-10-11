@@ -119,3 +119,103 @@ export function sanitizeName(name: string): string {
 export function sanitizeNumber(value: string): string {
   return value.replace(/[^\d]/g, "");
 }
+
+// ============================================================
+// ETHIOPIAN PHONE NUMBER VALIDATION
+// ============================================================
+// Ethiopian phone numbers follow these formats:
+//   - Mobile: +251 9XXXXXXXX or 09XXXXXXXX (9 digits after the prefix)
+//     Valid Ethiopian mobile prefixes: 91, 92, 93, 94, 95, 96, 97, 98, 99, 90, 70, 71, 72, 73, 74, 75, 76, 77, 78, 79
+//   - Landline: +251 11XXXXXXX or 011XXXXXXX (Addis Ababa area code 11, 7 digits)
+//   - Other regions: +251 XXXXXXXXX (area code + number)
+//
+// We accept the following input formats (case-insensitive):
+//   0912345678        (local mobile — 10 digits starting with 0)
+//   912345678         (mobile without leading 0 — 9 digits)
+//   +251912345678     (international with +251 prefix)
+//   251912345678      (international without +)
+//   +251 91 234 5678  (with spaces — we strip them)
+//
+// After normalization, we validate that the number is a valid Ethiopian phone.
+
+export function validateEthiopianPhone(phone: string): ValidationResult {
+  if (!phone) return { ok: false, error: "Phone number is required." };
+
+  // Strip all whitespace, dashes, parentheses
+  let cleaned = phone.trim().replace(/[\s\-()]/g, "");
+
+  if (!cleaned) return { ok: false, error: "Phone number is required." };
+
+  // Remove leading +
+  if (cleaned.startsWith("+")) cleaned = cleaned.slice(1);
+
+  // Handle international format: starts with 251
+  if (cleaned.startsWith("251")) {
+    cleaned = "0" + cleaned.slice(3); // convert 2519XXXXXXXX → 09XXXXXXXX
+  }
+
+  // Now the number should start with 0 and be 10 digits (Ethiopian local format)
+  // Or it could be 9 digits starting with 9 or 7 (without the leading 0)
+  if (cleaned.startsWith("0")) {
+    cleaned = cleaned.slice(1); // remove leading 0 for uniform validation
+  }
+
+  // Now we should have 9 digits
+  if (!/^\d{9}$/.test(cleaned)) {
+    return {
+      ok: false,
+      error: "Please enter a valid Ethiopian phone number (e.g. 0912345678 or +251912345678).",
+    };
+  }
+
+  // Check the prefix — Ethiopian mobile numbers start with 9 or 7
+  // Landline numbers start with 11 (Addis Ababa) or other area codes
+  const firstDigit = cleaned[0];
+  if (firstDigit === "9" || firstDigit === "7") {
+    // Mobile number — 9 digits starting with 9 or 7
+    // Valid mobile prefixes: 91-99, 70-79
+    const prefix = cleaned.slice(0, 2);
+    const validMobilePrefixes = ["91", "92", "93", "94", "95", "96", "97", "98", "99", "90", "70", "71", "72", "73", "74", "75", "76", "77", "78", "79"];
+    if (!validMobilePrefixes.includes(prefix)) {
+      return {
+        ok: false,
+        error: "Invalid Ethiopian phone prefix. Valid mobile prefixes are 91-99 or 70-79 (e.g. 0912345678).",
+      };
+    }
+  } else if (firstDigit === "1") {
+    // Landline — area codes start with 1 (e.g. 11 for Addis Ababa)
+    // We accept any 9-digit number starting with 1 as a valid landline
+  } else {
+    return {
+      ok: false,
+      error: "Ethiopian phone numbers must start with 09, 07, or +251 (e.g. 0912345678).",
+    };
+  }
+
+  return { ok: true };
+}
+
+// Normalize an Ethiopian phone number to international format: +2519XXXXXXXX
+export function normalizeEthiopianPhone(phone: string): string {
+  let cleaned = phone.trim().replace(/[\s\-()]/g, "");
+  if (cleaned.startsWith("+")) cleaned = cleaned.slice(1);
+  if (cleaned.startsWith("251")) cleaned = cleaned.slice(3);
+  else if (cleaned.startsWith("0")) cleaned = cleaned.slice(1);
+  return "+251" + cleaned;
+}
+
+// Sanitize phone input — keep only digits and + sign
+export function sanitizePhone(value: string): string {
+  // Keep + only at the start, and digits everywhere
+  let result = value.replace(/[^\d+]/g, "");
+  // If there's a + not at the start, remove it
+  if (result.indexOf("+") > 0) {
+    result = result.replace(/\+/g, "");
+    result = "+" + result;
+  }
+  // Only keep one + at the start
+  if (result.startsWith("+")) {
+    result = "+" + result.replace(/\+/g, "");
+  }
+  return result;
+}
