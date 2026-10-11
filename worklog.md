@@ -1286,3 +1286,80 @@ Stage Summary:
 - The public news detail page displays: cover image, full content, downloadable PDF/DOC attachments, and an "Apply Now" CTA that links to the login page.
 - Full DB integration: all content (text, image URL, base64 attachments) is saved to the News table and retrieved automatically.
 - File upload validation: image files must be images (max 2MB), document files must be PDF/DOC/DOCX (max 5MB).
+
+---
+Task ID: 27
+Agent: main (Super Z)
+Task: Phase 1 critical fixes — email verification, password reset, API pagination, SMTP email notifications, fix mock data (Messages + Skill Gap), automated tests.
+
+Work Log:
+
+1. EMAIL SERVICE (src/lib/email.ts):
+   - Installed nodemailer + @types/nodemailer.
+   - Created a reusable email service with SMTP support.
+   - Config via env vars: SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS, SMTP_FROM, APP_BASE_URL.
+   - In dev mode (no SMTP configured), emails are logged to the console with the full content + links.
+   - 5 email templates: sendVerificationEmail, sendPasswordResetEmail, sendApplicationConfirmationEmail, sendStageUpdateEmail, sendNewMessageEmail.
+   - All templates use a branded HTML wrapper with gradient header.
+
+2. EMAIL VERIFICATION:
+   - Added emailVerified, verificationToken, verificationTokenExpiry fields to User model.
+   - POST /api/auth/register now generates a verification token and sends a verification email.
+   - GET /api/auth/verify-email?token=...&email=... — verifies the token and activates the account.
+   - POST /api/auth/resend-verification — resends the verification email (for authenticated users).
+   - VerifyEmailPage UI component — standalone page accessed via the email link. Shows verifying → success/error states.
+   - Register success message updated: "Account created! Please check your email to verify your account, then sign in."
+   - GuestView type extended with "verify-email" and "reset-password".
+
+3. PASSWORD RESET:
+   - POST /api/auth/forgot-password — generates a reset token and emails it (doesn't leak whether the email exists).
+   - POST /api/auth/reset-password — accepts { token, email, password } and resets the password.
+   - Login component's "Forgot password?" dialog updated to work with the email-based flow (shows "Check your email" confirmation).
+   - ResetPasswordPage UI component — standalone page accessed via the email link. Enter new password + confirm → success.
+   - Both pages are routed in page.tsx as guest views.
+
+4. API PAGINATION:
+   - GET /api/jobs — now supports ?page=1&pageSize=20, returns { jobs, pagination: { page, pageSize, total, totalPages } }.
+   - GET /api/notifications — same pagination support.
+   - GET /api/news — same pagination support (backward compatible with ?limit=).
+   - All default to pageSize=50, max 100. Frontend components still work (they read data.jobs / data.notifications / data.news which is still the array).
+
+5. SMTP EMAIL NOTIFICATIONS:
+   - Updated sendNotification() in recruitment.ts to accept an optional emailContext and send an email via the email service.
+   - Application POST handler now sends: application confirmation email (sendApplicationConfirmationEmail) + stage update email (sendStageUpdateEmail).
+   - Messages POST handler sends a "New message" email notification to the other participant.
+   - All email sending is non-fatal (wrapped in try/catch) — if SMTP fails, the in-app notification still works.
+
+6. FIX MOCK DATA — MESSAGES:
+   - Added Conversation model (user1Id, user2Id, jobId, lastMessageAt, messages[]) with unique constraint on [user1Id, user2Id].
+   - Added Message model (conversationId, senderId, content, read, createdAt).
+   - GET /api/conversations — lists all conversations for the current user with participant info, last message, and unread count.
+   - POST /api/conversations — creates or returns an existing conversation between two users.
+   - GET /api/messages?conversationId=... — lists messages in a conversation (with pagination). Auto-marks messages from the other participant as read.
+   - POST /api/messages — sends a message, updates conversation lastMessageAt, notifies the other participant (in-app + email).
+   - SeekerMessages component completely rewritten to use /api/conversations + /api/messages (no more mock data).
+   - EmployerMessages component completely rewritten to use /api/conversations + /api/messages (no more mock data).
+   - Both show loading states, empty states, and real-time message sending.
+
+7. FIX MOCK DATA — SKILL GAP:
+   - SeekerSkillGap component completely rewritten to fetch the user's CV analysis from /api/resume.
+   - Uses the AI-detected skillGaps from the CV analysis (no more static mock data).
+   - Shows each gap with: skill name, importance (critical/recommended/optional), reason, and AI-recommended learning path.
+   - Shows the user's current skills as colored badges.
+   - Shows empty state if no CV uploaded, and success state if no gaps detected.
+
+8. AUTOMATED TESTS:
+   - Installed vitest.
+   - Created vitest.config.ts with path alias (@ → ./src).
+   - Added "test" and "test:watch" scripts to package.json.
+   - tests/validation.test.ts — 36 tests covering: name validation, email validation, password validation, Ethiopian phone validation (all formats, edge cases, normalization, sanitization), job title validation, location validation, expiration duration validation.
+   - tests/recruitment.test.ts — 31 tests covering: pipeline step definition, status-to-step mapping, step name lookup, strict step ordering enforcement (10+ skip-prevention tests), next-status mapping.
+   - All 67 tests pass.
+
+Stage Summary:
+- Email verification: new users get a verification email with a token link. Clicking it activates the account. ✅
+- Password reset: "Forgot password?" → email with reset link → set new password page. ✅
+- API pagination: jobs, notifications, and news support ?page=&pageSize= with pagination metadata. ✅
+- SMTP email notifications: application confirmations, stage updates, and new message notifications are sent via email (dev mode logs to console). ✅
+- Mock data fixed: Messages now uses real Conversation + Message DB models with full API. Skill Gap now uses the AI CV analysis data. ✅
+- Automated tests: 67 tests covering validation and pipeline logic, all passing. ✅

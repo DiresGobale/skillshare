@@ -3,35 +3,35 @@ import bcrypt from "bcryptjs";
 import { db } from "@/lib/db";
 
 // POST /api/auth/reset-password
-// Body: { token, newPassword }
-// Validates the token (must exist and not be expired), then updates the password.
+// Body: { token, email, password }
+// Resets the password using the token sent to the user's email
 export async function POST(req: NextRequest) {
   try {
-    const { token, newPassword } = await req.json();
+    const { token, email, password } = await req.json();
 
-    if (!token || !token.trim()) {
-      return NextResponse.json({ ok: false, error: "Reset token is required." }, { status: 400 });
+    if (!token || !email || !password) {
+      return NextResponse.json({ ok: false, error: "Token, email, and new password are required." }, { status: 400 });
     }
-    if (!newPassword || newPassword.length < 8) {
+
+    if (password.length < 8) {
       return NextResponse.json({ ok: false, error: "Password must be at least 8 characters." }, { status: 400 });
     }
 
-    // Find the user by token
-    const user = await db.user.findFirst({
-      where: {
-        resetToken: token,
-        resetTokenExpiry: { gt: new Date() },
-      },
-    });
-
+    const user = await db.user.findUnique({ where: { email: email.toLowerCase().trim() } });
     if (!user) {
       return NextResponse.json({ ok: false, error: "Invalid or expired reset token." }, { status: 400 });
     }
 
-    // Hash the new password
-    const passwordHash = await bcrypt.hash(newPassword, 10);
+    if (!user.resetToken || user.resetToken !== token) {
+      return NextResponse.json({ ok: false, error: "Invalid or expired reset token." }, { status: 400 });
+    }
 
-    // Update the password and clear the token
+    if (user.resetTokenExpiry && user.resetTokenExpiry < new Date()) {
+      return NextResponse.json({ ok: false, error: "Reset token has expired. Please request a new password reset." }, { status: 400 });
+    }
+
+    // Hash the new password and update the user
+    const passwordHash = await bcrypt.hash(password, 10);
     await db.user.update({
       where: { id: user.id },
       data: {
@@ -44,18 +44,15 @@ export async function POST(req: NextRequest) {
     await db.auditLog.create({
       data: {
         userId: user.id,
-        action: "Password reset completed",
+        action: "Password reset",
         target: user.email,
         type: "auth",
         status: "success",
       },
     });
 
-    return NextResponse.json({ ok: true, message: "Password updated successfully." });
+    return NextResponse.json({ ok: true, message: "Password reset successfully. You can now log in with your new password." });
   } catch (e) {
-    return NextResponse.json(
-      { ok: false, error: e instanceof Error ? e.message : "Failed" },
-      { status: 500 }
-    );
+    return NextResponse.json({ ok: false, error: "Failed to reset password." }, { status: 500 });
   }
 }

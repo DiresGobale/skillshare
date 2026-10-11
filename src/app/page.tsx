@@ -20,6 +20,8 @@ import {
   AboutPage,
   ContactPage,
   PublicNewsPage,
+  VerifyEmailPage,
+  ResetPasswordPage,
 } from "@/components/guest/views";
 import { JobPostedNotifier } from "@/components/shared/job-posted-notifier";
 // Seeker views
@@ -88,6 +90,9 @@ function Router() {
   if (status === "unauthenticated" || !session?.user) {
     if (view === "login") return <Login />;
     if (view === "register") return <Register />;
+    if (view === "verify-email") return <VerifyEmailPage />;
+    if (view === "reset-password") return <ResetPasswordPage />;
+    if (view === "forgot-password") return <Login />;
     if (view === "faq") return <FAQPage />;
     if (view === "privacy") return <PrivacyPage />;
     if (view === "terms") return <TermsPage />;

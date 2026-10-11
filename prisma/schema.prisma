@@ -29,20 +29,26 @@ model User {
   about         String?
   profilePhoto  String?  // base64-encoded image data URL
   phone         String?  // Ethiopian phone number in international format (+2519XXXXXXXX)
+  emailVerified Boolean  @default(false) // email verification status
+  verificationToken String? // email verification token
+  verificationTokenExpiry DateTime? // email verification token expiry
   resetToken    String?  // password reset token
   resetTokenExpiry DateTime?  // token expiry time
 
   // Relations
-  sessions     Session[]
-  skills       Skill[]
-  experiences  Experience[]
-  educations   Education[]
-  applications Application[]
-  jobsPosted   Job[]      @relation("JobEmployer")
-  notifications Notification[]
-  auditLogs    AuditLog[]
-  news         News[]     @relation("NewsAuthor")
-  resumes      Resume[]
+  sessions       Session[]
+  skills         Skill[]
+  experiences    Experience[]
+  educations     Education[]
+  applications   Application[]
+  jobsPosted     Job[]      @relation("JobEmployer")
+  notifications  Notification[]
+  auditLogs      AuditLog[]
+  news           News[]     @relation("NewsAuthor")
+  resumes        Resume[]
+  conversations1 Conversation[] @relation("ConvParticipant1")
+  conversations2 Conversation[] @relation("ConvParticipant2")
+  messages       Message[]
 
   // 2FA
   twoFactorSecretHash String?
@@ -359,5 +365,41 @@ model Resume {
   updatedAt   DateTime @updatedAt
 
   @@index([userId])
+  @@index([createdAt])
+}
+
+// ============================================================
+// CONVERSATIONS & MESSAGES — real-time messaging between users
+// ============================================================
+model Conversation {
+  id          String   @id @default(cuid())
+  user1Id     String
+  user1       User     @relation("ConvParticipant1", fields: [user1Id], references: [id], onDelete: Cascade)
+  user2Id     String
+  user2       User     @relation("ConvParticipant2", fields: [user2Id], references: [id], onDelete: Cascade)
+  jobId       String?  // optional: conversation about a specific job
+  lastMessageAt DateTime @default(now())
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  messages    Message[]
+
+  @@unique([user1Id, user2Id])
+  @@index([user1Id])
+  @@index([user2Id])
+  @@index([lastMessageAt])
+}
+
+model Message {
+  id              String   @id @default(cuid())
+  conversationId  String
+  conversation    Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  senderId        String
+  sender          User     @relation(fields: [senderId], references: [id], onDelete: Cascade)
+  content         String
+  read            Boolean  @default(false)
+  createdAt       DateTime @default(now())
+
+  @@index([conversationId])
+  @@index([senderId])
   @@index([createdAt])
 }

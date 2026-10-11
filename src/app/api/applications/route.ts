@@ -284,8 +284,15 @@ export async function POST(req: NextRequest) {
       user.id,
       "application",
       "Application submitted",
-      `Your application to "${job.title}" at ${job.company} has been submitted successfully. The employer will review it and notify you of the next steps.`
+      `Your application to "${job.title}" at ${job.company} has been submitted successfully. The employer will review it and notify you of the next steps.`,
+      { to: user.email, name: user.name, jobTitle: job.title, company: job.company }
     );
+
+    // Also send a dedicated application confirmation email
+    try {
+      const { sendApplicationConfirmationEmail } = await import("@/lib/email");
+      await sendApplicationConfirmationEmail(user.email, user.name, job.title, job.company);
+    } catch { /* non-fatal */ }
 
     await audit(user.id, "Applied to", `${job.title} @ ${job.company}`, "application", "success");
 

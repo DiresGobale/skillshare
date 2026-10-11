@@ -1787,10 +1787,7 @@ export function Login() {
   const [forgotEmail, setForgotEmail] = useState("");
   const [forgotError, setForgotError] = useState<string | null>(null);
   const [forgotLoading, setForgotLoading] = useState(false);
-  const [resetToken, setResetToken] = useState<string | null>(null);
-  const [newPassword, setNewPassword] = useState("");
-  const [resetSuccess, setResetSuccess] = useState(false);
-  const [resetError, setResetError] = useState<string | null>(null);
+  const [forgotSent, setForgotSent] = useState(false);
 
   // Core sign-in logic: pre-check credentials, then call NextAuth
   const doLogin = async (emailVal: string, passwordVal: string) => {
@@ -1886,7 +1883,7 @@ export function Login() {
             <div className="space-y-1.5">
               <div className="flex items-center justify-between">
                 <Label htmlFor="password">Password</Label>
-                <Dialog open={forgotOpen} onOpenChange={(o) => { setForgotOpen(o); if (!o) { setResetToken(null); setForgotError(null); setResetError(null); setResetSuccess(false); setNewPassword(""); } }}>
+                <Dialog open={forgotOpen} onOpenChange={(o) => { setForgotOpen(o); if (!o) { setForgotError(null); setForgotSent(false); setForgotEmail(""); } }}>
                   <button
                     type="button"
                     onClick={() => setForgotOpen(true)}
@@ -1896,78 +1893,31 @@ export function Login() {
                   </button>
                   <DialogContent>
                     <DialogHeader>
-                      <DialogTitle>{resetSuccess ? "Password updated!" : resetToken ? "Set a new password" : "Reset your password"}</DialogTitle>
+                      <DialogTitle>{forgotSent ? "Check your email" : "Reset your password"}</DialogTitle>
                       <DialogDescription>
-                        {resetSuccess
-                          ? "Your password has been changed. You can now sign in with your new password."
-                          : resetToken
-                          ? "Enter your new password below."
-                          : "Enter your email and we'll generate a reset link for you."}
+                        {forgotSent
+                          ? "We've sent a password reset link to your email. Click the link in the email to set a new password."
+                          : "Enter your email and we'll send you a password reset link."}
                       </DialogDescription>
                     </DialogHeader>
 
-                    {/* Step 3: Success */}
-                    {resetSuccess ? (
+                    {forgotSent ? (
                       <div className="flex flex-col items-center py-6 text-center">
-                        <CheckCircle2 className="h-12 w-12 text-emerald-600" />
-                        <p className="mt-3 text-sm font-semibold">Password changed successfully!</p>
-                        <p className="mt-1 text-xs text-muted-foreground">You can now sign in with your new password.</p>
-                        <Button className="mt-4 btn-green" size="sm" onClick={() => { setForgotOpen(false); setEmail(forgotEmail); }}>
-                          Sign in now
+                        <div className="flex h-14 w-14 items-center justify-center rounded-full bg-emerald-100 text-emerald-600">
+                          <Mail className="h-7 w-7" />
+                        </div>
+                        <p className="mt-3 text-sm font-semibold">Reset link sent!</p>
+                        <p className="mt-1 text-xs text-muted-foreground">
+                          Check <span className="font-medium text-foreground">{forgotEmail}</span> for the reset link.
+                        </p>
+                        <p className="mt-2 text-[11px] text-muted-foreground">
+                          In dev mode (no SMTP configured), the reset link is logged to the server console.
+                        </p>
+                        <Button className="mt-4" variant="outline" size="sm" onClick={() => setForgotOpen(false)}>
+                          Close
                         </Button>
                       </div>
-                    ) : resetToken ? (
-                      /* Step 2: Enter new password */
-                      <form
-                        onSubmit={async (e) => {
-                          e.preventDefault();
-                          setResetError(null);
-                          if (!newPassword || newPassword.length < 8) {
-                            setResetError("Password must be at least 8 characters.");
-                            return;
-                          }
-                          setForgotLoading(true);
-                          try {
-                            const res = await fetch("/api/auth/reset-password", {
-                              method: "POST",
-                              headers: { "Content-Type": "application/json" },
-                              body: JSON.stringify({ token: resetToken, newPassword }),
-                            });
-                            const data = await res.json();
-                            if (data.ok) {
-                              setResetSuccess(true);
-                            } else {
-                              setResetError(data.error ?? "Failed to reset password.");
-                            }
-                          } catch {
-                            setResetError("Network error.");
-                          } finally {
-                            setForgotLoading(false);
-                          }
-                        }}
-                        className="space-y-3"
-                      >
-                        <div className="space-y-1.5">
-                          <Label htmlFor="new-password">New password *</Label>
-                          <Input
-                            id="new-password"
-                            type="password"
-                            placeholder="At least 8 characters"
-                            value={newPassword}
-                            onChange={(e) => setNewPassword(e.target.value)}
-                            autoComplete="new-password"
-                          />
-                          {resetError && <p className="text-xs text-rose-600">{resetError}</p>}
-                        </div>
-                        <DialogFooter>
-                          <Button type="button" variant="outline" onClick={() => setForgotOpen(false)}>Cancel</Button>
-                          <Button type="submit" disabled={forgotLoading} className="btn-green">
-                            {forgotLoading ? "Resetting…" : "Reset password"}
-                          </Button>
-                        </DialogFooter>
-                      </form>
                     ) : (
-                      /* Step 1: Enter email */
                       <form
                         onSubmit={async (e) => {
                           e.preventDefault();
@@ -1989,9 +1939,9 @@ export function Login() {
                             });
                             const data = await res.json();
                             if (data.ok) {
-                              setResetToken(data.token);
+                              setForgotSent(true);
                             } else {
-                              setForgotError(data.error ?? "Failed to generate reset link.");
+                              setForgotError(data.error ?? "Failed to send reset link.");
                             }
                           } catch {
                             setForgotError("Network error.");
@@ -2013,13 +1963,10 @@ export function Login() {
                           />
                           {forgotError && <p className="text-xs text-rose-600">{forgotError}</p>}
                         </div>
-                        <div className="rounded-md border border-blue-200 bg-blue-50 px-3 py-2 text-[11px] text-blue-700">
-                          For demo accounts: seeker@demo.com, employer@demo.com, or admin@demo.com
-                        </div>
                         <DialogFooter>
                           <Button type="button" variant="outline" onClick={() => setForgotOpen(false)}>Cancel</Button>
                           <Button type="submit" disabled={forgotLoading} className="btn-blue">
-                            {forgotLoading ? "Generating…" : "Send reset link"}
+                            {forgotLoading ? "Sending…" : "Send reset link"}
                           </Button>
                         </DialogFooter>
                       </form>
@@ -2263,7 +2210,7 @@ export function Register() {
       }
       // Account created successfully — redirect to login so the user
       // signs in with their new credentials (per requirement #2).
-      setSuccessMsg("Account created! Redirecting to login…");
+      setSuccessMsg("Account created! Please check your email to verify your account, then sign in.");
       setTimeout(() => go("login"), 1500);
     } catch {
       setServerError("Network error. Please try again.");
@@ -3426,6 +3373,237 @@ export function PublicNewsDetailPage({ newsId }: { newsId: string }) {
             </article>
           )}
         </div>
+      </main>
+      <PublicFooter />
+    </div>
+  );
+}
+
+// ============================================================
+// VERIFY EMAIL PAGE — accessed via the verification link in the email
+// ============================================================
+export function VerifyEmailPage() {
+  const { go } = useApp();
+  const [status, setStatus] = useState<"verifying" | "success" | "error" | "already">("verifying");
+  const [message, setMessage] = useState<string>("");
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const token = params.get("token");
+    const email = params.get("email");
+    if (!token || !email) {
+      setStatus("error");
+      setMessage("Invalid verification link. Missing token or email.");
+      return;
+    }
+    fetch(`/api/auth/verify-email?token=${encodeURIComponent(token)}&email=${encodeURIComponent(email)}`)
+      .then((r) => r.json())
+      .then((data) => {
+        if (data.ok) {
+          if (data.alreadyVerified) {
+            setStatus("already");
+            setMessage("Your email is already verified. You can log in.");
+          } else {
+            setStatus("success");
+            setMessage(data.message || "Email verified successfully!");
+          }
+        } else {
+          setStatus("error");
+          setMessage(data.error || "Verification failed.");
+        }
+      })
+      .catch(() => {
+        setStatus("error");
+        setMessage("Network error. Please try again.");
+      });
+  }, []);
+
+  return (
+    <div className="flex min-h-screen flex-col">
+      <PublicHeader onAuth={(r) => go(r)} />
+      <main className="flex flex-1 items-center justify-center bg-muted/20 px-4">
+        <Card className="w-full max-w-md">
+          <CardContent className="p-8 text-center">
+            {status === "verifying" && (
+              <>
+                <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-blue-100">
+                  <Loader2 className="h-7 w-7 text-blue-600 animate-spin" />
+                </div>
+                <h2 className="mt-4 text-lg font-semibold">Verifying your email…</h2>
+                <p className="mt-1 text-sm text-muted-foreground">Please wait a moment.</p>
+              </>
+            )}
+            {status === "success" && (
+              <>
+                <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-emerald-100">
+                  <CheckCircle2 className="h-7 w-7 text-emerald-600" />
+                </div>
+                <h2 className="mt-4 text-lg font-semibold text-emerald-700">Email Verified!</h2>
+                <p className="mt-1 text-sm text-muted-foreground">{message}</p>
+                <Button className="mt-5 btn-green" onClick={() => go("login")}>
+                  Sign in to your account
+                </Button>
+              </>
+            )}
+            {status === "already" && (
+              <>
+                <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-blue-100">
+                  <CheckCircle2 className="h-7 w-7 text-blue-600" />
+                </div>
+                <h2 className="mt-4 text-lg font-semibold">Already Verified</h2>
+                <p className="mt-1 text-sm text-muted-foreground">{message}</p>
+                <Button className="mt-5" onClick={() => go("login")}>
+                  Sign in
+                </Button>
+              </>
+            )}
+            {status === "error" && (
+              <>
+                <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-rose-100">
+                  <AlertCircle className="h-7 w-7 text-rose-600" />
+                </div>
+                <h2 className="mt-4 text-lg font-semibold text-rose-700">Verification Failed</h2>
+                <p className="mt-1 text-sm text-muted-foreground">{message}</p>
+                <Button className="mt-5" variant="outline" onClick={() => go("login")}>
+                  Back to login
+                </Button>
+              </>
+            )}
+          </CardContent>
+        </Card>
+      </main>
+      <PublicFooter />
+    </div>
+  );
+}
+
+// ============================================================
+// RESET PASSWORD PAGE — accessed via the reset link in the email
+// ============================================================
+export function ResetPasswordPage() {
+  const { go } = useApp();
+  const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [success, setSuccess] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [token, setToken] = useState<string | null>(null);
+  const [email, setEmail] = useState<string | null>(null);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    setToken(params.get("token"));
+    setEmail(params.get("email"));
+  }, []);
+
+  const submit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError(null);
+    if (!token || !email) {
+      setError("Invalid reset link. Missing token or email.");
+      return;
+    }
+    if (password.length < 8) {
+      setError("Password must be at least 8 characters.");
+      return;
+    }
+    if (password !== confirmPassword) {
+      setError("Passwords do not match.");
+      return;
+    }
+    setLoading(true);
+    try {
+      const res = await fetch("/api/auth/reset-password", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ token, email, password }),
+      });
+      const data = await res.json();
+      if (data.ok) {
+        setSuccess(true);
+      } else {
+        setError(data.error || "Failed to reset password.");
+      }
+    } catch {
+      setError("Network error. Please try again.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="flex min-h-screen flex-col">
+      <PublicHeader onAuth={(r) => go(r)} />
+      <main className="flex flex-1 items-center justify-center bg-muted/20 px-4">
+        <Card className="w-full max-w-md">
+          <CardContent className="p-8">
+            {success ? (
+              <div className="text-center">
+                <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-emerald-100">
+                  <CheckCircle2 className="h-7 w-7 text-emerald-600" />
+                </div>
+                <h2 className="mt-4 text-lg font-semibold text-emerald-700">Password Reset!</h2>
+                <p className="mt-1 text-sm text-muted-foreground">Your password has been changed successfully. You can now sign in with your new password.</p>
+                <Button className="mt-5 btn-green" onClick={() => go("login")}>
+                  Sign in
+                </Button>
+              </div>
+            ) : !token || !email ? (
+              <div className="text-center">
+                <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-rose-100">
+                  <AlertCircle className="h-7 w-7 text-rose-600" />
+                </div>
+                <h2 className="mt-4 text-lg font-semibold text-rose-700">Invalid Reset Link</h2>
+                <p className="mt-1 text-sm text-muted-foreground">This password reset link is invalid or incomplete.</p>
+                <Button className="mt-5" variant="outline" onClick={() => go("login")}>
+                  Back to login
+                </Button>
+              </div>
+            ) : (
+              <>
+                <h2 className="text-lg font-semibold text-center">Set a New Password</h2>
+                <p className="mt-1 text-sm text-muted-foreground text-center">Enter your new password below.</p>
+                <form onSubmit={submit} className="mt-5 space-y-4">
+                  <div className="space-y-1.5">
+                    <Label htmlFor="reset-password">New password *</Label>
+                    <Input
+                      id="reset-password"
+                      type="password"
+                      placeholder="At least 8 characters"
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      autoComplete="new-password"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="reset-confirm">Confirm new password *</Label>
+                    <Input
+                      id="reset-confirm"
+                      type="password"
+                      placeholder="Re-enter your new password"
+                      value={confirmPassword}
+                      onChange={(e) => setConfirmPassword(e.target.value)}
+                      autoComplete="new-password"
+                    />
+                  </div>
+                  {error && (
+                    <div className="flex items-center gap-2 rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-700">
+                      <AlertCircle className="h-3.5 w-3.5 shrink-0" />
+                      {error}
+                    </div>
+                  )}
+                  <Button type="submit" className="w-full h-10 btn-green" disabled={loading}>
+                    {loading ? (
+                      <><span className="h-4 w-4 animate-spin rounded-full border-2 border-primary-foreground border-t-transparent" /> Resetting…</>
+                    ) : (
+                      "Reset password"
+                    )}
+                  </Button>
+                </form>
+              </>
+            )}
+          </CardContent>
+        </Card>
       </main>
       <PublicFooter />
     </div>

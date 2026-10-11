@@ -26,9 +26,11 @@ async function autoExpireJobs() {
   }
 }
 
-// GET /api/jobs — list jobs
+// GET /api/jobs — list jobs (with pagination)
+// Query: ?page=1&pageSize=20&status=published
 // - For employers: returns their own jobs
 // - For seekers/public: returns all published + non-expired jobs
+// Returns: { ok, jobs, pagination: { page, pageSize, total, totalPages } }
 export async function GET(req: NextRequest) {
   // Auto-expire jobs whose time has come — backend enforcement
   await autoExpireJobs();
@@ -36,19 +38,28 @@ export async function GET(req: NextRequest) {
   const session = await getServerSession(authOptions);
   const url = new URL(req.url);
   const status = url.searchParams.get("status");
+  const page = Math.max(1, parseInt(url.searchParams.get("page") ?? "1", 10));
+  const pageSize = Math.min(100, Math.max(1, parseInt(url.searchParams.get("pageSize") ?? "50", 10)));
 
   if (session?.user?.role === "employer") {
     const user = await db.user.findUnique({ where: { email: session.user.email! }, include: { jobsPosted: { orderBy: { postedAt: "desc" } } } });
     if (!user) return NextResponse.json({ ok: false, error: "Not found" }, { status: 404 });
     let jobs = user.jobsPosted;
     if (status && status !== "all") jobs = jobs.filter((j) => j.status === status);
-    return NextResponse.json({ ok: true, jobs });
+    const total = jobs.length;
+    const totalPages = Math.ceil(total / pageSize);
+    const paged = jobs.slice((page - 1) * pageSize, page * pageSize);
+    return NextResponse.json({ ok: true, jobs: paged, pagination: { page, pageSize, total, totalPages } });
   }
 
   // Public/seeker — only published jobs that haven't expired
   const where: any = { status: "published" };
-  const jobs = await db.job.findMany({ where, orderBy: { postedAt: "desc" } });
-  return NextResponse.json({ ok: true, jobs });
+  const [jobs, total] = await Promise.all([
+    db.job.findMany({ where, orderBy: { postedAt: "desc" }, skip: (page - 1) * pageSize, take: pageSize }),
+    db.job.count({ where }),
+  ]);
+  const totalPages = Math.ceil(total / pageSize);
+  return NextResponse.json({ ok: true, jobs, pagination: { page, pageSize, total, totalPages } });
 }
 
 // POST /api/jobs — employer creates a new job

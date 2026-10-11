@@ -102,17 +102,28 @@ export function canTransitionTo(currentStatus: string, targetStatus: string): { 
   return { ok: true };
 }
 
-// Send a notification to a user. Returns void; errors are swallowed (non-fatal).
+// Send a notification to a user. Also sends an email if the user has an email address.
+// Returns void; errors are swallowed (non-fatal).
 export async function sendNotification(
   userId: string,
   type: string,
   title: string,
-  message: string
+  message: string,
+  emailContext?: { to: string; name: string; jobTitle: string; company: string }
 ): Promise<void> {
   try {
     await db.notification.create({
       data: { userId, type, title, message, read: false },
     });
+    // Send email notification if context is provided
+    if (emailContext) {
+      try {
+        const { sendStageUpdateEmail } = await import("@/lib/email");
+        await sendStageUpdateEmail(emailContext.to, emailContext.name, emailContext.jobTitle, emailContext.company, message);
+      } catch {
+        // Email sending is non-fatal
+      }
+    }
   } catch {
     // Non-fatal: don't fail the API call if notification creation fails.
   }

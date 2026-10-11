@@ -2941,80 +2941,148 @@ export function SeekerApplications() {
 // ============================================================
 export function SeekerSkillGap() {
   const { go } = useApp();
+  const { toast } = useToast();
+  const [analysis, setAnalysis] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    // Fetch the user's CV/resume analysis which contains skill gaps
+    fetch("/api/resume")
+      .then((r) => r.json())
+      .then((data) => {
+        if (data.ok && data.resume?.analysis) {
+          setAnalysis(data.resume.analysis);
+        } else {
+          setAnalysis(null);
+          setError("Upload your CV in Resume & AI Analysis to get a personalized skill gap report.");
+        }
+      })
+      .catch(() => {
+        setError("Failed to load skill gap data. Please try again.");
+      })
+      .finally(() => setLoading(false));
+  }, []);
+
+  const skillGaps = analysis?.skillGaps ?? [];
+  const skills = analysis?.skills ?? [];
+
   return (
     <PageContainer>
       <SectionHeader
         title="Skill Gap Analysis"
-        description="Skills that separate you from your target roles, with curated learning paths."
+        description="AI-identified skill gaps based on your CV and career level, with recommended learning paths."
         icon={<TrendingUp className="h-4 w-4" />}
       />
 
-      <InfoCallout className="mt-6">
-        <span className="font-medium">How this works.</span> We analyzed the skills required across 4 recommended jobs and identified the gaps below. Each gap shows how many additional jobs it would unlock.
-      </InfoCallout>
-
-      <div className="mt-6 space-y-3">
-        {skillGapAnalysis.map((g: SkillGapItem) => (
-          <Card key={g.skill}>
-            <CardContent className="p-4">
-              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-2">
-                    <p className="text-sm font-semibold">{g.skill}</p>
-                    {g.gap >= 3 && (
-                      <Badge variant="outline" className="text-[10px] bg-rose-50 text-rose-700 border-rose-200">
-                        Critical gap
-                      </Badge>
-                    )}
-                    {g.gap === 1 && (
-                      <Badge variant="outline" className="text-[10px] bg-amber-50 text-amber-700 border-amber-200">
-                        Small gap
-                      </Badge>
-                    )}
-                  </div>
-                  <p className="text-xs text-muted-foreground">
-                    Required: <span className="capitalize font-medium text-foreground">{g.requiredProficiency}</span> · You: {g.currentProficiency ? <span className="capitalize font-medium text-foreground">{g.currentProficiency}</span> : "not yet started"}
-                  </p>
-                  <p className="text-xs text-muted-foreground">Unlocks <span className="font-semibold text-foreground">{g.jobsAvailable}</span> additional job matches</p>
-
-                  {/* Gap visualization */}
-                  <div className="mt-2 flex items-center gap-1.5">
-                    <span className="text-[10px] uppercase text-muted-foreground">Beginner</span>
-                    {(["beginner", "intermediate", "advanced", "expert"] as ProficiencyLevel[]).map((lvl) => {
-                      const isReached = g.currentProficiency && (
-                        ["beginner", "intermediate", "advanced", "expert"].indexOf(g.currentProficiency) >=
-                        ["beginner", "intermediate", "advanced", "expert"].indexOf(lvl)
-                      );
-                      const isRequired = lvl === g.requiredProficiency;
-                      return (
-                        <div
-                          key={lvl}
-                          className={cn(
-                            "h-1.5 flex-1 rounded-full",
-                            isReached ? "bg-emerald-500" : isRequired ? "bg-rose-400" : "bg-muted"
-                          )}
-                        />
-                      );
-                    })}
-                    <span className="text-[10px] uppercase text-muted-foreground">Expert</span>
-                  </div>
-                </div>
-                <div className="sm:ml-3 sm:w-56">
-                  <p className="mb-1.5 text-[10px] font-semibold uppercase text-muted-foreground">Recommended resources</p>
-                  <div className="space-y-1.5">
-                    {g.recommendedResources.map((r) => (
-                      <div key={r.title} className="rounded-md border border-border bg-card p-2 text-xs">
-                        <p className="font-semibold leading-tight">{r.title}</p>
-                        <p className="text-[11px] text-muted-foreground">{r.provider} · {r.duration} · {r.type}</p>
-                      </div>
-                    ))}
-                  </div>
-                </div>
+      {loading ? (
+        <LoadingState label="Analyzing your skill gaps…" rows={3} />
+      ) : error ? (
+        <div className="mt-6">
+          <Card>
+            <CardContent className="p-6 text-center">
+              <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-amber-100">
+                <AlertTriangle className="h-7 w-7 text-amber-600" />
               </div>
+              <h3 className="mt-3 text-base font-semibold">No skill gap data yet</h3>
+              <p className="mt-1 text-sm text-muted-foreground">{error}</p>
+              <Button className="mt-4" size="sm" onClick={() => go("resume")}>
+                <FileText className="h-3.5 w-3.5" /> Upload your CV
+              </Button>
             </CardContent>
           </Card>
-        ))}
-      </div>
+        </div>
+      ) : skillGaps.length === 0 ? (
+        <div className="mt-6">
+          <Card>
+            <CardContent className="p-6 text-center">
+              <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-emerald-100">
+                <CheckCircle2 className="h-7 w-7 text-emerald-600" />
+              </div>
+              <h3 className="mt-3 text-base font-semibold text-emerald-700">No skill gaps detected!</h3>
+              <p className="mt-1 text-sm text-muted-foreground">
+                Based on your CV analysis, you have the skills expected for your career level ({analysis?.careerLevel ?? "Mid-level"}).
+              </p>
+              <p className="mt-2 text-xs text-muted-foreground">
+                {skills.length} skills detected · {analysis?.yearsOfExperience ?? 0} years of experience
+              </p>
+            </CardContent>
+          </Card>
+        </div>
+      ) : (
+        <>
+          <div className="mt-6">
+            <InfoCallout>
+              <span className="font-medium">How this works:</span> Our AI analyzed your CV and identified {skillGaps.length} skill gap(s) for your career level ({analysis?.careerLevel ?? "Mid-level"}). Each gap includes the importance level and a recommended learning path.
+            </InfoCallout>
+          </div>
+
+          <div className="mt-6 space-y-3">
+            {skillGaps.map((gap: any, i: number) => (
+              <Card key={i} className={cn(
+                gap.importance === "critical" && "border-rose-200",
+                gap.importance === "recommended" && "border-amber-200",
+              )}>
+                <CardContent className="p-4">
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2">
+                        <p className="text-sm font-semibold">{gap.skill}</p>
+                        <Badge variant="outline" className={cn(
+                          "text-[10px]",
+                          gap.importance === "critical" ? "bg-rose-50 text-rose-700 border-rose-200" :
+                          gap.importance === "recommended" ? "bg-amber-50 text-amber-700 border-amber-200" :
+                          "bg-slate-50 text-slate-600 border-slate-200"
+                        )}>
+                          {gap.importance}
+                        </Badge>
+                      </div>
+                      <p className="mt-1 text-xs text-muted-foreground">{gap.reason}</p>
+
+                      {/* Learning path */}
+                      {gap.learningPath && (
+                        <div className="mt-3 flex items-start gap-2 rounded-lg border border-border bg-muted/30 p-3">
+                          <Lightbulb className="h-4 w-4 shrink-0 text-amber-600 mt-0.5" />
+                          <div>
+                            <p className="text-[10px] font-semibold uppercase text-muted-foreground">Recommended Learning Path</p>
+                            <p className="mt-0.5 text-xs text-foreground/80">{gap.learningPath}</p>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+
+          {/* Current skills summary */}
+          {skills.length > 0 && (
+            <Card className="mt-6">
+              <CardHeader className="pb-3">
+                <CardTitle className="text-sm flex items-center gap-2">
+                  <Sparkles className="h-4 w-4 text-primary" /> Your Current Skills ({skills.length})
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="flex flex-wrap gap-2">
+                  {skills.map((s: any, i: number) => (
+                    <Badge key={i} variant="outline" className={cn(
+                      "text-xs",
+                      s.proficiency === "expert" ? "bg-emerald-50 text-emerald-700 border-emerald-200" :
+                      s.proficiency === "advanced" ? "bg-blue-50 text-blue-700 border-blue-200" :
+                      s.proficiency === "intermediate" ? "bg-violet-50 text-violet-700 border-violet-200" :
+                      "bg-slate-50 text-slate-700 border-slate-200"
+                    )}>
+                      {s.name} ({s.proficiency})
+                    </Badge>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          )}
+        </>
+      )}
     </PageContainer>
   );
 }
@@ -3272,31 +3340,64 @@ export function SeekerNotifications() {
 export function SeekerMessages() {
   const { selectedConversationId, go } = useApp();
   const { toast } = useToast();
-  const [conversations, setConversations] = useState<Conversation[]>(seekerConversations);
-  const [activeId, setActiveId] = useState<string>(selectedConversationId || conversations[0].id);
+  const { data: convData, loading: convLoading, refetch: refetchConv } = useFetch<any>("/api/conversations");
+  const conversations: any[] = convData?.conversations ?? [];
+  const [activeId, setActiveId] = useState<string>("");
   const [draft, setDraft] = useState("");
+  const [messages, setMessages] = useState<any[]>([]);
+  const [loadingMsgs, setLoadingMsgs] = useState(false);
+  const [sending, setSending] = useState(false);
 
-  const active = conversations.find((c) => c.id === activeId)!;
+  // Set active conversation when data loads or selectedConversationId changes
+  useEffect(() => {
+    if (selectedConversationId) {
+      setActiveId(selectedConversationId);
+    } else if (conversations.length > 0 && !activeId) {
+      setActiveId(conversations[0].id);
+    }
+  }, [conversations, selectedConversationId, activeId]);
 
-  const send = () => {
-    if (!draft.trim()) return;
-    setConversations(
-      conversations.map((c) =>
-        c.id === activeId
-          ? {
-              ...c,
-              lastMessage: draft,
-              lastTime: "now",
-              unread: 0,
-              messages: [
-                ...c.messages,
-                { id: `m${Date.now()}`, sender: "me", text: draft, time: "now" },
-              ],
-            }
-          : c
-      )
-    );
-    setDraft("");
+  // Fetch messages when active conversation changes
+  useEffect(() => {
+    if (!activeId) {
+      setMessages([]);
+      return;
+    }
+    setLoadingMsgs(true);
+    fetch(`/api/messages?conversationId=${activeId}`)
+      .then((r) => r.json())
+      .then((data) => {
+        if (data.ok) setMessages(data.messages ?? []);
+        else setMessages([]);
+      })
+      .catch(() => setMessages([]))
+      .finally(() => setLoadingMsgs(false));
+  }, [activeId]);
+
+  const active = conversations.find((c) => c.id === activeId);
+
+  const send = async () => {
+    if (!draft.trim() || !activeId) return;
+    setSending(true);
+    try {
+      const res = await fetch("/api/messages", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ conversationId: activeId, content: draft.trim() }),
+      });
+      const data = await res.json();
+      if (data.ok) {
+        setMessages((prev) => [...prev, data.message]);
+        setDraft("");
+        refetchConv();
+      } else {
+        toast({ title: "Failed to send", description: data.error ?? "Please try again." });
+      }
+    } catch {
+      toast({ title: "Network error", description: "Please try again." });
+    } finally {
+      setSending(false);
+    }
   };
 
   return (
@@ -3313,31 +3414,39 @@ export function SeekerMessages() {
               <Input placeholder="Search conversations…" className="h-9" />
             </div>
             <div className="max-h-[60vh] divide-y divide-border lg:max-h-full overflow-y-auto">
-              {conversations.map((c) => (
-                <button
-                  key={c.id}
-                  onClick={() => setActiveId(c.id)}
-                  className={cn(
-                    "flex w-full items-start gap-3 p-3 text-left transition-colors hover:bg-accent",
-                    activeId === c.id && "bg-primary/5"
-                  )}
-                >
-                  <Avatar initials={c.participantInitials} color={c.participantColor} size="sm" />
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center justify-between">
-                      <p className="truncate text-sm font-semibold">{c.participantName}</p>
-                      <span className="text-[10px] text-muted-foreground">{c.lastTime}</span>
+              {convLoading ? (
+                <div className="p-6 text-center text-xs text-muted-foreground">Loading conversations…</div>
+              ) : conversations.length === 0 ? (
+                <div className="p-6 text-center text-xs text-muted-foreground">
+                  No conversations yet. When an employer shortlists you, you'll be able to message them here.
+                </div>
+              ) : (
+                conversations.map((c) => (
+                  <button
+                    key={c.id}
+                    onClick={() => setActiveId(c.id)}
+                    className={cn(
+                      "flex w-full items-start gap-3 p-3 text-left transition-colors hover:bg-accent",
+                      activeId === c.id && "bg-primary/5"
+                    )}
+                  >
+                    <Avatar initials={c.participantInitials} color={c.participantColor} size="sm" />
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center justify-between">
+                        <p className="truncate text-sm font-semibold">{c.participantName}</p>
+                        <span className="text-[10px] text-muted-foreground">{c.lastTime}</span>
+                      </div>
+                      <p className="text-[11px] text-muted-foreground">{c.participantRole}</p>
+                      <p className="mt-0.5 truncate text-xs text-muted-foreground">{c.lastMessage}</p>
                     </div>
-                    <p className="text-[11px] text-muted-foreground">{c.participantRole}</p>
-                    <p className="mt-0.5 truncate text-xs text-muted-foreground">{c.lastMessage}</p>
-                  </div>
-                  {c.unread > 0 && (
-                    <span className="inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-primary px-1.5 text-[10px] font-semibold text-primary-foreground">
-                      {c.unread}
-                    </span>
-                  )}
-                </button>
-              ))}
+                    {c.unread > 0 && (
+                      <span className="inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-primary px-1.5 text-[10px] font-semibold text-primary-foreground">
+                        {c.unread}
+                      </span>
+                    )}
+                  </button>
+                ))
+              )}
             </div>
           </CardContent>
         </Card>
@@ -3345,6 +3454,8 @@ export function SeekerMessages() {
         {/* Active conversation */}
         <Card className="lg:col-span-2 overflow-hidden flex flex-col">
           <CardContent className="p-0 flex flex-1 flex-col">
+            {active ? (
+            <>
             <div className="flex items-center gap-3 border-b border-border p-3">
               <Avatar initials={active.participantInitials} color={active.participantColor} size="sm" />
               <div className="min-w-0 flex-1">
@@ -3361,44 +3472,57 @@ export function SeekerMessages() {
               </Button>
             </div>
             <div className="flex-1 space-y-3 overflow-y-auto bg-muted/20 p-4 max-h-[60vh]">
-              {active.messages.map((m) => (
-                <div
-                  key={m.id}
-                  className={cn(
-                    "flex",
-                    m.sender === "me" ? "justify-end" : "justify-start"
-                  )}
-                >
+              {loadingMsgs ? (
+                <div className="text-center text-xs text-muted-foreground py-8">Loading messages…</div>
+              ) : messages.length === 0 ? (
+                <div className="text-center text-xs text-muted-foreground py-8">No messages yet. Start the conversation!</div>
+              ) : (
+                messages.map((m) => (
                   <div
+                    key={m.id}
                     className={cn(
-                      "max-w-[75%] rounded-lg px-3 py-2 text-sm",
-                      m.sender === "me"
-                        ? "bg-primary text-primary-foreground"
-                        : "bg-card border border-border"
+                      "flex",
+                      m.sender === "me" ? "justify-end" : "justify-start"
                     )}
                   >
-                    <p>{m.text}</p>
-                    <p className={cn(
-                      "mt-1 text-[10px]",
-                      m.sender === "me" ? "text-primary-foreground/70" : "text-muted-foreground"
-                    )}>
-                      {m.time}
-                    </p>
+                    <div
+                      className={cn(
+                        "max-w-[75%] rounded-lg px-3 py-2 text-sm",
+                        m.sender === "me"
+                          ? "bg-primary text-primary-foreground"
+                          : "bg-card border border-border"
+                      )}
+                    >
+                      <p>{m.text}</p>
+                      <p className={cn(
+                        "mt-1 text-[10px]",
+                        m.sender === "me" ? "text-primary-foreground/70" : "text-muted-foreground"
+                      )}>
+                        {m.time}
+                      </p>
+                    </div>
                   </div>
-                </div>
-              ))}
+                ))
+              )}
             </div>
             <div className="flex items-center gap-2 border-t border-border p-3">
               <Input
                 placeholder="Type your message…"
                 value={draft}
                 onChange={(e) => setDraft(e.target.value)}
-                onKeyDown={(e) => { if (e.key === "Enter") send(); }}
+                onKeyDown={(e) => { if (e.key === "Enter" && !sending) send(); }}
+                disabled={sending}
               />
-              <Button size="icon" onClick={send}>
-                <Send className="h-4 w-4" />
+              <Button size="icon" onClick={send} disabled={sending || !draft.trim()}>
+                {sending ? <span className="h-4 w-4 animate-spin rounded-full border-2 border-primary-foreground border-t-transparent" /> : <Send className="h-4 w-4" />}
               </Button>
             </div>
+            </>
+            ) : (
+              <div className="flex flex-1 items-center justify-center p-8 text-center">
+                <p className="text-sm text-muted-foreground">Select a conversation to start messaging.</p>
+              </div>
+            )}
           </CardContent>
         </Card>
       </div>

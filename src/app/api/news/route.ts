@@ -10,6 +10,8 @@ export async function GET(req: NextRequest) {
   const includeDrafts = url.searchParams.get("includeDrafts") === "true";
   const limit = parseInt(url.searchParams.get("limit") ?? "50", 10);
   const category = url.searchParams.get("category");
+  const page = Math.max(1, parseInt(url.searchParams.get("page") ?? "1", 10));
+  const pageSize = Math.min(100, Math.max(1, parseInt(url.searchParams.get("pageSize") ?? String(limit), 10)));
 
   let where: any = {};
   if (includeDrafts) {
@@ -24,14 +26,19 @@ export async function GET(req: NextRequest) {
     where.category = category;
   }
 
-  const news = await db.news.findMany({
-    where,
-    orderBy: [{ pinned: "desc" }, { publishedAt: "desc" }],
-    take: limit,
-    include: {
-      author: { select: { name: true, avatarColor: true, initials: true } },
-    },
-  });
+  const [news, total] = await Promise.all([
+    db.news.findMany({
+      where,
+      orderBy: [{ pinned: "desc" }, { publishedAt: "desc" }],
+      take: pageSize,
+      skip: (page - 1) * pageSize,
+      include: {
+        author: { select: { name: true, avatarColor: true, initials: true } },
+      },
+    }),
+    db.news.count({ where }),
+  ]);
+  const totalPages = Math.ceil(total / pageSize);
 
   const result = news.map((n) => {
     let attachments: any[] = [];
@@ -55,7 +62,7 @@ export async function GET(req: NextRequest) {
     };
   });
 
-  return NextResponse.json({ ok: true, news: result });
+  return NextResponse.json({ ok: true, news: result, pagination: { page, pageSize, total, totalPages } });
 }
 
 // POST /api/news — create news (admin only)

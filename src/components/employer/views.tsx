@@ -2663,24 +2663,61 @@ export function EmployerNotifications() {
 }
 
 export function EmployerMessages() {
-  const [conversations, setConversations] = useState<Conversation[]>(employerConversations);
-  const [activeId, setActiveId] = useState<string>(conversations[0]?.id ?? "");
+  const { toast } = useToast();
+  const { data: convData, loading: convLoading, refetch: refetchConv } = useFetch<any>("/api/conversations");
+  const conversations: any[] = convData?.conversations ?? [];
+  const [activeId, setActiveId] = useState<string>("");
   const [draft, setDraft] = useState("");
+  const [messages, setMessages] = useState<any[]>([]);
+  const [loadingMsgs, setLoadingMsgs] = useState(false);
+  const [sending, setSending] = useState(false);
+
+  useEffect(() => {
+    if (conversations.length > 0 && !activeId) {
+      setActiveId(conversations[0].id);
+    }
+  }, [conversations, activeId]);
+
+  useEffect(() => {
+    if (!activeId) {
+      setMessages([]);
+      return;
+    }
+    setLoadingMsgs(true);
+    fetch(`/api/messages?conversationId=${activeId}`)
+      .then((r) => r.json())
+      .then((data) => {
+        if (data.ok) setMessages(data.messages ?? []);
+        else setMessages([]);
+      })
+      .catch(() => setMessages([]))
+      .finally(() => setLoadingMsgs(false));
+  }, [activeId]);
+
   const active = conversations.find((c) => c.id === activeId);
 
-  const send = () => {
-    if (!draft.trim()) return;
-    setConversations(conversations.map((c) =>
-      c.id === activeId
-        ? {
-            ...c,
-            lastMessage: draft.trim(),
-            lastTime: "now",
-            messages: [...c.messages, { id: String(Date.now()), sender: "me" as const, text: draft.trim(), time: "now" }],
-          }
-        : c
-    ));
-    setDraft("");
+  const send = async () => {
+    if (!draft.trim() || !activeId) return;
+    setSending(true);
+    try {
+      const res = await fetch("/api/messages", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ conversationId: activeId, content: draft.trim() }),
+      });
+      const data = await res.json();
+      if (data.ok) {
+        setMessages((prev) => [...prev, data.message]);
+        setDraft("");
+        refetchConv();
+      } else {
+        toast({ title: "Failed to send", description: data.error ?? "Please try again." });
+      }
+    } catch {
+      toast({ title: "Network error", description: "Please try again." });
+    } finally {
+      setSending(false);
+    }
   };
 
   return (
@@ -2693,31 +2730,39 @@ export function EmployerMessages() {
               <Input placeholder="Search conversations…" className="h-9" />
             </div>
             <div className="max-h-[60vh] divide-y divide-border lg:max-h-full overflow-y-auto">
-              {conversations.map((c) => (
-                <button
-                  key={c.id}
-                  onClick={() => setActiveId(c.id)}
-                  className={cn(
-                    "flex w-full items-start gap-3 p-3 text-left transition-colors hover:bg-accent",
-                    activeId === c.id && "bg-primary/5"
-                  )}
-                >
-                  <Avatar initials={c.participantInitials} color={c.participantColor} size="sm" />
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center justify-between">
-                      <p className="truncate text-sm font-semibold">{c.participantName}</p>
-                      <span className="text-[10px] text-muted-foreground">{c.lastTime}</span>
+              {convLoading ? (
+                <div className="p-6 text-center text-xs text-muted-foreground">Loading conversations…</div>
+              ) : conversations.length === 0 ? (
+                <div className="p-6 text-center text-xs text-muted-foreground">
+                  No conversations yet. Shortlist a candidate to start messaging.
+                </div>
+              ) : (
+                conversations.map((c) => (
+                  <button
+                    key={c.id}
+                    onClick={() => setActiveId(c.id)}
+                    className={cn(
+                      "flex w-full items-start gap-3 p-3 text-left transition-colors hover:bg-accent",
+                      activeId === c.id && "bg-primary/5"
+                    )}
+                  >
+                    <Avatar initials={c.participantInitials} color={c.participantColor} size="sm" />
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center justify-between">
+                        <p className="truncate text-sm font-semibold">{c.participantName}</p>
+                        <span className="text-[10px] text-muted-foreground">{c.lastTime}</span>
+                      </div>
+                      <p className="text-[11px] text-muted-foreground">{c.participantRole}</p>
+                      <p className="mt-0.5 truncate text-xs text-muted-foreground">{c.lastMessage}</p>
                     </div>
-                    <p className="text-[11px] text-muted-foreground">{c.participantRole}</p>
-                    <p className="mt-0.5 truncate text-xs text-muted-foreground">{c.lastMessage}</p>
-                  </div>
-                  {c.unread > 0 && (
-                    <span className="inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-primary px-1.5 text-[10px] font-semibold text-primary-foreground">
-                      {c.unread}
-                    </span>
-                  )}
-                </button>
-              ))}
+                    {c.unread > 0 && (
+                      <span className="inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-primary px-1.5 text-[10px] font-semibold text-primary-foreground">
+                        {c.unread}
+                      </span>
+                    )}
+                  </button>
+                ))
+              )}
             </div>
           </CardContent>
         </Card>
@@ -2734,37 +2779,44 @@ export function EmployerMessages() {
               </div>
             </div>
             <div className="flex-1 space-y-3 overflow-y-auto bg-muted/20 p-4 max-h-[60vh]">
-              {active.messages.map((m) => (
-                <div
-                  key={m.id}
-                  className={cn("flex", m.sender === "me" ? "justify-end" : "justify-start")}
-                >
+              {loadingMsgs ? (
+                <div className="text-center text-xs text-muted-foreground py-8">Loading messages…</div>
+              ) : messages.length === 0 ? (
+                <div className="text-center text-xs text-muted-foreground py-8">No messages yet. Start the conversation!</div>
+              ) : (
+                messages.map((m) => (
                   <div
-                    className={cn(
-                      "max-w-[75%] rounded-lg px-3 py-2 text-sm",
-                      m.sender === "me" ? "bg-primary text-primary-foreground" : "bg-card border border-border"
-                    )}
+                    key={m.id}
+                    className={cn("flex", m.sender === "me" ? "justify-end" : "justify-start")}
                   >
-                    <p>{m.text}</p>
-                    <p className={cn(
-                      "mt-1 text-[10px]",
-                      m.sender === "me" ? "text-primary-foreground/70" : "text-muted-foreground"
-                    )}>
-                      {m.time}
-                    </p>
+                    <div
+                      className={cn(
+                        "max-w-[75%] rounded-lg px-3 py-2 text-sm",
+                        m.sender === "me" ? "bg-primary text-primary-foreground" : "bg-card border border-border"
+                      )}
+                    >
+                      <p>{m.text}</p>
+                      <p className={cn(
+                        "mt-1 text-[10px]",
+                        m.sender === "me" ? "text-primary-foreground/70" : "text-muted-foreground"
+                      )}>
+                        {m.time}
+                      </p>
+                    </div>
                   </div>
-                </div>
-              ))}
+                ))
+              )}
             </div>
             <div className="flex items-center gap-2 border-t border-border p-3">
               <Input
                 placeholder="Type your message…"
                 value={draft}
                 onChange={(e) => setDraft(e.target.value)}
-                onKeyDown={(e) => { if (e.key === "Enter") send(); }}
+                onKeyDown={(e) => { if (e.key === "Enter" && !sending) send(); }}
+                disabled={sending}
               />
-              <Button size="icon" onClick={send} aria-label="Send message">
-                <SendIcon className="h-4 w-4" />
+              <Button size="icon" onClick={send} disabled={sending || !draft.trim()} aria-label="Send message">
+                {sending ? <span className="h-4 w-4 animate-spin rounded-full border-2 border-primary-foreground border-t-transparent" /> : <SendIcon className="h-4 w-4" />}
               </Button>
             </div>
             </>
