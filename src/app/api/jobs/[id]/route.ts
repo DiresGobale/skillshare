@@ -36,11 +36,23 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
     include: { applications: true, employer: { select: { name: true, company: true, avatarColor: true, initials: true } } },
   });
   if (!job) return NextResponse.json({ ok: false, error: "Job not found" }, { status: 404 });
+  // Parse JSON-array fields so the client receives real arrays
+  const parseArr = (s: string | null | undefined) => {
+    if (!s) return [];
+    try { return JSON.parse(s); } catch { return []; }
+  };
   return NextResponse.json({
     ok: true,
     job: {
       ...job,
       applicants: job.applications.length,
+      responsibilities: parseArr(job.responsibilities),
+      requirements: parseArr(job.requirements),
+      niceToHave: parseArr(job.niceToHave),
+      qualifications: parseArr(job.qualifications),
+      requiredSkills: parseArr(job.requiredSkills),
+      attachments: parseArr(job.attachments),
+      images: parseArr(job.images),
     },
   });
 }
@@ -87,11 +99,16 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     }
 
     const data: any = {};
-    for (const field of ["title", "category", "type", "location", "remote", "description", "status"]) {
+    for (const field of ["title", "category", "type", "location", "remote", "description", "status",
+      "minEducationLevel", "fieldOfStudy", "fieldOfStudyMandatory", "minExperienceYears"]) {
       if (body[field] !== undefined) data[field] = body[field];
     }
     if (body.salaryMin !== undefined) data.salaryMin = Number(body.salaryMin);
     if (body.salaryMax !== undefined) data.salaryMax = Number(body.salaryMax);
+    // JSON-array fields — serialize before saving
+    for (const field of ["responsibilities", "requirements", "niceToHave", "qualifications", "requiredSkills", "attachments", "images"]) {
+      if (body[field] !== undefined) data[field] = JSON.stringify(body[field] ?? []);
+    }
 
     // Handle expiration — when publishing a draft, require/set expiration
     if (body.status === "published" && body.expirationDays !== undefined) {

@@ -142,6 +142,21 @@ model Job {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
+  // Standardized job-posting fields
+  responsibilities  String  @default("[]") // JSON array of strings
+  requirements      String  @default("[]") // JSON array of strings
+  niceToHave        String  @default("[]") // JSON array of strings (preferred but not mandatory)
+  qualifications    String  @default("[]") // JSON array of strings (e.g. "Bachelor's degree in Computer Science")
+  // Eligibility criteria for auto-screening
+  minEducationLevel String? // high-school | diploma | bachelor | master | phd | any
+  fieldOfStudy      String? // e.g. "Computer Science" — if set, applicant's education field must match (mandatory)
+  fieldOfStudyMandatory Boolean @default(false) // if true, applicants with non-matching field are blocked
+  minExperienceYears Int    @default(0) // minimum years of experience required
+  requiredSkills    String  @default("[]") // JSON array of { name, mandatory } — mandatory skills are checked against applicant's CV
+  // Attachments (JSON arrays of { fileName, fileData, mimeType })
+  attachments       String  @default("[]") // DOC/DOCX/PDF documents attached to the job post
+  images            String  @default("[]") // photos/images attached to the job post
+
   applications Application[]
   examSchedules ExamSchedule[]
   interviewSchedules InterviewSchedule[]

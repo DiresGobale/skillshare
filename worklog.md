@@ -1063,3 +1063,68 @@ Stage Summary:
 - Re-uploading a CV automatically triggers a fresh AI analysis and updates all results.
 - AI-detected skills are auto-merged into the user's skill profile.
 - All output is in English.
+
+---
+Task ID: 23
+Agent: main (Super Z)
+Task: Standardized job posting format with document/image uploads + automatic eligibility screening. Employers post jobs in a standardized format. Seekers can only apply if their CV/qualifications match the job requirements. Ineligible applicants are blocked with a clear message.
+
+Work Log:
+
+DATABASE (prisma/schema.prisma):
+- Extended the Job model with standardized posting fields:
+  * responsibilities (JSON array)
+  * requirements (JSON array)
+  * niceToHave (JSON array — preferred but not mandatory)
+  * qualifications (JSON array)
+  * minEducationLevel (high-school | diploma | bachelor | master | phd | any)
+  * fieldOfStudy (e.g. "Computer Science")
+  * fieldOfStudyMandatory (boolean — if true, applicants with non-matching field are blocked)
+  * minExperienceYears (int)
+  * requiredSkills (JSON array of { name, mandatory })
+  * attachments (JSON array of { fileName, fileData, mimeType } — DOC/DOCX/PDF documents)
+  * images (JSON array of { fileName, fileData, mimeType } — photos/images)
+- Ran prisma db push + prisma generate.
+
+API — JOB CREATION/UPDATE:
+- POST /api/jobs now accepts all standardized fields and saves them (JSON-serialized for array fields).
+- PATCH /api/jobs/[id] now accepts all standardized fields for editing.
+- GET /api/jobs/[id] now parses the JSON arrays back to real arrays before returning, so the client receives proper arrays.
+
+API — ELIGIBILITY CHECK (src/app/api/jobs/[id]/eligibility/route.ts):
+- GET /api/jobs/[id]/eligibility — checks if the current seeker is eligible to apply for a job.
+- Performs 5 checks:
+  1. CV uploaded — seeker must have a Resume record
+  2. Field of study (if mandatory) — checks the applicant's Education records AND CV analysis education entries for a matching field
+  3. Minimum education level — maps degree names to levels (high-school=1, diploma=2, bachelor=3, master=4, phd=5) and checks the applicant's highest level
+  4. Minimum years of experience — uses the CV AI analysis yearsOfExperience, or estimates from experience entries
+  5. Mandatory required skills — checks the applicant's Skill table AND CV analysis skills for each mandatory skill (with fuzzy matching: includes/substring)
+- Returns { eligible, message, reasons[], checks[] } where each check has { criteria, passed, detail }.
+- Message: "You are eligible to apply for this position." OR "You are not eligible to apply for this position because your qualifications do not meet the required criteria."
+
+API — APPLICATION BLOCKING (src/app/api/applications/route.ts POST handler):
+- After the existing CV requirement check, added a full eligibility screening that runs the same 5 checks inline.
+- If ANY check fails, the application is blocked with HTTP 400 and returns:
+  {
+    ok: false,
+    error: "You are not eligible to apply for this position because your qualifications do not meet the required criteria.",
+    reasons: ["Your field of study does not match...", "You are missing mandatory skills: ..."]
+  }
+- The seeker's profile is fetched with skills, experiences, educations, and resumes (including the latest CV AI analysis) so the check considers both manually-entered data AND AI-extracted CV data.
+
+END-TO-END TEST RESULTS:
+1. ✅ Created a "Software Engineer (CS Required)" job with: fieldOfStudy="Computer Science" (mandatory), minEducationLevel="bachelor", minExperienceYears=2, requiredSkills=[{React, mandatory}, {Node.js, mandatory}, {Python, optional}].
+2. ✅ Eligibility check for the seeker (who has B.Sc. Computer Science + 7 years experience + React + Node.js skills): ELIGIBLE — all 5 checks passed.
+3. ✅ Application to the CS job: ACCEPTED (status="applied").
+4. ✅ Created a "Social Worker Position" job with: fieldOfStudy="Social Work" (mandatory), minEducationLevel="bachelor", minExperienceYears=3, requiredSkills=[{Counseling, mandatory}, {Case Management, mandatory}].
+5. ✅ Eligibility check for the same seeker: INELIGIBLE — 2 checks failed (field of study: Social Work does not match Computer Science; missing mandatory skills: Counseling, Case Management).
+6. ✅ Application to the Social Work job: BLOCKED with exact message "You are not eligible to apply for this position because your qualifications do not meet the required criteria." + reasons returned.
+7. ✅ This proves the example scenario works: a CS graduate cannot apply for a Social Work position when field of study is mandatory.
+
+Stage Summary:
+- Standardized job posting format: responsibilities, requirements, nice-to-have, qualifications, minEducationLevel, fieldOfStudy, minExperienceYears, requiredSkills, attachments (DOC/DOCX/PDF), images.
+- Automatic eligibility screening: the system compares the applicant's CV (AI-analyzed skills, education, experience) against the job's mandatory requirements before allowing an application.
+- Ineligible applicants are blocked with the exact message: "You are not eligible to apply for this position because your qualifications do not meet the required criteria." plus specific reasons.
+- The example scenario (CS graduate blocked from Social Work position) works as expected.
+- The eligibility check considers BOTH manually-entered profile data AND AI-extracted CV data — so even if the seeker didn't manually add their education, the CV analysis fills the gap.
+- File/image attachment support is in the schema and API (stored as base64 JSON arrays). The employer UI form for uploading attachments and the seeker UI for displaying them are next steps.

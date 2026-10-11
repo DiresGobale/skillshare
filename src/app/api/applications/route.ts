@@ -135,6 +135,127 @@ export async function POST(req: NextRequest) {
     if (!job) return NextResponse.json({ ok: false, error: "Job not found" }, { status: 404 });
     if (job.status !== "published") return NextResponse.json({ ok: false, error: "This job is no longer accepting applications." }, { status: 400 });
 
+    // ===== ELIGIBILITY CHECK: compare applicant's CV/qualifications against job requirements =====
+    // Fetch the applicant's full profile (skills, experiences, educations, resumes)
+    const applicantProfile = await db.user.findUnique({
+      where: { id: user.id },
+      include: {
+        skills: true,
+        experiences: true,
+        educations: true,
+        resumes: { orderBy: { createdAt: "desc" }, take: 1 },
+      },
+    });
+
+    const parseArr = (s: string | null | undefined) => {
+      if (!s) return [];
+      try { return JSON.parse(s); } catch { return []; }
+    };
+    const requiredSkills: { name: string; mandatory?: boolean }[] = parseArr(job.requiredSkills);
+    const eligibilityFailures: string[] = [];
+
+    // Check 1: Field of study (mandatory)
+    if (job.fieldOfStudy && job.fieldOfStudyMandatory) {
+      const requiredField = job.fieldOfStudy.toLowerCase().trim();
+      const matchingEdu = applicantProfile?.educations?.find((e) =>
+        e.field?.toLowerCase().includes(requiredField) || requiredField.includes(e.field?.toLowerCase() ?? "")
+      );
+      let cvFieldMatch = false;
+      if (applicantProfile?.resumes?.[0]) {
+        try {
+          const analysis = JSON.parse(applicantProfile.resumes[0].analysis || "{}");
+          cvFieldMatch = (analysis.education ?? []).some((e: any) =>
+            e.field?.toLowerCase().includes(requiredField) || requiredField.includes(e.field?.toLowerCase() ?? "")
+          );
+        } catch { /* ignore */ }
+      }
+      if (!matchingEdu && !cvFieldMatch) {
+        eligibilityFailures.push(`Your field of study does not match the required field: "${job.fieldOfStudy}".`);
+      }
+    }
+
+    // Check 2: Minimum education level
+    if (job.minEducationLevel && job.minEducationLevel !== "any") {
+      const levelOrder: Record<string, number> = { "high-school": 1, diploma: 2, bachelor: 3, master: 4, phd: 5 };
+      const requiredLevel = levelOrder[job.minEducationLevel] ?? 0;
+      let applicantLevel = 0;
+      const checkDegree = (deg: string) => {
+        const d = deg.toLowerCase();
+        if (d.includes("phd") || d.includes("doctor")) return 5;
+        if (d.includes("master") || d.includes("m.sc") || d.includes("msc") || d.includes("m.a")) return 4;
+        if (d.includes("bachelor") || d.includes("b.sc") || d.includes("bsc") || d.includes("b.a") || d.includes("b.eng") || d.includes("b.tech")) return 3;
+        if (d.includes("diploma") || d.includes("associate")) return 2;
+        if (d.includes("high school") || d.includes("secondary")) return 1;
+        return 0;
+      };
+      for (const edu of applicantProfile?.educations ?? []) {
+        applicantLevel = Math.max(applicantLevel, checkDegree(edu.degree || ""));
+      }
+      if (applicantProfile?.resumes?.[0]) {
+        try {
+          const analysis = JSON.parse(applicantProfile.resumes[0].analysis || "{}");
+          for (const edu of analysis.education ?? []) {
+            applicantLevel = Math.max(applicantLevel, checkDegree(edu.degree || ""));
+          }
+        } catch { /* ignore */ }
+      }
+      if (applicantLevel < requiredLevel) {
+        const levelName = job.minEducationLevel.charAt(0).toUpperCase() + job.minEducationLevel.slice(1);
+        eligibilityFailures.push(`Your education level does not meet the minimum requirement: ${levelName}.`);
+      }
+    }
+
+    // Check 3: Minimum years of experience
+    if (job.minExperienceYears > 0) {
+      let applicantYears = 0;
+      if (applicantProfile?.resumes?.[0]) {
+        try {
+          const analysis = JSON.parse(applicantProfile.resumes[0].analysis || "{}");
+          applicantYears = analysis.yearsOfExperience ?? 0;
+        } catch { /* ignore */ }
+      }
+      if (applicantYears === 0 && (applicantProfile?.experiences?.length ?? 0) > 0) {
+        applicantYears = (applicantProfile?.experiences?.length ?? 0) * 2;
+      }
+      if (applicantYears < job.minExperienceYears) {
+        eligibilityFailures.push(`You need at least ${job.minExperienceYears} year(s) of experience. You have ${applicantYears}.`);
+      }
+    }
+
+    // Check 4: Mandatory required skills
+    const mandatorySkills = requiredSkills.filter((s) => s.mandatory);
+    if (mandatorySkills.length > 0) {
+      const applicantSkillNames = new Set<string>();
+      for (const s of applicantProfile?.skills ?? []) applicantSkillNames.add(s.name.toLowerCase());
+      if (applicantProfile?.resumes?.[0]) {
+        try {
+          const analysis = JSON.parse(applicantProfile.resumes[0].analysis || "{}");
+          for (const s of analysis.skills ?? []) applicantSkillNames.add(s.name.toLowerCase());
+        } catch { /* ignore */ }
+      }
+      const missingSkills: string[] = [];
+      for (const ms of mandatorySkills) {
+        const hasSkill = Array.from(applicantSkillNames).some((name) =>
+          name === ms.name.toLowerCase() ||
+          name.includes(ms.name.toLowerCase()) ||
+          ms.name.toLowerCase().includes(name)
+        );
+        if (!hasSkill) missingSkills.push(ms.name);
+      }
+      if (missingSkills.length > 0) {
+        eligibilityFailures.push(`You are missing mandatory skills: ${missingSkills.join(", ")}.`);
+      }
+    }
+
+    // If any eligibility check failed, block the application
+    if (eligibilityFailures.length > 0) {
+      return NextResponse.json({
+        ok: false,
+        error: "You are not eligible to apply for this position because your qualifications do not meet the required criteria.",
+        reasons: eligibilityFailures,
+      }, { status: 400 });
+    }
+
     // Check for duplicate
     const existing = await db.application.findFirst({ where: { userId: user.id, jobId } });
     if (existing) return NextResponse.json({ ok: false, error: "You've already applied to this job." }, { status: 409 });

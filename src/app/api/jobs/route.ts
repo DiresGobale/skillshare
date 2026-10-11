@@ -58,7 +58,12 @@ export async function POST(req: NextRequest) {
   if (session.user.role !== "employer") return NextResponse.json({ ok: false, error: "Employers only" }, { status: 403 });
   try {
     const body = await req.json();
-    const { title, category, type, location, remote, salaryMin, salaryMax, description, status, skills, expirationDays } = body;
+    const { title, category, type, location, remote, salaryMin, salaryMax, description, status, skills, expirationDays,
+      // New standardized fields
+      responsibilities, requirements, niceToHave, qualifications,
+      minEducationLevel, fieldOfStudy, fieldOfStudyMandatory, minExperienceYears, requiredSkills,
+      attachments, images,
+    } = body;
 
     // ---------- BACKEND VALIDATION ----------
     const titleCheck = validateJobTitle(title ?? "");
@@ -111,6 +116,18 @@ export async function POST(req: NextRequest) {
         description: description.trim(),
         status: status || "draft",
         expiresAt,
+        // Standardized fields
+        responsibilities: JSON.stringify(responsibilities ?? []),
+        requirements: JSON.stringify(requirements ?? []),
+        niceToHave: JSON.stringify(niceToHave ?? []),
+        qualifications: JSON.stringify(qualifications ?? []),
+        minEducationLevel: minEducationLevel || null,
+        fieldOfStudy: fieldOfStudy || null,
+        fieldOfStudyMandatory: Boolean(fieldOfStudyMandatory),
+        minExperienceYears: parseInt(minExperienceYears, 10) || 0,
+        requiredSkills: JSON.stringify(requiredSkills ?? []),
+        attachments: JSON.stringify(attachments ?? []),
+        images: JSON.stringify(images ?? []),
       },
     });
 
