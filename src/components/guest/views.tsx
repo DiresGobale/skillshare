@@ -3637,6 +3637,9 @@ export function VerifyOtpPage() {
   const [success, setSuccess] = useState(false);
   const [resendCooldown, setResendCooldown] = useState(0);
   const [devOtp, setDevOtp] = useState<string | null>(null);
+  // Countdown timer: 10 minutes = 600 seconds
+  const [timeLeft, setTimeLeft] = useState(600);
+  const [codeExpired, setCodeExpired] = useState(false);
 
   useEffect(() => {
     try {
@@ -3647,15 +3650,37 @@ export function VerifyOtpPage() {
     } catch { /* ignore */ }
   }, []);
 
+  // Resend cooldown timer (60 seconds)
   useEffect(() => {
     if (resendCooldown <= 0) return;
     const id = setTimeout(() => setResendCooldown((s) => s - 1), 1000);
     return () => clearTimeout(id);
   }, [resendCooldown]);
 
+  // OTP expiry countdown timer (10 minutes = 600 seconds)
+  useEffect(() => {
+    if (timeLeft <= 0) {
+      setCodeExpired(true);
+      return;
+    }
+    const id = setTimeout(() => setTimeLeft((s) => s - 1), 1000);
+    return () => clearTimeout(id);
+  }, [timeLeft]);
+
+  // Format seconds as MM:SS
+  const formatTime = (seconds: number) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins.toString().padStart(2, "0")}:${secs.toString().padStart(2, "0")}`;
+  };
+
   const verify = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
+    if (codeExpired) {
+      setError("The verification code has expired. Please request a new code.");
+      return;
+    }
     if (!email.trim()) { setError("Email is required."); return; }
     if (!/^\d{6}$/.test(otpCode)) { setError("Please enter the 6-digit verification code."); return; }
     setLoading(true);
@@ -3692,6 +3717,9 @@ export function VerifyOtpPage() {
       const data = await res.json();
       if (data.ok) {
         setResendCooldown(60);
+        setTimeLeft(600); // Reset the 10-minute countdown
+        setCodeExpired(false);
+        setOtpCode(""); // Clear the old code
         if (data.devOtp) setDevOtp(data.devOtp);
       } else {
         setError(data.error ?? "Failed to resend code.");
@@ -3715,23 +3743,41 @@ export function VerifyOtpPage() {
                   <CheckCircle2 className="h-7 w-7 text-emerald-600" />
                 </div>
                 <h2 className="mt-4 text-lg font-semibold text-emerald-700">Account Verified!</h2>
-                <p className="mt-1 text-sm text-muted-foreground">Your email and phone have been verified. You can now sign in to your account.</p>
+                <p className="mt-1 text-sm text-muted-foreground">Your email has been verified successfully. You can now sign in to your account.</p>
                 <Button className="mt-5 btn-green" onClick={() => go("login")}>Sign in now</Button>
               </div>
             ) : (
               <>
                 <div className="text-center mb-6">
                   <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-primary/10">
-                    <Phone className="h-7 w-7 text-primary" />
+                    <Mail className="h-7 w-7 text-primary" />
                   </div>
-                  <h2 className="mt-4 text-lg font-semibold">Verify Your Account</h2>
-                  <p className="mt-1 text-sm text-muted-foreground">Enter the 6-digit verification code sent to your email and phone.</p>
+                  <h2 className="mt-4 text-lg font-semibold">Verify Your Email</h2>
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    A 6-digit verification code has been sent to your email{email ? <span className="font-medium text-foreground"> {email}</span> : null}.
+                  </p>
                 </div>
+
+                {/* Countdown Timer */}
+                {!codeExpired ? (
+                  <div className="mb-4 flex items-center justify-center gap-2 rounded-lg border border-blue-200 bg-blue-50 px-4 py-2.5">
+                    <Clock className="h-4 w-4 text-blue-600" />
+                    <span className="text-sm text-blue-700">
+                      Code expires in <span className="font-bold text-blue-800 tabular-nums">{formatTime(timeLeft)}</span>
+                    </span>
+                  </div>
+                ) : (
+                  <div className="mb-4 flex items-center justify-center gap-2 rounded-lg border border-rose-200 bg-rose-50 px-4 py-2.5">
+                    <AlertCircle className="h-4 w-4 text-rose-600" />
+                    <span className="text-sm font-medium text-rose-700">Code has expired — please request a new one</span>
+                  </div>
+                )}
+
                 {devOtp && (
                   <div className="mb-4 rounded-lg border border-blue-200 bg-blue-50 p-3 text-center">
                     <p className="text-xs font-semibold text-blue-700 uppercase tracking-wide">Dev Mode — Your Code</p>
                     <p className="mt-1 text-2xl font-bold text-blue-800 tracking-widest">{devOtp}</p>
-                    <p className="mt-1 text-[11px] text-blue-600">(No SMS/email configured — code displayed here for testing)</p>
+                    <p className="mt-1 text-[11px] text-blue-600">(No email configured — code displayed here for testing)</p>
                   </div>
                 )}
                 <form onSubmit={verify} className="space-y-4">
@@ -3741,20 +3787,55 @@ export function VerifyOtpPage() {
                   </div>
                   <div className="space-y-1.5">
                     <Label htmlFor="otp-code">Verification Code (6 digits)</Label>
-                    <Input id="otp-code" type="text" inputMode="numeric" pattern="\d{6}" maxLength={6} placeholder="000000" value={otpCode} onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, "").slice(0, 6))} className="text-center text-2xl tracking-widest font-bold" autoComplete="one-time-code" />
+                    <Input
+                      id="otp-code"
+                      type="text"
+                      inputMode="numeric"
+                      pattern="\d{6}"
+                      maxLength={6}
+                      placeholder="000000"
+                      value={otpCode}
+                      onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
+                      className={cn("text-center text-2xl tracking-widest font-bold", codeExpired && "border-rose-400")}
+                      autoComplete="one-time-code"
+                      disabled={codeExpired}
+                    />
                   </div>
                   {error && (
                     <div className="flex items-center gap-2 rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-700">
                       <AlertCircle className="h-3.5 w-3.5 shrink-0" />{error}
                     </div>
                   )}
-                  <Button type="submit" className="w-full h-10 btn-blue" disabled={loading || otpCode.length !== 6}>
-                    {loading ? (<><span className="h-4 w-4 animate-spin rounded-full border-2 border-primary-foreground border-t-transparent" /> Verifying…</>) : ("Verify Account")}
+                  <Button
+                    type="submit"
+                    className="w-full h-10 btn-blue"
+                    disabled={loading || otpCode.length !== 6 || codeExpired}
+                  >
+                    {loading ? (
+                      <><span className="h-4 w-4 animate-spin rounded-full border-2 border-primary-foreground border-t-transparent" /> Verifying…</>
+                    ) : codeExpired ? (
+                      "Code expired — resend to continue"
+                    ) : (
+                      "Verify Account"
+                    )}
                   </Button>
                 </form>
                 <div className="mt-4 text-center">
-                  <button type="button" onClick={resend} disabled={resendCooldown > 0 || loading} className="text-xs text-primary hover:underline disabled:text-muted-foreground disabled:no-underline">
-                    {resendCooldown > 0 ? `Resend code in ${resendCooldown}s` : "Didn't receive a code? Resend"}
+                  <button
+                    type="button"
+                    onClick={resend}
+                    disabled={resendCooldown > 0 || loading}
+                    className={cn(
+                      "text-xs hover:underline disabled:no-underline",
+                      codeExpired ? "text-rose-600 font-semibold" : "text-primary",
+                      "disabled:text-muted-foreground"
+                    )}
+                  >
+                    {resendCooldown > 0
+                      ? `Resend code in ${resendCooldown}s`
+                      : codeExpired
+                      ? "→ Resend new code now ←"
+                      : "Didn't receive a code? Resend"}
                   </button>
                 </div>
                 <div className="mt-4 text-center">
