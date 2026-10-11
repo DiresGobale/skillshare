@@ -51,7 +51,7 @@ export async function POST(req: NextRequest) {
 
     // Generate a 6-digit OTP code for phone/email verification
     const otpCode = generateOtpCode();
-    const otpExpiry = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
+    const otpExpiry = new Date(Date.now() + 60 * 1000); // 1 minute
 
     const user = await db.user.create({
       data: {
@@ -75,7 +75,7 @@ export async function POST(req: NextRequest) {
     await sendOtpEmail(user.email, user.name, otpCode);
 
     // Send OTP via SMS to the phone number
-    const smsMessage = `SkillMatch AI: Your verification code is ${otpCode}. It expires in 10 minutes. Do not share this code with anyone.`;
+    const smsMessage = `SkillMatch AI: Your verification code is ${otpCode}. It expires in 1 minute. Do not share this code with anyone.`;
     const smsResult = await sendSms(normalizedPhone, smsMessage);
 
     // Audit

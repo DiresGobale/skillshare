@@ -3637,8 +3637,8 @@ export function VerifyOtpPage() {
   const [success, setSuccess] = useState(false);
   const [resendCooldown, setResendCooldown] = useState(0);
   const [devOtp, setDevOtp] = useState<string | null>(null);
-  // Countdown timer: 10 minutes = 600 seconds
-  const [timeLeft, setTimeLeft] = useState(600);
+  // Countdown timer: 1 minute = 60 seconds
+  const [timeLeft, setTimeLeft] = useState(60);
   const [codeExpired, setCodeExpired] = useState(false);
 
   useEffect(() => {
@@ -3657,7 +3657,7 @@ export function VerifyOtpPage() {
     return () => clearTimeout(id);
   }, [resendCooldown]);
 
-  // OTP expiry countdown timer (10 minutes = 600 seconds)
+  // OTP expiry countdown timer (1 minute = 60 seconds)
   useEffect(() => {
     if (timeLeft <= 0) {
       setCodeExpired(true);
@@ -3717,7 +3717,7 @@ export function VerifyOtpPage() {
       const data = await res.json();
       if (data.ok) {
         setResendCooldown(60);
-        setTimeLeft(600); // Reset the 10-minute countdown
+        setTimeLeft(60); // Reset the 1-minute countdown
         setCodeExpired(false);
         setOtpCode(""); // Clear the old code
         if (data.devOtp) setDevOtp(data.devOtp);

@@ -188,6 +188,6 @@ export async function sendOtpEmail(to: string, name: string, otpCode: string): P
       <div style="display:inline-block;background:linear-gradient(135deg,#7c3aed,#3b82f6);color:#ffffff;padding:16px 40px;border-radius:12px;font-size:32px;font-weight:700;letter-spacing:8px;">${otpCode}</div>
     </div>
     <p style="margin:0 0 8px;color:#71717a;font-size:13px;">Enter this 6-digit code on the verification page to activate your account.</p>
-    <p style="margin:0;color:#a1a1aa;font-size:12px;">This code expires in 10 minutes. A copy has also been sent to your phone via SMS.</p>`;
+    <p style="margin:0;color:#a1a1aa;font-size:12px;">This code expires in 1 minute. A copy has also been sent to your phone via SMS.</p>`;
   await sendEmail({ to, subject: `Your verification code — ${APP_NAME}`, html: emailWrapper("Verify Your Account", body) });
 }
