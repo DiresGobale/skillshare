@@ -165,7 +165,8 @@ export function SkillChip({
 // ============================================================
 // STATUS BADGE — unified styling for application / job status
 // ============================================================
-const APP_STATUS_STYLE: Record<ApplicationStatus, { label: string; className: string }> = {
+const APP_STATUS_STYLE: Record<string, { label: string; className: string }> = {
+  // Legacy statuses
   submitted: { label: "Submitted", className: "bg-slate-100 text-slate-700 border-slate-200" },
   screening: { label: "Screening", className: "bg-blue-50 text-blue-700 border-blue-200" },
   shortlisted: { label: "Shortlisted", className: "bg-violet-50 text-violet-700 border-violet-200" },
@@ -173,10 +174,23 @@ const APP_STATUS_STYLE: Record<ApplicationStatus, { label: string; className: st
   offer: { label: "Offer", className: "bg-emerald-50 text-emerald-700 border-emerald-200" },
   rejected: { label: "Rejected", className: "bg-rose-50 text-rose-700 border-rose-200" },
   withdrawn: { label: "Withdrawn", className: "bg-slate-100 text-slate-500 border-slate-200" },
+  // 7-step recruitment pipeline statuses
+  applied: { label: "Applied", className: "bg-slate-100 text-slate-700 border-slate-200" },
+  reviewing: { label: "Under Review", className: "bg-blue-50 text-blue-700 border-blue-200" },
+  review_passed: { label: "Review Passed", className: "bg-violet-50 text-violet-700 border-violet-200" },
+  exam_notified: { label: "Exam Notified", className: "bg-cyan-50 text-cyan-700 border-cyan-200" },
+  exam_completed: { label: "Exam Completed", className: "bg-blue-50 text-blue-700 border-blue-200" },
+  exam_passed: { label: "Exam Passed", className: "bg-emerald-50 text-emerald-700 border-emerald-200" },
+  interview_notified: { label: "Interview Notified", className: "bg-amber-50 text-amber-700 border-amber-200" },
+  interview_completed: { label: "Interview Completed", className: "bg-amber-50 text-amber-700 border-amber-200" },
+  interview_passed: { label: "Interview Passed", className: "bg-emerald-50 text-emerald-700 border-emerald-200" },
+  selected: { label: "Selected", className: "bg-emerald-50 text-emerald-700 border-emerald-200" },
+  hired: { label: "Hired", className: "bg-emerald-100 text-emerald-800 border-emerald-300" },
 };
 
-export function ApplicationStatusBadge({ status }: { status: ApplicationStatus }) {
-  const s = APP_STATUS_STYLE[status];
+export function ApplicationStatusBadge({ status }: { status: string }) {
+  // Crash-safe: fall back to a neutral badge if the status is unknown
+  const s = APP_STATUS_STYLE[status] ?? { label: status || "Unknown", className: "bg-slate-100 text-slate-600 border-slate-200" };
   return (
     <Badge variant="outline" className={cn("font-medium", s.className)}>
       {s.label}

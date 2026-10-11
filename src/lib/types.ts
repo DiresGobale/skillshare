@@ -13,7 +13,19 @@ export type ApplicationStatus =
   | "interview"
   | "offer"
   | "rejected"
-  | "withdrawn";
+  | "withdrawn"
+  // 7-step recruitment pipeline statuses
+  | "applied"
+  | "reviewing"
+  | "review_passed"
+  | "exam_notified"
+  | "exam_completed"
+  | "exam_passed"
+  | "interview_notified"
+  | "interview_completed"
+  | "interview_passed"
+  | "selected"
+  | "hired";
 
 export type JobStatus = "draft" | "published" | "closed" | "paused" | "expired";
 
