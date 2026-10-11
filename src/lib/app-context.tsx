@@ -5,7 +5,7 @@ import { useSession, signOut as nextAuthSignOut } from "next-auth/react";
 import type { Role } from "./types";
 
 // All navigable views keyed by role
-export type GuestView = "landing" | "home" | "faq" | "privacy" | "terms" | "login" | "register" | "public-jobs" | "public-job-detail" | "about" | "contact" | "public-news" | "public-news-detail" | "verify-email" | "reset-password" | "forgot-password";
+export type GuestView = "landing" | "home" | "faq" | "privacy" | "terms" | "login" | "register" | "public-jobs" | "public-job-detail" | "about" | "contact" | "public-news" | "public-news-detail" | "verify-email" | "reset-password" | "forgot-password" | "verify-otp";
 export type SeekerView =
   | "dashboard"
   | "profile"

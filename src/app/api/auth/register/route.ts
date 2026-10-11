@@ -3,10 +3,13 @@ import bcrypt from "bcryptjs";
 import crypto from "crypto";
 import { db } from "@/lib/db";
 import { validateName, validateEmail, validatePassword, validateEthiopianPhone, normalizeEthiopianPhone } from "@/lib/validation";
-import { sendVerificationEmail } from "@/lib/email";
+import { sendOtpEmail } from "@/lib/email";
+import { sendSms, generateOtpCode } from "@/lib/sms";
 
 // POST /api/auth/register
 // Body: { name, email, password, role, phone }
+// Generates a 6-digit OTP, sends it to both email and phone (SMS).
+// User must verify the OTP before their account is activated.
 export async function POST(req: NextRequest) {
   try {
     const { name, email, password, role, phone } = await req.json();
@@ -46,9 +49,9 @@ export async function POST(req: NextRequest) {
     const initials = cleanName.split(/\s+/).map((w: string) => w[0]).slice(0, 2).join("").toUpperCase();
     const avatarColor = role === "employer" ? "oklch(0.6 0.18 240)" : "oklch(0.55 0.22 285)";
 
-    // Generate a verification token
-    const verificationToken = crypto.randomBytes(32).toString("hex");
-    const verificationExpiry = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
+    // Generate a 6-digit OTP code for phone/email verification
+    const otpCode = generateOtpCode();
+    const otpExpiry = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
 
     const user = await db.user.create({
       data: {
@@ -59,29 +62,42 @@ export async function POST(req: NextRequest) {
         title: role === "employer" ? "Employer" : "Job Seeker",
         avatarColor,
         initials,
-        status: "active",
+        status: "pending", // pending until OTP is verified
         phone: normalizedPhone,
         emailVerified: false,
-        verificationToken,
-        verificationTokenExpiry: verificationExpiry,
+        phoneVerified: false,
+        emailOtpCode: otpCode,
+        emailOtpExpiry: otpExpiry,
       },
     });
 
-    // Send verification email
-    await sendVerificationEmail(user.email, user.name, verificationToken);
+    // Send OTP via email
+    await sendOtpEmail(user.email, user.name, otpCode);
+
+    // Send OTP via SMS to the phone number
+    const smsMessage = `SkillMatch AI: Your verification code is ${otpCode}. It expires in 10 minutes. Do not share this code with anyone.`;
+    const smsResult = await sendSms(normalizedPhone, smsMessage);
 
     // Audit
     await db.auditLog.create({
       data: {
         userId: user.id,
-        action: "Registered",
+        action: "Registered (pending OTP verification)",
         target: user.email,
         type: "auth",
         status: "success",
       },
     });
 
-    return NextResponse.json({ ok: true, userId: user.id, message: "Account created. Please check your email to verify your account." });
+    return NextResponse.json({
+      ok: true,
+      userId: user.id,
+      email: user.email,
+      phone: normalizedPhone,
+      message: "Account created. A 6-digit verification code has been sent to your email and phone. Please enter it to activate your account.",
+      // In dev mode (no SMS/email configured), return the OTP so the UI can display it
+      devOtp: smsResult.devPreview ? otpCode : undefined,
+    });
   } catch (e) {
     return NextResponse.json(
       { ok: false, error: e instanceof Error ? e.message : "Registration failed." },

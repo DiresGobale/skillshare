@@ -179,3 +179,15 @@ export async function sendNewMessageEmail(to: string, name: string, fromName: st
     <p style="margin:0;color:#71717a;font-size:13px;">Log in to read and reply to this message.</p>`;
   await sendEmail({ to, subject: `New message from ${fromName}`, html: emailWrapper("New Message", body) });
 }
+
+export async function sendOtpEmail(to: string, name: string, otpCode: string): Promise<void> {
+  const body = `
+    <p style="margin:0 0 16px;color:#3f3f46;font-size:14px;line-height:1.6;">Hi ${name},</p>
+    <p style="margin:0 0 16px;color:#3f3f46;font-size:14px;line-height:1.6;">Welcome to ${APP_NAME}! Use the verification code below to complete your registration.</p>
+    <div style="text-align:center;margin:24px 0;">
+      <div style="display:inline-block;background:linear-gradient(135deg,#7c3aed,#3b82f6);color:#ffffff;padding:16px 40px;border-radius:12px;font-size:32px;font-weight:700;letter-spacing:8px;">${otpCode}</div>
+    </div>
+    <p style="margin:0 0 8px;color:#71717a;font-size:13px;">Enter this 6-digit code on the verification page to activate your account.</p>
+    <p style="margin:0;color:#a1a1aa;font-size:12px;">This code expires in 10 minutes. A copy has also been sent to your phone via SMS.</p>`;
+  await sendEmail({ to, subject: `Your verification code — ${APP_NAME}`, html: emailWrapper("Verify Your Account", body) });
+}

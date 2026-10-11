@@ -1803,6 +1803,15 @@ export function Login() {
       const checkData = await checkRes.json();
 
       if (!checkData.ok) {
+        if (checkData.needsVerification) {
+          // Account is pending OTP verification — redirect to verify-otp page
+          try {
+            sessionStorage.setItem("skillmatch.otp-email", checkData.email || emailVal);
+          } catch { /* ignore */ }
+          setLoading(false);
+          go("verify-otp");
+          return;
+        }
         setError(checkData.error ?? "Invalid email or password.");
         setLoading(false);
         return;
@@ -2208,10 +2217,16 @@ export function Register() {
         setServerError(data.error ?? "Registration failed.");
         return;
       }
-      // Account created successfully — redirect to login so the user
-      // signs in with their new credentials (per requirement #2).
-      setSuccessMsg("Account created! Please check your email to verify your account, then sign in.");
-      setTimeout(() => go("login"), 1500);
+      // Account created — redirect to OTP verification page
+      // Pass email + devOtp (dev mode only) via sessionStorage
+      try {
+        sessionStorage.setItem("skillmatch.otp-email", data.email || email.trim());
+        if (data.devOtp) {
+          sessionStorage.setItem("skillmatch.otp-dev", data.devOtp);
+        }
+      } catch { /* ignore */ }
+      setSuccessMsg("Account created! A verification code has been sent to your email and phone. Redirecting to verification…");
+      setTimeout(() => go("verify-otp"), 1500);
     } catch {
       setServerError("Network error. Please try again.");
     } finally {
@@ -3600,6 +3615,151 @@ export function ResetPasswordPage() {
                     )}
                   </Button>
                 </form>
+              </>
+            )}
+          </CardContent>
+        </Card>
+      </main>
+      <PublicFooter />
+    </div>
+  );
+}
+
+// ============================================================
+// VERIFY OTP PAGE — enter the 6-digit code sent to email + phone
+// ============================================================
+export function VerifyOtpPage() {
+  const { go } = useApp();
+  const [email, setEmail] = useState("");
+  const [otpCode, setOtpCode] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState(false);
+  const [resendCooldown, setResendCooldown] = useState(0);
+  const [devOtp, setDevOtp] = useState<string | null>(null);
+
+  useEffect(() => {
+    try {
+      const storedEmail = sessionStorage.getItem("skillmatch.otp-email");
+      if (storedEmail) setEmail(storedEmail);
+      const storedDevOtp = sessionStorage.getItem("skillmatch.otp-dev");
+      if (storedDevOtp) setDevOtp(storedDevOtp);
+    } catch { /* ignore */ }
+  }, []);
+
+  useEffect(() => {
+    if (resendCooldown <= 0) return;
+    const id = setTimeout(() => setResendCooldown((s) => s - 1), 1000);
+    return () => clearTimeout(id);
+  }, [resendCooldown]);
+
+  const verify = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError(null);
+    if (!email.trim()) { setError("Email is required."); return; }
+    if (!/^\d{6}$/.test(otpCode)) { setError("Please enter the 6-digit verification code."); return; }
+    setLoading(true);
+    try {
+      const res = await fetch("/api/auth/verify-otp", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: email.trim(), otpCode }),
+      });
+      const data = await res.json();
+      if (data.ok) {
+        setSuccess(true);
+        try { sessionStorage.removeItem("skillmatch.otp-email"); sessionStorage.removeItem("skillmatch.otp-dev"); } catch { /* ignore */ }
+      } else {
+        setError(data.error ?? "Verification failed.");
+      }
+    } catch {
+      setError("Network error. Please try again.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const resend = async () => {
+    if (resendCooldown > 0 || !email.trim()) return;
+    setError(null);
+    setLoading(true);
+    try {
+      const res = await fetch("/api/auth/resend-otp", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: email.trim() }),
+      });
+      const data = await res.json();
+      if (data.ok) {
+        setResendCooldown(60);
+        if (data.devOtp) setDevOtp(data.devOtp);
+      } else {
+        setError(data.error ?? "Failed to resend code.");
+      }
+    } catch {
+      setError("Network error. Please try again.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="flex min-h-screen flex-col">
+      <PublicHeader onAuth={(r) => go(r)} />
+      <main className="flex flex-1 items-center justify-center bg-muted/20 px-4">
+        <Card className="w-full max-w-md">
+          <CardContent className="p-8">
+            {success ? (
+              <div className="text-center">
+                <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-emerald-100">
+                  <CheckCircle2 className="h-7 w-7 text-emerald-600" />
+                </div>
+                <h2 className="mt-4 text-lg font-semibold text-emerald-700">Account Verified!</h2>
+                <p className="mt-1 text-sm text-muted-foreground">Your email and phone have been verified. You can now sign in to your account.</p>
+                <Button className="mt-5 btn-green" onClick={() => go("login")}>Sign in now</Button>
+              </div>
+            ) : (
+              <>
+                <div className="text-center mb-6">
+                  <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-primary/10">
+                    <Phone className="h-7 w-7 text-primary" />
+                  </div>
+                  <h2 className="mt-4 text-lg font-semibold">Verify Your Account</h2>
+                  <p className="mt-1 text-sm text-muted-foreground">Enter the 6-digit verification code sent to your email and phone.</p>
+                </div>
+                {devOtp && (
+                  <div className="mb-4 rounded-lg border border-blue-200 bg-blue-50 p-3 text-center">
+                    <p className="text-xs font-semibold text-blue-700 uppercase tracking-wide">Dev Mode — Your Code</p>
+                    <p className="mt-1 text-2xl font-bold text-blue-800 tracking-widest">{devOtp}</p>
+                    <p className="mt-1 text-[11px] text-blue-600">(No SMS/email configured — code displayed here for testing)</p>
+                  </div>
+                )}
+                <form onSubmit={verify} className="space-y-4">
+                  <div className="space-y-1.5">
+                    <Label htmlFor="otp-email">Email</Label>
+                    <Input id="otp-email" type="email" placeholder="you@example.com" value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="email" />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="otp-code">Verification Code (6 digits)</Label>
+                    <Input id="otp-code" type="text" inputMode="numeric" pattern="\d{6}" maxLength={6} placeholder="000000" value={otpCode} onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, "").slice(0, 6))} className="text-center text-2xl tracking-widest font-bold" autoComplete="one-time-code" />
+                  </div>
+                  {error && (
+                    <div className="flex items-center gap-2 rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-700">
+                      <AlertCircle className="h-3.5 w-3.5 shrink-0" />{error}
+                    </div>
+                  )}
+                  <Button type="submit" className="w-full h-10 btn-blue" disabled={loading || otpCode.length !== 6}>
+                    {loading ? (<><span className="h-4 w-4 animate-spin rounded-full border-2 border-primary-foreground border-t-transparent" /> Verifying…</>) : ("Verify Account")}
+                  </Button>
+                </form>
+                <div className="mt-4 text-center">
+                  <button type="button" onClick={resend} disabled={resendCooldown > 0 || loading} className="text-xs text-primary hover:underline disabled:text-muted-foreground disabled:no-underline">
+                    {resendCooldown > 0 ? `Resend code in ${resendCooldown}s` : "Didn't receive a code? Resend"}
+                  </button>
+                </div>
+                <div className="mt-4 text-center">
+                  <button type="button" onClick={() => go("login")} className="text-xs text-muted-foreground hover:underline">Back to login</button>
+                </div>
               </>
             )}
           </CardContent>

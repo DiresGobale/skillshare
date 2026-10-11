@@ -1,78 +1,63 @@
 import { NextRequest, NextResponse } from "next/server";
-import bcrypt from "bcryptjs";
 import { db } from "@/lib/db";
-import { authOptions } from "@/lib/auth/auth-options";
-import { getServerSession } from "next-auth";
 
 // POST /api/auth/verify-otp
-// Body: { email, otp }
-// Validates the OTP against the database (must match + not be expired).
-// If valid, clears the OTP and returns success so the admin gate can unlock.
+// Body: { email, otpCode }
+// Verifies the 6-digit OTP code sent during registration.
+// On success: activates the account (status = "active", emailVerified = true, phoneVerified = true).
 export async function POST(req: NextRequest) {
   try {
-    const { email, otp } = await req.json();
+    const { email, otpCode } = await req.json();
 
-    if (!email || !otp) {
-      return NextResponse.json({ ok: false, error: "Email and OTP are required." }, { status: 400 });
+    if (!email || !otpCode) {
+      return NextResponse.json({ ok: false, error: "Email and verification code are required." }, { status: 400 });
     }
 
-    // Find the user
-    const user = await db.user.findUnique({
-      where: { email: email.toLowerCase().trim() },
-    });
+    if (!/^\d{6}$/.test(otpCode)) {
+      return NextResponse.json({ ok: false, error: "Verification code must be a 6-digit number." }, { status: 400 });
+    }
 
+    const user = await db.user.findUnique({ where: { email: email.toLowerCase().trim() } });
     if (!user) {
-      return NextResponse.json({ ok: false, error: "Invalid request." }, { status: 404 });
+      return NextResponse.json({ ok: false, error: "User not found." }, { status: 404 });
     }
 
-    if (user.role !== "admin") {
-      return NextResponse.json({ ok: false, error: "OTP verification is for admin accounts only." }, { status: 403 });
+    if (user.status === "active" && user.emailVerified && user.phoneVerified) {
+      return NextResponse.json({ ok: true, message: "Account is already verified.", alreadyVerified: true });
     }
 
-    // Check if OTP exists and is not expired
-    if (!user.emailOtpCode || !user.emailOtpExpiry) {
-      return NextResponse.json({ ok: false, error: "No OTP has been generated. Please request a new OTP." }, { status: 400 });
+    if (!user.emailOtpCode || user.emailOtpCode !== otpCode) {
+      return NextResponse.json({ ok: false, error: "Invalid verification code. Please check and try again." }, { status: 400 });
     }
 
-    if (new Date() > user.emailOtpExpiry) {
-      // Clear expired OTP
-      await db.user.update({
-        where: { id: user.id },
-        data: { emailOtpCode: null, emailOtpExpiry: null },
-      });
-      return NextResponse.json({ ok: false, error: "OTP has expired. Please request a new OTP." }, { status: 400 });
+    if (user.emailOtpExpiry && user.emailOtpExpiry < new Date()) {
+      return NextResponse.json({ ok: false, error: "Verification code has expired. Please request a new code." }, { status: 400 });
     }
 
-    // Validate the OTP
-    if (user.emailOtpCode !== otp.trim()) {
-      return NextResponse.json({ ok: false, error: "Invalid OTP. Please check and try again." }, { status: 400 });
-    }
-
-    // OTP is valid — clear it from the database
+    // Activate the account
     await db.user.update({
       where: { id: user.id },
-      data: { emailOtpCode: null, emailOtpExpiry: null },
+      data: {
+        status: "active",
+        emailVerified: true,
+        phoneVerified: true,
+        emailOtpCode: null,
+        emailOtpExpiry: null,
+      },
     });
 
-    // Audit
     await db.auditLog.create({
       data: {
         userId: user.id,
-        action: "Email OTP verified successfully",
+        action: "OTP verified — account activated",
         target: user.email,
         type: "auth",
         status: "success",
       },
     });
 
-    return NextResponse.json({
-      ok: true,
-      message: "OTP verified successfully. Access granted.",
-    });
+    return NextResponse.json({ ok: true, message: "Account verified successfully! You can now log in." });
   } catch (e) {
-    return NextResponse.json(
-      { ok: false, error: e instanceof Error ? e.message : "OTP verification failed" },
-      { status: 500 }
-    );
+    return NextResponse.json({ ok: false, error: "Verification failed." }, { status: 500 });
   }
 }

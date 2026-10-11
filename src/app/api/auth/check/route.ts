@@ -24,6 +24,15 @@ export async function POST(req: NextRequest) {
     }
 
     if (user.status !== "active") {
+      if (user.status === "pending") {
+        // Account not yet verified via OTP
+        return NextResponse.json({
+          ok: false,
+          error: "Your account is not verified yet. Please enter the verification code sent to your email and phone.",
+          needsVerification: true,
+          email: user.email,
+        }, { status: 403 });
+      }
       return NextResponse.json({ ok: false, error: "Account is " + user.status + ". Contact support." }, { status: 403 });
     }
 

@@ -1363,3 +1363,77 @@ Stage Summary:
 - SMTP email notifications: application confirmations, stage updates, and new message notifications are sent via email (dev mode logs to console). ✅
 - Mock data fixed: Messages now uses real Conversation + Message DB models with full API. Skill Gap now uses the AI CV analysis data. ✅
 - Automated tests: 67 tests covering validation and pipeline logic, all passing. ✅
+
+---
+Task ID: 28
+Agent: main (Super Z)
+Task: Send verification code (OTP) to email AND phone on signup. User must enter the 6-digit code to activate their account.
+
+Work Log:
+
+DATABASE (prisma/schema.prisma):
+- Repurposed emailOtpCode field for signup OTP (6-digit code).
+- Repurposed emailOtpExpiry for OTP expiry (10 minutes).
+- Added phoneVerified Boolean field to track phone verification status.
+- Ran prisma db push + prisma generate.
+
+SMS SERVICE (src/lib/sms.ts):
+- Created a reusable SMS service with support for Africa's Talking (popular in East Africa) and Twilio.
+- Config via env vars: SMS_PROVIDER, AFRICAS_TALKING_USERNAME/API_KEY/SENDER_ID, TWILIO_ACCOUNT_SID/AUTH_TOKEN/PHONE_NUMBER.
+- In dev mode (no provider configured), SMS content is logged to the console.
+- Includes generateOtpCode() — generates a random 6-digit code.
+
+EMAIL OTP TEMPLATE (src/lib/email.ts):
+- Added sendOtpEmail() template — sends the 6-digit code in a large gradient-styled box. States that a copy was also sent via SMS.
+
+REGISTER API (src/app/api/auth/register/route.ts):
+- On signup: generates a 6-digit OTP code, stores it with a 10-minute expiry.
+- Sets user status to "pending" (not "active") until OTP is verified.
+- Sends the OTP via email (sendOtpEmail) AND via SMS (sendSms).
+- In dev mode, returns the OTP in the response so the UI can display it.
+
+VERIFY OTP API (src/app/api/auth/verify-otp/route.ts):
+- POST /api/auth/verify-otp — accepts { email, otpCode }.
+- Validates: code must be 6 digits, must match the stored code, must not be expired.
+- On success: sets status="active", emailVerified=true, phoneVerified=true, clears the OTP.
+- On failure: returns clear error messages (invalid code, expired code).
+
+RESEND OTP API (src/app/api/auth/resend-otp/route.ts):
+- POST /api/auth/resend-otp — accepts { email }.
+- Generates a new 6-digit OTP, sends it via email + SMS.
+- 60-second cooldown enforced on the frontend.
+
+LOGIN BLOCK (src/app/api/auth/check/route.ts):
+- When a user with status="pending" tries to log in, returns { needsVerification: true, email } instead of allowing the login.
+- The Login UI detects this and redirects to the OTP verification page.
+
+OTP VERIFICATION UI (src/components/guest/views.tsx — VerifyOtpPage):
+- Standalone page with: email field, 6-digit OTP input (large, centered, tracking-widest).
+- In dev mode: displays the OTP code in a blue info box so you can complete testing without email/SMS.
+- "Verify Account" button — calls /api/auth/verify-otp.
+- "Resend code" button with 60-second cooldown.
+- Success state: green checkmark + "Account Verified!" + "Sign in now" button.
+- Error handling: invalid code, expired code, network errors.
+- On success: cleans up sessionStorage and redirects to login.
+
+ROUTING:
+- GuestView type extended with "verify-otp".
+- page.tsx: if (view === "verify-otp") return <VerifyOtpPage />;
+- Register component: after successful registration, stores email + devOtp in sessionStorage, then navigates to "verify-otp".
+- Login component: if check API returns needsVerification, stores email in sessionStorage and navigates to "verify-otp".
+
+END-TO-END TEST RESULTS:
+1. ✅ Register "Selam Bekele" → OTP generated (834299), sent via email (logged) + SMS (logged).
+2. ✅ Login attempt blocked: "Your account is not verified yet. Please enter the verification code sent to your email and phone."
+3. ✅ Wrong OTP (000000) rejected: "Invalid verification code. Please check and try again."
+4. ✅ Correct OTP (834299) accepted: "Account verified successfully! You can now log in."
+5. ✅ Login after verification: allowed with role "seeker".
+6. ✅ Dev mode: OTP displayed on the verification page (blue info box) so testing works without email/SMS.
+
+Stage Summary:
+- Every person who signs up receives a 6-digit verification code to BOTH their email and phone (SMS).
+- The account is created with status="pending" — login is blocked until the code is verified.
+- The user enters the 6-digit code on a dedicated verification page.
+- On success: account is activated (status="active", emailVerified=true, phoneVerified=true).
+- SMS supports Africa's Talking and Twilio (configurable via env vars). In dev mode, codes are logged to the console and displayed on the verification page.
+- The OTP expires after 10 minutes. Users can request a new code (60-second cooldown).
