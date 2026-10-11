@@ -1934,9 +1934,9 @@ export function SeekerJobDetail() {
                       <h1 className="text-xl font-bold tracking-tight sm:text-2xl">{job.title}</h1>
                       <p className="text-sm text-muted-foreground">{job.company}</p>
                       <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground">
-                        <span className="flex items-center gap-1"><MapPin className="h-3 w-3" />{job.location}</span>
-                        <span className="flex items-center gap-1"><Briefcase className="h-3 w-3" />{job.type}</span>
-                        <span className="flex items-center gap-1"><Clock className="h-3 w-3" />{timeAgo(job.postedAt)}</span>
+                        <span className="flex items-center gap-1"><MapPin className="h-3 w-3" />{job.location || "—"}</span>
+                        <span className="flex items-center gap-1"><Briefcase className="h-3 w-3" />{job.type || "full-time"}</span>
+                        <span className="flex items-center gap-1"><Clock className="h-3 w-3" />{job.postedAt ? timeAgo(job.postedAt) : "recently"}</span>
                       </div>
                     </div>
                     {apiJob?.expiresAt && <JobExpiryBadge expiresAt={apiJob.expiresAt} status={apiJob.status} />}
@@ -1961,15 +1961,15 @@ export function SeekerJobDetail() {
                 <div>
                   <h2 className="text-sm font-semibold">Required skills</h2>
                   <div className="mt-2 flex flex-wrap gap-1.5">
-                    {job.skills.map((s) => (
-                      <SkillChip key={s.id} name={s.name} proficiency={s.proficiency} mandatory={s.mandatory} size="sm" />
+                    {(job.skills ?? []).map((s: any, i: number) => (
+                      <SkillChip key={s.id ?? i} name={s.name} proficiency={s.proficiency} mandatory={s.mandatory} size="sm" />
                     ))}
                   </div>
                 </div>
                 <div>
                   <h2 className="text-sm font-semibold">What you'll do</h2>
                   <ul className="mt-2 space-y-1.5">
-                    {job.responsibilities.map((r, i) => (
+                    {(job.responsibilities ?? []).map((r: any, i: number) => (
                       <li key={i} className="flex gap-2 text-sm text-muted-foreground">
                         <Check className="h-4 w-4 shrink-0 text-emerald-600 mt-0.5" />{r}
                       </li>
@@ -1979,7 +1979,7 @@ export function SeekerJobDetail() {
                 <div>
                   <h2 className="text-sm font-semibold">What we're looking for</h2>
                   <ul className="mt-2 space-y-1.5">
-                    {job.requirements.map((r, i) => (
+                    {(job.requirements ?? []).map((r: any, i: number) => (
                       <li key={i} className="flex gap-2 text-sm text-muted-foreground">
                         <Check className="h-4 w-4 shrink-0 text-emerald-600 mt-0.5" />{r}
                       </li>
@@ -2143,9 +2143,9 @@ export function SeekerJobDetail() {
               <CardTitle className="text-sm">Job activity</CardTitle>
             </CardHeader>
             <CardContent className="space-y-2 text-xs">
-              <div className="flex justify-between"><span className="text-muted-foreground">Applicants</span><span className="font-semibold">{job.applicants}</span></div>
-              <div className="flex justify-between"><span className="text-muted-foreground">Views</span><span className="font-semibold">{job.views}</span></div>
-              <div className="flex justify-between"><span className="text-muted-foreground">Posted</span><span className="font-semibold">{timeAgo(job.postedAt)}</span></div>
+              <div className="flex justify-between"><span className="text-muted-foreground">Applicants</span><span className="font-semibold">{job.applicants ?? "—"}</span></div>
+              <div className="flex justify-between"><span className="text-muted-foreground">Views</span><span className="font-semibold">{job.views ?? "—"}</span></div>
+              <div className="flex justify-between"><span className="text-muted-foreground">Posted</span><span className="font-semibold">{job.postedAt ? timeAgo(job.postedAt) : "—"}</span></div>
             </CardContent>
           </Card>
         </aside>
