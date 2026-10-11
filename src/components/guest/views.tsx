@@ -125,7 +125,7 @@ function PublicHeader({ onAuth }: { onAuth: (r: "login" | "register") => void })
 
   return (
     <>
-      <header className="sticky top-0 z-40 border-b border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80">
+      <header className="fixed top-0 left-0 right-0 z-50 border-b border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80">
         <div className="mx-auto flex h-16 max-w-7xl items-center justify-between gap-3 px-4 sm:px-6 lg:px-8">
           {/* Hamburger toggle (mobile only) */}
           <HamburgerToggle
@@ -532,7 +532,7 @@ export function Landing() {
   return (
     <div className="flex min-h-screen flex-col">
       <PublicHeader onAuth={(r) => go(r)} />
-      <main className="flex-1">
+      <main className="flex-1 pt-16">
         <LandingHero />
         <LandingFeatures />
         <LandingHowItWorks />
@@ -1091,7 +1091,7 @@ export function HomePage() {
   return (
     <div className="flex min-h-screen flex-col">
       <PublicHeader onAuth={(r) => go(r)} />
-      <main className="flex-1">
+      <main className="flex-1 pt-16">
         <HomeHero />
         <HomeStats />
         <HomeGroupPhotos />
@@ -1317,7 +1317,7 @@ export function FAQPage() {
   return (
     <div className="flex min-h-screen flex-col">
       <PublicHeader onAuth={(r) => go(r)} />
-      <main className="flex-1">
+      <main className="flex-1 pt-16">
         <FAQHero />
         <section className="py-12 sm:py-16">
           <div className="mx-auto max-w-3xl px-4 sm:px-6 lg:px-8">
@@ -1369,7 +1369,7 @@ function LegalPageLayout({
   return (
     <div className="flex min-h-screen flex-col">
       <PublicHeader onAuth={(r) => go(r)} />
-      <main className="flex-1 bg-muted/20">
+      <main className="flex-1 pt-16 bg-muted/20">
         {/* Hero */}
         <section className="relative overflow-hidden border-b border-border bg-hero-glow">
           <div className="pointer-events-none absolute inset-0">
@@ -1755,7 +1755,7 @@ function AuthShell({ title, subtitle, children }: { title: string; subtitle: str
   return (
     <div className="flex min-h-screen flex-col">
       <PublicHeader onAuth={(r) => go(r)} />
-      <main className="flex flex-1 items-center justify-center bg-muted/20 px-4 py-10">
+      <main className="flex flex-1 items-center justify-center bg-muted/20 px-4 py-10 pt-16">
         <div className="w-full max-w-md">
           <div className="text-center">
             <h1 className="text-2xl font-bold tracking-tight">{title}</h1>
@@ -2455,7 +2455,7 @@ export function PublicJobs() {
   return (
     <div className="flex min-h-screen flex-col">
       <PublicHeader onAuth={(r) => go(r)} />
-      <main className="flex-1 bg-muted/20">
+      <main className="flex-1 pt-16 bg-muted/20">
         <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
           <div className="mb-6">
             <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">Browse open jobs</h1>
@@ -2542,7 +2542,7 @@ export function PublicJobDetail() {
   return (
     <div className="flex min-h-screen flex-col">
       <PublicHeader onAuth={(r) => go(r)} />
-      <main className="flex-1 bg-muted/20">
+      <main className="flex-1 pt-16 bg-muted/20">
         <div className="mx-auto max-w-4xl px-4 py-8 sm:px-6 lg:px-8">
           <button
             onClick={() => go("public-jobs")}
@@ -2667,7 +2667,7 @@ export function AboutPage() {
   return (
     <div className="flex min-h-screen flex-col">
       <PublicHeader onAuth={(r) => go(r)} />
-      <main className="flex-1">
+      <main className="flex-1 pt-16">
         {/* Hero */}
         <section className="bg-hero-glow border-b border-border">
           <div className="mx-auto max-w-4xl px-4 py-16 sm:px-6 sm:py-20 lg:px-8 text-center">
@@ -2819,7 +2819,7 @@ export function ContactPage() {
   return (
     <div className="flex min-h-screen flex-col">
       <PublicHeader onAuth={(r) => go(r)} />
-      <main className="flex-1 bg-muted/20">
+      <main className="flex-1 pt-16 bg-muted/20">
         <div className="mx-auto max-w-5xl px-4 py-12 sm:px-6 lg:px-8">
           <div className="text-center">
             <Badge variant="outline" className="bg-primary/5 text-primary border-primary/20 mb-4">
@@ -3097,7 +3097,7 @@ export function PublicNewsPage() {
   return (
     <div className="flex min-h-screen flex-col">
       <PublicHeader onAuth={(r) => go(r)} />
-      <main className="flex-1 bg-muted/20">
+      <main className="flex-1 pt-16 bg-muted/20">
         <NewsHero />
 
         <div className="mx-auto max-w-7xl px-4 py-10 sm:px-6 lg:px-8">
@@ -3251,7 +3251,7 @@ export function PublicNewsDetailPage({ newsId }: { newsId: string }) {
   return (
     <div className="flex min-h-screen flex-col">
       <PublicHeader onAuth={(r) => go(r)} />
-      <main className="flex-1 bg-muted/20">
+      <main className="flex-1 pt-16 bg-muted/20">
         <div className="mx-auto max-w-3xl px-4 py-8 sm:px-6 lg:px-8">
           <button
             onClick={() => go("public-news", { newsId: undefined })}
@@ -3436,7 +3436,7 @@ export function VerifyEmailPage() {
   return (
     <div className="flex min-h-screen flex-col">
       <PublicHeader onAuth={(r) => go(r)} />
-      <main className="flex flex-1 items-center justify-center bg-muted/20 px-4">
+      <main className="flex flex-1 items-center justify-center bg-muted/20 px-4 pt-16">
         <Card className="w-full max-w-md">
           <CardContent className="p-8 text-center">
             {status === "verifying" && (
@@ -3549,7 +3549,7 @@ export function ResetPasswordPage() {
   return (
     <div className="flex min-h-screen flex-col">
       <PublicHeader onAuth={(r) => go(r)} />
-      <main className="flex flex-1 items-center justify-center bg-muted/20 px-4">
+      <main className="flex flex-1 items-center justify-center bg-muted/20 px-4 pt-16">
         <Card className="w-full max-w-md">
           <CardContent className="p-8">
             {success ? (
@@ -3734,7 +3734,7 @@ export function VerifyOtpPage() {
   return (
     <div className="flex min-h-screen flex-col">
       <PublicHeader onAuth={(r) => go(r)} />
-      <main className="flex flex-1 items-center justify-center bg-muted/20 px-4">
+      <main className="flex flex-1 items-center justify-center bg-muted/20 px-4 pt-16">
         <Card className="w-full max-w-md">
           <CardContent className="p-8">
             {success ? (
