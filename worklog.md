@@ -626,3 +626,27 @@ Stage Summary:
 - The desktop sidebar, topbar, and mobile bottom nav are now structurally outside the scroll container, so they are guaranteed to stay fixed regardless of which nav item is clicked or how far the page scrolls.
 - The previous fix's reliance on `position: sticky` is gone — replaced by the more robust app-shell pattern.
 - Scroll-to-top on navigation now correctly targets the inner scroll container for authenticated pages, and falls back to window for guest pages.
+
+---
+Task ID: 15
+Agent: main (Super Z)
+Task: System had recurring JWEDecryptionFailed errors causing /api/notifications to return 401 in a loop — restore to full functionality.
+
+Work Log:
+- Inspected dev.log and found the recurring JWEDecryptionFailed error pattern + /api/notifications returning 401 in an infinite polling loop.
+- Root cause (same as Task 3): the .env file had been overwritten again and was missing NEXTAUTH_SECRET and NEXTAUTH_URL. Without NEXTAUTH_SECRET, NextAuth could not decrypt existing session JWTs → all authenticated endpoints returned 401.
+- Restored .env with the correct secret: NEXTAUTH_SECRET=r8LVmfrSszKdeyDeWmsiYY5cL85ZnvBqlgrMFEMrCIk=, NEXTAUTH_URL=http://localhost:3000, DATABASE_URL=file:/home/z/my-project/db/custom.db.
+- Killed the dead dev server and restarted via the daemon script (scripts/daemon-start.sh) so the process survives across bash tool calls (double-fork daemon pattern from Task 4).
+- Verified end-to-end across all three roles:
+  * employer@demo.com (demo1234): login 200, /api/jobs 200, /api/candidates 200, /api/applications 200, /api/notifications 200, /api/profile 200, /api/skills 200
+  * admin@demo.com (demo1234): login 200, /api/admin/stats 200, /api/admin/users 200, /api/admin/audit 200, /api/admin/security 200, /api/admin/ai-analytics 200, /api/admin/monitoring 200
+  * seeker@demo.com (demo1234): login 200, /api/jobs 200, /api/notifications 200, /api/profile 200, /api/skills 200
+  * Public endpoints (no auth): /api/jobs 200, /api/auth/csrf 200, /api/auth/session 200, /api/site-images 200
+- Error counts after restart: 0 JWEDecryptionFailed errors, 0 500 errors in log.
+
+Stage Summary:
+- ROOT CAUSE FIXED (recurring issue): .env was missing NEXTAUTH_SECRET again → all authenticated API calls returned 401 → infinite notification polling loop. Restored .env, restarted dev server via daemon script.
+- All three roles (seeker, employer, admin) log in successfully and all their endpoints return 200 OK with real data.
+- Zero JWT errors, zero 500 errors in dev log after restart.
+- Dev server is running as a detached daemon (PID 2002) that survives across bash tool calls.
+- Note for future: if 401 storms reappear, first check `cat .env` — the .env file appears to get periodically overwritten, losing NEXTAUTH_SECRET.
